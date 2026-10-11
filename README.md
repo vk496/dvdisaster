@@ -21,6 +21,8 @@ This version is built on top of the latest upstream version, with the following 
 - New experimental RS04 codec with long codewords and self-describing layout (more on that below)
 - Reading of multi-session discs (all sessions in one image) and of audio CDs (2352-byte `.bin` + `.cue`, with C2 error pointers)
 - Optional pause after a given number of read errors, to let drives that overheat on damaged media cool down (`--pause-after-errors`)
+- A helper script that turns a folder into a protected disc in one step: it builds the ISO image with xorriso, augments it,
+  burns it (also as a further session of a multi-session disc) and verifies it by reading it back ([contrib/dvdisaster-burn.sh](contrib/dvdisaster-burn.sh))
 - A new CLI-only version, not depending on gtk (`./configure --with-gui=no && make clean && make -j4`)
 - GUI codebase ported from gtk2 to gtk3 to ensure future-proofness
 - Windows and macOS builds are supported again, those were dropped upstream a few versions back
