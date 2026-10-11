@@ -38,6 +38,10 @@ oder Kratzer
 .RB [\| \-\-cache-size
 .IR n \|]
 .RB [\| \-\-cdda \|]
+.RB [\| \-\-catalog
+.IR f \|]
+.RB [\| \-\-catalog-report
+.IR f \|]
 .RB [\| \-\-dao \|]
 .RB [\| \-\-defective-dump \|
 .IR d \|]
@@ -396,6 +400,16 @@ Ohne \-\-cdda werden die Audio-Spuren einer CD mit Datenspuren genauso gespeiche
 Datentr\[:a]ger mit RS02- oder RS03-Fehlerkorrekturdaten k\[:o]nnen nicht im
 Mehrfachsitzungs-Modus gelesen werden.
 .RE
+.TP
+.B \-\-catalog f
+h\[:a]ngt das Ergebnis jedes \[:U]berpr\[:u]fens (\-s) oder Lesens (\-r) an die Katalogdatei f an,
+so da\[ss] der Zustand eines Datentr\[:a]gers \[:u]ber die Jahre verfolgt werden kann. Jeder Lauf
+f\[:u]gt eine Zeile mit Datum, Fingerabdruck, Bezeichnung und Gr\[:o]\[ss]e des Datentr\[:a]gers,
+der Aktion und der Anzahl unlesbarer Sektoren und CRC-Fehler hinzu (durch Tabulatoren getrennt).
+.TP
+.B \-\-catalog-report f
+gibt den Verlauf jedes in der Katalogdatei f erfassten Datentr\[:a]gers aus und warnt bei
+Datentr\[:a]gern, deren Anzahl besch\[:a]digter Sektoren zunimmt.
 .TP
 .B \-\-dao
 unterstelle DAO; Abbild am Ende nicht k\[:u]rzen.

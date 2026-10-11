@@ -2400,6 +2400,12 @@ finished:
 
    //print_intervals(rc);
 
+   /*** Remember the result in the catalog file */
+
+   if(Closure->catalogFile)
+      AppendCatalog(rc->medium, "read", rc->volumeLabel, rc->expectedSectors,
+		    rc->expectedSectors - rc->readable, Closure->crcErrors);
+
    /*** Close and clean up */
 
    rc->earlyTermination = FALSE;

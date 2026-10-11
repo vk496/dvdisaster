@@ -1546,6 +1546,12 @@ step_counter:
    if(Closure->eject && !Closure->readErrors)
       LoadMedium(rc->image->dh, FALSE);
 
+   /*** Remember the result in the catalog file */
+
+   if(Closure->catalogFile)
+      AppendCatalog(rc->image, rc->scanMode ? "scan" : "read", rc->volumeLabel,
+		    rc->image->dh->sectors, Closure->readErrors, Closure->crcErrors);
+
    /*** Close and clean up */
 
    if(Closure->crcBuf && (Closure->readErrors || Closure->crcErrors))

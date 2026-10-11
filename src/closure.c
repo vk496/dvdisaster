@@ -729,6 +729,8 @@ void FreeClosure()
    cond_free(Closure->abortFile);
    if(Closure->moreEccNames)
      g_ptr_array_free(Closure->moreEccNames, TRUE);
+   cond_free(Closure->catalogFile);
+   cond_free(Closure->catalogReport);
    cond_free(Closure->redundancy);
 
    CallMethodDestructors();
