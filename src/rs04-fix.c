@@ -107,8 +107,8 @@ static void fix_cleanup(gpointer data)
 
    free_buffers(fc);
    if(fc->timer) g_timer_destroy(fc->timer);
+   RS04FreeSets(fc->image, fc->info);
    if(fc->image) CloseImage(fc->image);
-   g_free(fc->info);
    g_free(fc);
 
    GuiExitWorkerThread();
@@ -220,7 +220,9 @@ static int check_sizes(fix_closure *fc)
    if(set->target == ECC_FILE)
    {  gint64 diff = (gint64)image->file->size - (gint64)set->dataBytes;
 
-      if(diff > 0)
+      /* Supplementary sets may protect only a part of the image */
+
+      if(diff > 0 && fc->info->nSets == 1)
       {  char *add_truncate = _("Add the --truncate option to the program call\n"
 				"to have the superfluous sectors removed.");
 	 char *longer = _("The image file is %lld sectors longer as noted in the\n"
@@ -258,7 +260,7 @@ static int check_sizes(fix_closure *fc)
       }
 
       expand_file(image->file, 0, set->B, set->dataBytes);
-      expand_file(image->eccFile, 0, set->B, set->A*set->B);
+      expand_file(fc->st.io.zoneFile, 0, set->B, set->A*set->B);
    }
    else expand_file(image->file, set->start*set->B, set->B,
 		    (set->start + set->S + set->A)*set->B);
@@ -676,7 +678,10 @@ static int fix_set(fix_closure *fc, int idx)
    RS04State *st = &fc->st;
    guint64 j;
 
-   if(fc->info->nSets > 1)
+   if(fc->info->nSets > 1 && set->target == ECC_FILE)
+     PrintLog(_("\nSet %d of %d (ecc file %s):\n"),
+	      idx+1, fc->info->nSets, set->file ? set->file->path : Closure->eccName);
+   else if(fc->info->nSets > 1)
      PrintLog(_("\nSet %d of %d (image sectors %" PRId64 " - %" PRId64 "):\n"),
 	      idx+1, fc->info->nSets, set->start, set->start + (gint64)(set->S + set->A) - 1);
 
@@ -739,7 +744,7 @@ void RS04Fix(Image *image)
 {  fix_closure *fc = g_malloc0(sizeof(fix_closure));
    guint64 corrected;
    char *t = NULL;
-   int i;
+   int i, pass, combined;
 
    fc->wl = (RS04Widgets*)FindMethod("RS04")->widgetList;
    fc->image = image;
@@ -747,7 +752,7 @@ void RS04Fix(Image *image)
    GuiSetLabelText(fc->wl->fixHeadline, _("<big>Repairing the image.</big>\n<i>%s</i>"),
 		   _("Opening files..."));
 
-   fc->info = RS04GetSets(image);
+   fc->info = RS04GetAllSets(image, O_RDWR);
    if(!fc->info)
      Stop("Internal error: RS04Fix() called without RS04 data");
 
@@ -758,15 +763,31 @@ void RS04Fix(Image *image)
    for(i=0; i<fc->info->nSets; i++)
      fc->Ltotal += fc->info->set[i].L;
 
-   for(i=0; i<fc->info->nSets; i++)
-   {  fc->set = &fc->info->set[i];
-      if(!fix_set(fc, i))
-      {  PrintLog(_("Aborted by user request!\n"));
-	 GuiSwitchAndSetFootline(fc->wl->fixNotebook, 1, fc->wl->fixFootline,
-				 _("<span %s>Aborted by user request!</span>"), Closure->redMarkup);
-	 fix_cleanup((gpointer)fc);
-	 return;
+   /* Sets protecting the same sectors are applied in turn as long as
+      one of them repairs sectors which the others could not. */
+
+   combined = RS04Combined(fc->info);
+   for(pass=1; ; pass++)
+   {  guint64 before = fc->dataCorr + fc->crcCorr + fc->eccCorr;
+
+      if(pass > 1)
+	PrintLog(_("\nRepeating the repair with all sets (pass %d).\n"), pass);
+      fc->uncorrected = 0;
+      fc->Ldone = 0;
+
+      for(i=0; i<fc->info->nSets; i++)
+      {  fc->set = &fc->info->set[i];
+	 if(!fix_set(fc, i))
+	 {  PrintLog(_("Aborted by user request!\n"));
+	    GuiSwitchAndSetFootline(fc->wl->fixNotebook, 1, fc->wl->fixFootline,
+				    _("<span %s>Aborted by user request!</span>"), Closure->redMarkup);
+	    fix_cleanup((gpointer)fc);
+	    return;
+	 }
       }
+
+      if(!combined || !fc->uncorrected || fc->dataCorr + fc->crcCorr + fc->eccCorr == before)
+	break;
    }
 
    /*** Print results */

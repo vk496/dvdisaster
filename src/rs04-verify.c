@@ -303,6 +303,14 @@ int RS04DetectAudioOffset(RS04State *st, int *delta, int *score, int *probes)
  *** Verify one set
  ***/
 
+typedef struct
+{  Image *image;
+   RS04Info *info;
+   Bitmap *imgBad;          /* combined sets: erased image sectors */
+   Bitmap **zoneBad;        /* combined sets: erased payload of ecc file sets */
+   int scanned;             /* sets whose erasures are complete */
+} verify_closure;
+
 static void print_properties(Image *image, RS04Set *set, int idx, int n)
 {  char digest[33];
    int major = set->creatorVersion/10000;
@@ -325,6 +333,9 @@ static void print_properties(Image *image, RS04Set *set, int idx, int n)
       if(set->matches < 0)
 	PrintLog(_("* set              : unconfirmed (no readable CRC and data sectors)\n"));
    }
+   if(set->target == ECC_FILE && n > 1)
+     PrintLog(_("- set              : %d of %d, ecc file %s\n"),
+	      idx+1, n, set->file ? set->file->path : Closure->eccName);
 
    if(set->target == ECC_IMAGE && set->matches < 0)
         RS04VerifyField(idx, RS04_V_ECCRESULT, _("<span %s>Unconfirmed set (no readable CRC and data sectors).</span>"),
@@ -356,11 +367,13 @@ static void print_properties(Image *image, RS04Set *set, int idx, int n)
 
 /* Print sizes; returns FALSE if the data part is missing */
 
-static int print_sizes(Image *image, RS04Set *set, int idx, int last)
-{  PrintLog(_("\nData integrity:\n"));
+static int print_sizes(Image *image, RS04Set *set, int idx, int n)
+{  int last = idx == n-1;
+
+   PrintLog(_("\nData integrity:\n"));
 
    if(set->target == ECC_FILE)
-   {  guint64 ecc_sectors = image->eccFile->size / set->B;
+   {  guint64 ecc_sectors = (set->file ? set->file : image->eccFile)->size / set->B;
       guint64 img_bytes = image->file->size;
 
       if(ecc_sectors != set->A)
@@ -375,7 +388,9 @@ static int print_sizes(Image *image, RS04Set *set, int idx, int last)
 	 exitCode = EXIT_CODE_SIZE_MISMATCH;
       }
 
-      if(img_bytes == set->dataBytes)
+      /* combined with other sets, the ecc file may protect a part of the image */
+
+      if(img_bytes == set->dataBytes || (n > 1 && img_bytes > set->dataBytes))
       {  PrintLog(_("- sectors          : %" PRId64 " in image; "), set->S);
 	 PrintLog(_("%" PRId64 " in ecc file\n"), set->A);
 	 RS04VerifyField(idx, RS04_V_SECTORS, _("%" PRId64 " in image; %" PRId64 " in ecc file"), set->S, set->A);
@@ -463,8 +478,11 @@ static void mark_zone(RS04State *st, gint64 base)
    spiral_add(&run, 0, 0);
 }
 
-static void verify_set(Image *image, RS04Set *set, int idx, int n)
-{  RS04State st;
+static void verify_set(verify_closure *vc, int idx)
+{  Image *image = vc->image;
+   RS04Set *set = &vc->info->set[idx];
+   int n = vc->info->nSets;
+   RS04State st;
    GString *zone_report = g_string_new(NULL);
    unsigned char *buf = g_malloc((size_t)CHUNK*set->B);
    guint8 present[CHUNK];
@@ -487,7 +505,7 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
    if(!image->file)
      goto done;
 
-   print_sizes(image, set, idx, idx == n-1);
+   print_sizes(image, set, idx, n);
 
    if(Closure->quickVerify)
    {  PrintLog(_("* quick mode        : image NOT scanned\n"));
@@ -571,6 +589,8 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
 	    erasures[t % set->L]++;
 	    state = 2;
 	 }
+	 if(vc->imgBad && state > 1)
+	   SetBit(vc->imgBad, base+t);
 	 spiral_add(&run, base+t, state);
       }
 
@@ -600,7 +620,18 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
 
    for(i=0; i<set->Q; i++)
      if(GetBit(st.payloadBad, i))
-       erasures[(i < set->c ? set->S + i : i - set->c) % set->L]++;
+     {  erasures[(i < set->c ? set->S + i : i - set->c) % set->L]++;
+	if(vc->imgBad && set->target == ECC_IMAGE)
+	  SetBit(vc->imgBad, set->start + set->S + RS04ZoneIndex(set, i));
+     }
+
+   if(vc->imgBad)
+   {  if(set->target == ECC_FILE)
+      {  vc->zoneBad[idx] = st.payloadBad;
+	 st.payloadBad = NULL;
+      }
+      vc->scanned++;
+   }
 
    /*** Summary */
 
@@ -698,22 +729,115 @@ done:
 }
 
 /***
+ *** Combined prognosis of sets protecting the same sectors:
+ *** decodable codewords of each set are assumed to be repaired,
+ *** which may reduce the erasures of the other sets.
+ ***/
+
+/* Map and bit holding the erasure of payload sector q of set s */
+
+static Bitmap* payload_bit(verify_closure *vc, int s, guint64 q, guint64 *bit)
+{  RS04Set *set = &vc->info->set[s];
+
+   if(set->target == ECC_FILE)
+   {  *bit = q;
+      return vc->zoneBad[s];
+   }
+   *bit = set->start + set->S + RS04ZoneIndex(set, q);
+   return vc->imgBad;
+}
+
+/* Same for symbol j of codeword col; NULL for the zero sectors */
+
+static Bitmap* codeword_bit(verify_closure *vc, int s, guint64 col, guint64 j, guint64 *bit)
+{  RS04Set *set = &vc->info->set[s];
+   guint64 t = j*set->L + col;
+
+   if(j >= set->k)
+     return payload_bit(vc, s, set->c + (j - set->k)*set->L + col, bit);
+   if(t < set->S)
+   {  *bit = (set->target == ECC_FILE ? 0 : set->start) + t;
+      return vc->imgBad;
+   }
+   if(t < set->D)
+     return payload_bit(vc, s, t - set->S, bit);
+   return NULL;
+}
+
+static guint64 count_erasures(verify_closure *vc)
+{  guint64 count = CountBits(vc->imgBad);
+   int s;
+
+   for(s=0; s<vc->info->nSets; s++)
+     if(vc->zoneBad[s])
+       count += CountBits(vc->zoneBad[s]);
+   return count;
+}
+
+static void combined_prognosis(verify_closure *vc)
+{  guint64 expected = vc->imgBad->size, lost, bit, col, j;
+   int s, progress = TRUE, percentage;
+
+   if(!count_erasures(vc))
+     return;
+
+   while(progress)
+   {  progress = FALSE;
+
+      for(s=0; s<vc->info->nSets; s++)
+      {  RS04Set *set = &vc->info->set[s];
+
+	 for(col=0; col<set->L; col++)
+	 {  guint32 count = 0;
+
+	    for(j=0; j<set->k+set->m; j++)
+	    {  Bitmap *map = codeword_bit(vc, s, col, j, &bit);
+
+	       if(map && GetBit(map, bit)) count++;
+	    }
+	    if(!count || count > set->m)
+	      continue;
+
+	    for(j=0; j<set->k+set->m; j++)
+	    {  Bitmap *map = codeword_bit(vc, s, col, j, &bit);
+
+	       if(map) ClearBit(map, bit);
+	    }
+	    progress = TRUE;
+	 }
+      }
+   }
+
+   for(s=0; s<vc->info->nSets; s++)
+     if(vc->zoneBad[s])
+       expected += vc->info->set[s].A;
+   lost = count_erasures(vc);
+   percentage = (int)((1000*(expected - lost))/expected);
+
+   PrintLog(_("\nCombined prognosis of all %d sets:\n"), vc->info->nSets);
+   PrintLog(_("- prognosis        : %" PRId64 " of %" PRId64 " sectors recoverable (%d.%d%%)\n"),
+	    expected - lost, expected, percentage/10, percentage%10);
+}
+
+/***
  *** Verify all sets of the image or the ecc file
  ***/
 
-typedef struct
-{  Image *image;
-   RS04Info *info;
-} verify_closure;
-
 static void cleanup(gpointer data)
 {  verify_closure *vc = (verify_closure*)data;
+   int i;
 
    UnregisterCleanup();
    GuiAllowActions(TRUE);
 
+   if(vc->zoneBad)
+   {  for(i=0; i<vc->info->nSets; i++)
+	if(vc->zoneBad[i]) FreeBitmap(vc->zoneBad[i]);
+      g_free(vc->zoneBad);
+   }
+   if(vc->imgBad) FreeBitmap(vc->imgBad);
+   RS04FreeSets(vc->image, vc->info);
    if(vc->image) CloseImage(vc->image);
-   g_free(vc->info);
    g_free(vc);
 
    GuiExitWorkerThread();
@@ -725,7 +849,7 @@ void RS04Verify(Image *image)
 
    RegisterCleanup(_("Check aborted"), cleanup, vc);
    vc->image = image;
-   vc->info = RS04GetSets(image);
+   vc->info = RS04GetAllSets(image, O_RDONLY);
    if(!vc->info)
      Stop("Internal error: RS04Verify() called without suitable image and ecc file");
 
@@ -733,8 +857,21 @@ void RS04Verify(Image *image)
         PrintLog(_("\n%s present.\n"), Closure->imageName);
    else PrintLog(_("\n%s not present.\n"), Closure->imageName);
 
-   if(vc->info->set[0].target == ECC_FILE)
-     PrintLog(_("%s present.\n"), Closure->eccName);
+   for(i=0; i<vc->info->nSets; i++)
+     if(vc->info->set[i].target == ECC_FILE)
+       PrintLog(_("%s present.\n"), i ? vc->info->set[i].file->path : Closure->eccName);
+
+   if(RS04Combined(vc->info))
+   {  gint64 end = 0;
+
+      for(i=0; i<vc->info->nSets; i++)
+      {  RS04Set *set = &vc->info->set[i];
+
+	 end = MAX(end, set->target == ECC_FILE ? (gint64)set->S : set->start + (gint64)(set->S + set->A));
+      }
+      vc->imgBad = CreateBitmap0(end);
+      vc->zoneBad = g_malloc0(vc->info->nSets*sizeof(Bitmap*));
+   }
 
    RS04VerifyInit(vc->info, image);
 
@@ -745,8 +882,11 @@ void RS04Verify(Image *image)
 
    for(i=0; i<vc->info->nSets && !Closure->stopActions; i++)
    {  RS04VerifyShowSet(i);
-      verify_set(image, &vc->info->set[i], i, vc->info->nSets);
+      verify_set(vc, i);
    }
+
+   if(vc->imgBad && vc->scanned == vc->info->nSets)
+     combined_prognosis(vc);
 
    if(image->file && !Closure->stopActions)
      RS04VerifyResult(exitCode == 0);

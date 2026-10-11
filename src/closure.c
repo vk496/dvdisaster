@@ -715,6 +715,8 @@ void FreeClosure()
    cond_free_ptr_array(Closure->deviceNodes);
    cond_free(Closure->imageName);
    cond_free(Closure->eccName);
+   if(Closure->moreEccNames)
+     g_ptr_array_free(Closure->moreEccNames, TRUE);
    cond_free(Closure->redundancy);
 
    CallMethodDestructors();

@@ -235,6 +235,7 @@ typedef struct _GlobalClosure
    GPtrArray *deviceNodes;  /* List of device nodes (C: or /dev/foo) */
    char *imageName;     /* complete path of current image file */
    char *eccName;       /* complete path of current ecc file */
+   GPtrArray *moreEccNames; /* further ecc files given with -e (RS04 supplementary sets) */
    GPtrArray *methodList; /* List of available methods */
    char *methodName;    /* Name of currently selected codec */
    gint64 readStart;    /* Range to read */

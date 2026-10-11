@@ -96,6 +96,7 @@ typedef struct _RS04Set
    int target;              /* ECC_FILE or ECC_IMAGE */
    int tags;                /* valid tags seen during recognition */
    int matches;             /* confirmed data sectors (-1 = not confirmable) */
+   LargeFile *file;         /* ecc file holding the added zone (NULL = Image->eccFile) */
 } RS04Set;
 
 /* All sets of an image. Kept in Image->cachedLayout for augmented images;
@@ -242,6 +243,10 @@ void RS04Create(void);
 
 int RS04RecognizeFile(LargeFile*, EccHeader**);
 int RS04RecognizeImage(Image*);
+int  RS04ConfirmEccFile(Image*, LargeFile*, EccHeader*);
+RS04Info* RS04GetAllSets(Image*, int);
+void RS04FreeSets(Image*, RS04Info*);
+int  RS04Combined(RS04Info*);
 
 /* rs04-verify.c */
 

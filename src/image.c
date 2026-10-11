@@ -26,6 +26,8 @@
 #include "scsi-layer.h"
 #include "udf.h"
 
+#include "rs04-includes.h"
+
 /***
  *** Open image from a given device or file.
  ***
@@ -91,9 +93,11 @@ void ExamineECC(Image *image)
  *** Search a directory for the .ecc file matching the image
  ***
  * Only *.ecc files directly inside the directory are examined.
- * A file matches if its header fingerprint equals the image fingerprint.
+ * A file matches if its header fingerprint equals the image fingerprint
+ * (RS04: if its CRC sectors match the image).
  * Returns the newly allocated path of the single match;
  * stops if there is no match or more than one.
+ * Further matching RS04 files are added as supplementary sets.
  */
 
 static gint compare_names(gconstpointer a, gconstpointer b)
@@ -106,7 +110,7 @@ static char *find_ecc_file(Image *image, char *dir)
    GPtrArray *names = g_ptr_array_new_with_free_func(g_free);
    const char *name;
    char *found = NULL;
-   int n;
+   int n, found_rs04 = FALSE;
 
    if(!gdir)
      Stop(_("Can't open %s:\n%s"), dir, err->message);
@@ -123,7 +127,7 @@ static char *find_ecc_file(Image *image, char *dir)
    for(n=0; n<names->len; n++)
    {  char *path = g_ptr_array_index(names, n);
       LargeFile *file = LargeOpen(path, O_RDONLY, IMG_PERMS);
-      int i, match = FALSE;
+      int i, match = FALSE, rs04 = FALSE;
 
       if(!file)
 	continue;
@@ -135,8 +139,10 @@ static char *find_ecc_file(Image *image, char *dir)
 
 	 if(   method->recognizeEccFile
 	    && method->recognizeEccFile(file, &eh) == ECCFILE_PRESENT)
-	 {  match =    GetImageFingerprint(image, fp, eh->fpSector)
-	            && !memcmp(fp, eh->mediumFP, 16);
+	 {  if(!strncmp((char*)eh->method, "RS04", 4))
+	         match = rs04 = RS04ConfirmEccFile(image, file, eh);
+	    else match =    GetImageFingerprint(image, fp, eh->fpSector)
+	                 && !memcmp(fp, eh->mediumFP, 16);
 	    g_free(eh);
 	    break;
 	 }
@@ -146,9 +152,16 @@ static char *find_ecc_file(Image *image, char *dir)
       Verbose("find_ecc_file(): %s %s\n", path, match ? "matches" : "does not match");
       if(!match)
 	continue;
+      if(found && found_rs04 && rs04)
+      {  if(!Closure->moreEccNames)
+	   Closure->moreEccNames = g_ptr_array_new_with_free_func(g_free);
+	 g_ptr_array_add(Closure->moreEccNames, g_strdup(path));
+	 continue;
+      }
       if(found)
 	Stop(_("Both %s and %s match the image; please select one with -e.\n"), found, path);
       found = g_strdup(path);
+      found_rs04 = rs04;
    }
    g_ptr_array_free(names, TRUE);
 
