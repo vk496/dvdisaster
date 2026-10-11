@@ -26,6 +26,8 @@ This version is built on top of the latest upstream version, with the following 
 - Audio CD rips get AccurateRip v1/v2 and CTDB checksums and CD-TEXT in the `.cue`, and an optional test & copy pass (`--test-and-copy`)
 - Optional pause after a given number of read errors, to let drives that overheat on damaged media cool down (`--pause-after-errors`)
 - Drive capability report (`--drive-test`): profiles, raw/C2/CD-DA reading support and what the drive is suitable for, using read-only commands
+- A helper script that turns a folder into a protected disc in one step: it builds the ISO image with xorriso, augments it,
+  burns it (also as a further session of a multi-session disc) and verifies it by reading it back ([contrib/dvdisaster-burn.sh](contrib/dvdisaster-burn.sh))
 - A new CLI-only version, not depending on gtk (`./configure --with-gui=no && make clean && make -j4`)
 - Scripting support: documented exit codes, a machine-readable JSON report (`--json`) and a quiet mode (`-q`)
 - GUI codebase ported from gtk2 to gtk3 to ensure future-proofness
