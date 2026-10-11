@@ -845,7 +845,9 @@ void ReadMediumLinear(gpointer data)
         and attach it with the Image struct. */
 
    if(rc->sectorBytes == 2048)
-      OpenEccFileForImage(rc->image, Closure->eccName, O_RDONLY, IMG_PERMS);
+   {  OpenEccFileForImage(rc->image, Closure->eccName, O_RDONLY, IMG_PERMS);
+      HintOverwritableMedium(rc->image);
+   }
 
    /*** If ecc information is available in both the image and the
 	ecc file, the ecc file gets precedence. */
