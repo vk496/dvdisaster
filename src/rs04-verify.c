@@ -313,6 +313,8 @@ static void print_properties(Image *image, RS04Set *set, int idx, int n)
       if(n > 1)
 	PrintLog(_("- set              : %d of %d, image sectors %" PRId64 " - %" PRId64 "\n"),
 		 idx+1, n, set->start, set->start + (gint64)(set->S + set->A) - 1);
+      if(set->matches < 0)
+	PrintLog(_("* set              : unconfirmed (no readable CRC and data sectors)\n"));
    }
 
    PrintLog(_("- method           : RS04, %u+%u layers of %" PRIu64 " sectors, %4.1f%% redundancy.\n"),
