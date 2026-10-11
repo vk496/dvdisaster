@@ -1,0 +1,49 @@
+85a24eb529119e79c540b623f47fc2a3
+210c7a5b81e68f8dbc978010cfb9eceb
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04f-tmp.iso: 8000 medium sectors.
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+    1 repaired sectors: ; ecc file: 1114d 
+    1 repaired sectors: ; ecc file: 1115d 
+    1 repaired sectors: ; ecc file: 1116d 
+    1 repaired sectors: ; ecc file: 1117d 
+    1 repaired sectors: ; ecc file: 1118d 
+    1 repaired sectors: ; ecc file: 1119d 
+    1 repaired sectors: ; ecc file: 1120d 
+    1 repaired sectors: ; ecc file: 1121d 
+    1 repaired sectors: ; ecc file: 1122d 
+    1 repaired sectors: ; ecc file: 1123d 
+    1 repaired sectors: ; ecc file: 1124d 
+    1 repaired sectors: ; ecc file: 1125d 
+    1 repaired sectors: ; ecc file: 1126d 
+    1 repaired sectors: ; ecc file: 1127d 
+    1 repaired sectors: ; ecc file: 1128d 
+    1 repaired sectors: ; ecc file: 1129d 
+    1 repaired sectors: ; ecc file: 1130d 
+    1 repaired sectors: ; ecc file: 1131d 
+    1 repaired sectors: ; ecc file: 1132d 
+    1 repaired sectors: ; ecc file: 1133d 
+    1 repaired sectors: ; ecc file: 1134d 
+    1 repaired sectors: ; ecc file: 1135d 
+    2 repaired sectors: ; ecc file: 1100d 1136d 
+    2 repaired sectors: ; ecc file: 1101d 1137d 
+    2 repaired sectors: ; ecc file: 1102d 1138d 
+    2 repaired sectors: ; ecc file: 1103d 1139d 
+    2 repaired sectors: ; ecc file: 1104d 1140d 
+    2 repaired sectors: ; ecc file: 1105d 1141d 
+    2 repaired sectors: ; ecc file: 1106d 1142d 
+    2 repaired sectors: ; ecc file: 1107d 1143d 
+    2 repaired sectors: ; ecc file: 1108d 1144d 
+    2 repaired sectors: ; ecc file: 1109d 1145d 
+    2 repaired sectors: ; ecc file: 1110d 1146d 
+    2 repaired sectors: ; ecc file: 1111d 1147d 
+    2 repaired sectors: ; ecc file: 1112d 1148d 
+    2 repaired sectors: ; ecc file: 1113d 1149d 
+Repaired sectors: 50 (0 data, 0 crc, 50 ecc, 0 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  1.4; worst = 2.
