@@ -125,6 +125,7 @@ typedef enum
    MODIFIER_SPEED_WARNING, 
    MODIFIER_SPINUP_DELAY, 
    MODIFIER_TIME_LIMIT,
+   MODIFIER_TEST_AND_COPY,
    MODIFIER_TRUNCATE,
    MODIFIER_VERSION,
 } run_mode;
@@ -356,6 +357,7 @@ int main(int argc, char *argv[])
 	{"spinup-delay", 1, 0, MODIFIER_SPINUP_DELAY},
 	{"strip", 0, 0, 'z'},
 	{"test", 2, 0, 't'},
+	{"test-and-copy", 0, 0, MODIFIER_TEST_AND_COPY},
         {"threads", 1, 0, 'x'},
 	{"time-limit", 1, 0, MODIFIER_TIME_LIMIT},
 	{"truncate", 2, 0, MODIFIER_TRUNCATE},
@@ -759,6 +761,9 @@ int main(int argc, char *argv[])
          case MODIFIER_SPEED_WARNING:
 	   if(optarg) Closure->speedWarning = atoi(optarg);
 	   else Closure->speedWarning=10;
+	   break;
+         case MODIFIER_TEST_AND_COPY:
+	   Closure->testAndCopy = TRUE;
 	   break;
          case MODIFIER_TRUNCATE: 
 	   if(optarg)                  /* debugging truncate mode */
@@ -1182,6 +1187,7 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --speed-warning n          - print warning if speed changes by more than n percent\n"));
       PrintCLI(_("  --spinup-delay n           - wait n seconds for drive to spin up\n"));
       PrintCLI(_("  --time-limit n             - stop the current action after n seconds\n"));
+      PrintCLI(_("  --test-and-copy            - audio CDs: read the tracks twice and compare their CRC32\n"));
       PrintCLI(_("  --version                  - print version and some configuration info\n"));
       PrintCLI(_("  --debug                    - allow advanced dangerous options (use with --help for a list)\n"));
 

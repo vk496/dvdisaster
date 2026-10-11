@@ -1,5 +1,5 @@
 ed7ef56f6e811fb4cd19bf5d18256f21
-5ef9ac798d5a06e3cb22ab502598d62b
+b35e28628f6d8a701f87c008e887353a
 This software comes with  ABSOLUTELY NO WARRANTY.  This
 is free software and you are welcome to redistribute it
 under the conditions of the GNU GENERAL PUBLIC LICENSE.
@@ -19,4 +19,9 @@ they are stored as zero-filled sectors and are not read.
 Creating new cdextra.bin image.
 
 All sectors successfully read.
+
+AccurateRip checksums (no read offset correction; see --audio-offset):
+  Track  1: v1 67365dd2, v2 1858c5e0, CRC32 3556b4e2
+AccurateRip disc id: 001-00000a00-00001401-0b002202
+CTDB TOC id: 6YJpkKCbFDZYr.wSi18nYIfU7w4-, CRC32 309a7f35
 Cue sheet written to cdextra.cue.

@@ -23,6 +23,7 @@ This version is built on top of the latest upstream version, with the following 
 - Reading of multi-session discs (all sessions in one image) and of audio CDs (2352-byte `.bin` + `.cue`, with C2 error pointers)
 - Reading of multi-session discs (all sessions in one image) and of audio CDs (2352-byte `.bin` + `.cue`, with C2 error pointers);
   Video CD, PlayStation and CD-i discs (Mode 2 Form 2 sectors) are read the same way, with EDC checks of the data sectors
+- Audio CD rips get AccurateRip v1/v2 and CTDB checksums and CD-TEXT in the `.cue`, and an optional test & copy pass (`--test-and-copy`)
 - Optional pause after a given number of read errors, to let drives that overheat on damaged media cool down (`--pause-after-errors`)
 - A new CLI-only version, not depending on gtk (`./configure --with-gui=no && make clean && make -j4`)
 - Scripting support: documented exit codes, a machine-readable JSON report (`--json`) and a quiet mode (`-q`)

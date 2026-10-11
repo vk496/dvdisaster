@@ -163,6 +163,17 @@ guint32 Crc32(unsigned char *data, int len)
    return crc;
 }
 
+/* The standard (zlib compatible) CRC32, continued from a previous value
+   (start with 0); e.g. the CRC32 of audio tracks */
+
+guint32 Crc32Update(guint32 crc, unsigned char *data, int len)
+{  crc = ~crc;
+   while(len--)
+      crc = crctable[(crc ^ *data++) & 0xFF] ^ (crc >> 8);
+
+   return ~crc;
+}
+
 /***
  *** EDC checksum used in CDROM sectors
  ***/

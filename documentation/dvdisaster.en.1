@@ -86,6 +86,7 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .IR n \|]
 .RB [\| \-\-time-limit
 .IR n \|]
+.RB [\| \-\-test-and-copy \|]
 .RB [\| \-\-version \|]
 
 .SH DESCRIPTION
@@ -358,6 +359,9 @@ use optimized strategy for reading damaged media.
 RS04 only: read offset of a CD-DA rip relative to the rip the error correction file
 was created from, in samples (4 bytes). By default the offset is detected
 automatically when repairing; use this option if detection fails.
+When reading an audio CD, the AccurateRip and CTDB checksums (see \-\-cdda) are
+computed with this read offset correction; give the drive's AccurateRip read
+offset for comparing them with the databases. The image itself is stored as read.
 .TP
 .B \-\-auto-suffix
 automatically add .iso and .ecc file suffixes.
@@ -384,6 +388,15 @@ CDs with Mode 2 Form 2 sectors (Video CD, Super Video CD, PlayStation, CD-i) are
 always read as CD-DA images since these sectors do not fit into 2048 bytes. For Mode 2
 (XA) discs, dvdisaster looks for them in 64 sectors spread over the data tracks; use
 \-\-cdda if Form 2 sectors are rare on the disc.
+After reading, the AccurateRip v1 and v2 checksums and the CRC32 of each audio track,
+the AccurateRip disc id (which ends with the FreeDB disc id) and the CUETools database
+(CTDB) TOC id and CRC32 are printed and written into the cue sheet as REM lines,
+for comparing the rip with these databases using other tools; dvdisaster does not
+look them up online. They match the AccurateRip database only if the drive's read offset
+is given with \-\-audio-offset (the log and the cue sheet tell which offset was used).
+CD-TEXT is written into the cue sheet (TITLE, PERFORMER, SONGWRITER, ...) if the drive
+reports it; only CD-TEXT in ISO 8859-1 or ASCII is used, and packs with CRC errors
+are skipped. See also \-\-test-and-copy.
 .RS
 Multi-session media (CD, DVD and BD) are always read as one image with the sectors
 at their real positions. The sectors between the sessions are not read; they are
@@ -577,6 +590,13 @@ wait n seconds for drive to spin up.
 .B \-\-time-limit n
 stop the current action (like the Stop button in the graphical user interface)
 after n seconds. What has been read so far is kept in the image.
+.TP
+.B \-\-test-and-copy
+for audio CDs (see \-\-cdda): after reading, read the audio tracks once more and
+compare the CRC32 of each track with the one of the image, like "test & copy" in
+other CD rippers. A track with a different CRC32 was not read reliably, e.g. because the
+drive interpolated damaged samples without reporting C2 errors; dvdisaster exits
+with an error code in that case.
 .TP
 .B \-\-version
 print version number and some configuration information.
