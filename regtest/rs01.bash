@@ -971,6 +971,16 @@ if try "reading image, no ecc data" read_no_ecc; then (
   run_regtest read_no_ecc "--spinup-delay=0 -r" $TMPISO  $ISODIR/no.ecc
 ) & limit_jobs; fi
 
+# Catalog of scan results and history report
+
+if try "catalog of scan results" catalog_report; then (
+  cp $MASTERISO $SIMISO
+  $NEWVER --regtest --debug --sim-cd=$SIMISO --fixed-speed-values --spinup-delay=0 -s --catalog=$TMPISO.cat >>$LOGFILE 2>&1
+  $NEWVER --debug -i$SIMISO --erase 1000-1049 >>$LOGFILE 2>&1
+  $NEWVER --regtest --debug --sim-cd=$SIMISO --fixed-speed-values --spinup-delay=0 -s --catalog=$TMPISO.cat >>$LOGFILE 2>&1
+  run_regtest catalog_report "--catalog-report=$TMPISO.cat" $TMPISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
 # Read into existing and complete image file
 
 if try "reading good image in good file" read_no_ecc_good_file; then (

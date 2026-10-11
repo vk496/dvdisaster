@@ -715,6 +715,8 @@ void FreeClosure()
    cond_free_ptr_array(Closure->deviceNodes);
    cond_free(Closure->imageName);
    cond_free(Closure->eccName);
+   cond_free(Closure->catalogFile);
+   cond_free(Closure->catalogReport);
    cond_free(Closure->redundancy);
 
    CallMethodDestructors();

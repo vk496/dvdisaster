@@ -34,6 +34,10 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .RB [\| \-\-audio-offset
 .IR n \|]
 .RB [\| \-\-cdda \|]
+.RB [\| \-\-catalog
+.IR f \|]
+.RB [\| \-\-catalog-report
+.IR f \|]
 .RB [\| \-\-dao \|]
 .RB [\| \-\-defective-dump
 .IR d \|]
@@ -337,6 +341,16 @@ are reported separately.
 Without \-\-cdda, audio tracks of a CD with data tracks are stored the same way.
 Media with RS02 or RS03 error correction data can not be read in multi-session mode.
 .RE
+.TP
+.B \-\-catalog f
+append the result of each scan (\-s) or read (\-r) to the catalog file f, so that the
+state of a medium can be followed over the years. Each run adds one line with the
+date, the medium fingerprint, volume label and size, the action and the numbers of
+unreadable sectors and CRC errors, separated by tabs.
+.TP
+.B \-\-catalog-report f
+print the history of each medium recorded in the catalog file f, and warn about media
+whose number of damaged sectors is growing.
 .TP
 .B \-\-dao
 assume DAO disc; do not trim image end.

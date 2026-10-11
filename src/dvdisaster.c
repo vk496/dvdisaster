@@ -77,6 +77,8 @@ typedef enum
    MODIFIER_AUDIO_OFFSET,
    MODIFIER_AUTO_SUFFIX,
    MODIFIER_CACHE_SIZE, 
+   MODIFIER_CATALOG,
+   MODIFIER_CATALOG_REPORT,
    MODIFIER_CLV_SPEED,    /* unused */ 
    MODIFIER_CAV_SPEED,    /* unused */
    MODIFIER_CDDA,
@@ -232,6 +234,8 @@ int main(int argc, char *argv[])
 	{"compare-images", 1, 0, MODE_CMP_IMAGES },
 	{"bruteforce-rs03-search", 0, 0, MODIFIER_BRUTEFORCE_RS03_SEARCH },
 	{"cache-size", 1, 0, MODIFIER_CACHE_SIZE },
+	{"catalog", 1, 0, MODIFIER_CATALOG },
+	{"catalog-report", 1, 0, MODIFIER_CATALOG_REPORT },
 	{"cav", 1, 0, MODIFIER_CAV_SPEED },
 	{"cdda", 0, 0, MODIFIER_CDDA },
 	{"cdump", 0, 0, MODIFIER_CDUMP },
@@ -561,6 +565,16 @@ int main(int argc, char *argv[])
 	    }
 	 }
 	   break;
+	 case MODIFIER_CATALOG:
+	    g_free(Closure->catalogFile);
+	    Closure->catalogFile = g_strdup(optarg);
+	    break;
+	 case MODIFIER_CATALOG_REPORT:
+	    g_free(Closure->catalogReport);
+	    Closure->catalogReport = g_strdup(optarg);
+	    if(mode == MODE_NONE)
+	       mode = MODE_SEQUENCE;
+	    break;
 	 case MODIFIER_NO_BDR_DEFECT_MANAGEMENT:
 	    Closure->noBdrDefectManagement = TRUE;
 	    break;
@@ -985,6 +999,11 @@ int main(int argc, char *argv[])
 	break;
    }
 
+   /*** Print the medium history from a catalog file if requested */
+
+   if(Closure->catalogReport && mode == MODE_SEQUENCE)
+      CatalogReport(Closure->catalogReport);
+
    if(debug_arg) g_free(debug_arg);
 
    /*** If no mode was selected, print the help screen. */
@@ -1033,6 +1052,8 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --audio-offset n           - RS04: read offset of a CD-DA rip in samples (default: detect)\n"));
       PrintCLI(_("  --auto-suffix              - automatically add .iso and .ecc file suffixes\n"));
       PrintCLI(_("  --cache-size n             - image cache size in MiB during -c mode (default: 32MiB)\n"));
+      PrintCLI(_("  --catalog f                - append the result of each scan/read to catalog file f\n"));
+      PrintCLI(_("  --catalog-report f         - print the history of each medium in catalog file f\n"));
       PrintCLI(_("  --cdda                     - read CD as 2352 byte sectors (.bin + .cue; automatic for audio CDs)\n"));
       PrintCLI(_("  --dao                      - assume DAO disc; do not trim image end\n"));
       PrintCLI(_("  --defective-dump d         - directory for saving incomplete raw sectors\n"));

@@ -235,6 +235,8 @@ typedef struct _GlobalClosure
    GPtrArray *deviceNodes;  /* List of device nodes (C: or /dev/foo) */
    char *imageName;     /* complete path of current image file */
    char *eccName;       /* complete path of current ecc file */
+   char *catalogFile;   /* append scan/read results to this file */
+   char *catalogReport; /* print the history from this catalog file */
    GPtrArray *methodList; /* List of available methods */
    char *methodName;    /* Name of currently selected codec */
    gint64 readStart;    /* Range to read */
@@ -946,6 +948,13 @@ typedef struct _Image
 } Image;
 
 Image* OpenImageFromFile(char*, int, mode_t);
+
+/***
+ *** catalog.c
+ ***/
+
+void AppendCatalog(Image*, char*, char*, gint64, gint64, gint64);
+void CatalogReport(char*);
 Image* OpenImageFromDevice(char*, int);   /* really in scsi-layer.h */
 Image* OpenEccFileForImage(Image*, char*, int, mode_t);
 int ReportImageEccInconsistencies(Image*);
