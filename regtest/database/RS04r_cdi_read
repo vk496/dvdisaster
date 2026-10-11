@@ -1,0 +1,21 @@
+b3f86c7a122d21207e233ffb55bd5048
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ CD.
+Medium: CD-R/CD-I, 1200 sectors.
+
+This CD contains Mode 2 Form 2 sectors (e.g. VCD, PlayStation or CD-i)
+which do not fit into 2048 byte sectors; reading it as a CD-DA image (see --cdda).
+Reading CD-DA image: 1200 sectors of 2352 bytes, using C2 error pointers.
+  Session 1, track  1: sectors 0 - 299, data, mode 2
+  Session 1, track  2: sectors 300 - 1199, data, mode 2
+
+Creating new rip.bin image.
+
+All sectors successfully read.
+Cue sheet written to rip.cue.
