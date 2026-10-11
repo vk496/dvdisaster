@@ -462,3 +462,145 @@ int RS04RecognizeImage(Image *image)
    Verbose("RS04RecognizeImage(): %d set(s) found\n", n);
    return TRUE;
 }
+
+/***
+ *** Supplementary sets (rs04.tex, "Supplementary sets")
+ ***
+ * Fix and verify combine all RS04 sets which protect the same image:
+ * the ecc file, further ecc files given with -e, and the augmented
+ * sets of the image which overlap the data of the ecc file.
+ * Sets with another sector size are not combined.
+ */
+
+/* TRUE if the RS04 ecc file belongs to the image (or this can not be checked) */
+
+int RS04ConfirmEccFile(Image *image, LargeFile *file, EccHeader *eh)
+{  RS04Set set;
+
+   if(RS04ParseTag((unsigned char*)eh->padding, &set, NULL, NULL) != RS04_TAG_VALID)
+     return FALSE;
+   set.target = ECC_FILE;
+   set.file = file;
+   return confirm(image, &set) != 0;
+}
+
+static void ignore_ecc_file(char *name, char *reason)
+{  PrintLog(_("* ecc file %s ignored: %s\n"), name, reason);
+}
+
+RS04Info* RS04GetAllSets(Image *image, int flags)
+{  RS04Info *info = RS04GetSets(image);
+   RS04Info *aug = NULL;
+   GArray *sets;
+   RS04Set *first;
+   gint64 extent;
+   guint i;
+
+   if(!info || info->set[0].target != ECC_FILE)
+     return info;
+
+   sets = g_array_new(FALSE, FALSE, sizeof(RS04Set));
+   g_array_append_val(sets, info->set[0]);
+   first = &info->set[0];
+   extent = first->dataBytes;
+
+   /* Augmented sets overlapping the data of the ecc file */
+
+   if(image->eccHeader && image->cachedLayout
+      && !strncmp((char*)image->eccHeader->method, "RS04", 4))
+   {  aug = (RS04Info*)image->cachedLayout;
+
+      for(i=0; i<aug->nSets; i++)
+      {  RS04Set *set = &aug->set[i];
+
+	 if(set->B == first->B && set->start*set->B < (gint64)first->dataBytes)
+	   extent = MAX(extent, (set->start + (gint64)(set->S + set->A))*set->B);
+      }
+   }
+
+   /* Further ecc files; they must not extend the image */
+
+   for(i=0; Closure->moreEccNames && i<Closure->moreEccNames->len; i++)
+   {  char *name = g_ptr_array_index(Closure->moreEccNames, i);
+      LargeFile *file = LargeOpen(name, flags, IMG_PERMS);
+      EccHeader *eh;
+      RS04Set set;
+      int ok;
+
+      if(!file)
+      {  ignore_ecc_file(name, strerror(errno));
+	 continue;
+      }
+      if(RS04RecognizeFile(file, &eh) != ECCFILE_PRESENT)
+      {  ignore_ecc_file(name, _("no RS04 data"));
+	 LargeClose(file);
+	 continue;
+      }
+
+      RS04ParseTag((unsigned char*)eh->padding, &set, NULL, NULL);
+      set.target = ECC_FILE;
+      set.file = file;
+      ok =    set.B == first->B && (gint64)set.dataBytes <= extent
+	   && RS04ConfirmEccFile(image, file, eh);
+      g_free(eh);
+
+      if(!ok)
+      {  ignore_ecc_file(name, _("does not belong to the image"));
+	 LargeClose(file);
+	 continue;
+      }
+      g_array_append_val(sets, set);
+   }
+
+   if(aug)
+     for(i=0; i<aug->nSets; i++)
+     {  RS04Set *set = &aug->set[i];
+
+	if(set->B == first->B && set->start*set->B < (gint64)first->dataBytes)
+	  g_array_append_val(sets, *set);
+     }
+
+   if(sets->len > 1)
+   {  RS04Info *all = g_malloc0(sizeof(RS04Info) + sets->len*sizeof(RS04Set));
+
+      all->eh = info->eh;
+      all->nSets = sets->len;
+      memcpy(all->set, sets->data, sets->len*sizeof(RS04Set));
+      g_free(info);
+      info = all;
+   }
+
+   g_array_free(sets, TRUE);
+   return info;
+}
+
+void RS04FreeSets(Image *image, RS04Info *info)
+{  int i;
+
+   if(!info) return;
+
+   for(i=0; i<info->nSets; i++)
+     if(info->set[i].file && info->set[i].file != image->eccFile)
+       LargeClose(info->set[i].file);
+   g_free(info);
+}
+
+/* TRUE if some sets protect the same image sectors */
+
+int RS04Combined(RS04Info *info)
+{  int i, j;
+
+   for(i=0; i<info->nSets; i++)
+     for(j=0; j<i; j++)
+     {  RS04Set *a = &info->set[i], *b = &info->set[j];
+	gint64 a0 = a->target == ECC_FILE ? 0 : a->start*a->B;
+	gint64 a1 = a->target == ECC_FILE ? (gint64)a->dataBytes : (a->start + (gint64)(a->S + a->A))*a->B;
+	gint64 b0 = b->target == ECC_FILE ? 0 : b->start*b->B;
+	gint64 b1 = b->target == ECC_FILE ? (gint64)b->dataBytes : (b->start + (gint64)(b->S + b->A))*b->B;
+
+	if(a0 < b1 && b0 < a1)
+	  return TRUE;
+     }
+
+   return FALSE;
+}

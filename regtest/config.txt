@@ -33,6 +33,9 @@ RS01_defective_with_ecc yes
 RS01_missing_sectors_with_ecc yes
 RS01_crc_errors_with_ecc yes
 RS01_ecc_margin_exceeded yes
+RS01_find_ecc_in_dir yes
+RS01_find_ecc_in_dir_no_match yes
+RS01_find_ecc_in_dir_ambiguous yes
 RS01_crc_in_fingerprint yes
 RS01_missing_fingerprint yes
 RS01_missing_ecc_header yes
@@ -126,6 +129,7 @@ RS01_read_new_with_range_no_ecc yes
 RS01_read_new_with_invalid_range_no_ecc yes
 RS01_read_two_missing_secs_no_ecc yes
 RS01_read_with_ecc yes
+RS01_read_find_ecc_in_dir yes
 RS01_read_with_ecc_good_file yes
 RS01_read_with_non_existing_ecc yes
 RS01_read_with_no_permission_for_ecc yes
@@ -618,6 +622,7 @@ RS03f_ecc_recreate_after_read_rs03f yes
 
 RS03f_fix_good yes
 RS03f_fix_missing_data_sectors yes
+RS03f_fix_find_ecc_in_dir yes
 RS03f_fix_missing_crc_sectors yes
 RS03f_fix_missing_ecc_sectors yes
 RS03f_fix_border_cases_erasures yes
@@ -720,6 +725,7 @@ RS04f_image_plus56 yes
 RS04f_ecc_truncated yes
 RS04f_ecc_plus1 yes
 RS04f_wrong_image yes
+RS04f_supplementary yes
 RS04f_fix_good yes
 RS04f_fix_correctable yes
 RS04f_fix_correctable_threads yes
@@ -733,6 +739,7 @@ RS04f_fix_truncated_ecc yes
 RS04f_fix_image_plus56 yes
 RS04f_fix_image_plus56_truncate yes
 RS04f_fix_partial_last_sector yes
+RS04f_fix_supplementary_dir yes
 RS04f_audio_create yes
 RS04f_audio_good yes
 RS04f_audio_offset_verify yes
@@ -771,6 +778,7 @@ RS04i_crc_sectors_lost yes
 RS04i_embedded_ecc_file yes
 RS04i_multisession yes
 RS04i_multisession_gap_scan yes
+RS04i_supplementary yes
 RS04i_fix_good yes
 RS04i_fix_correctable yes
 RS04i_fix_crc_sectors yes
@@ -781,6 +789,7 @@ RS04i_fix_truncated_threads yes
 RS04i_fix_trailing_garbage yes
 RS04i_fix_tiny_1 yes
 RS04i_fix_multisession yes
+RS04i_fix_supplementary yes
 RS04i_strip_ecc yes
 RS04i_read_good yes
 ### Reading tests (codec independent): multi-session media and audio CDs

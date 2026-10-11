@@ -1,0 +1,51 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+rs04i-tmp.iso present.
+rs04i-tmp.ecc present.
+
+Error correction properties:
+- type             : Error correction file
+- set              : 1 of 2, ecc file rs04i-tmp.ecc
+- method           : RS04, 224+22 layers of 45 sectors,  9.9% redundancy.
+- sector size      : 2048 bytes
+- created by       : dvdisaster-0.80
+- data md5sum      : 9b5c6ccc5364b4658e853486d3fd29fb
+
+Data integrity:
+- sectors          : 10022 in image; 1043 in ecc file
+* missing sectors  : 100 - 2080 
+* missing sectors  : 100 - 110 (in ecc file)
+* BAD image/file   : 1992 sectors missing
+  ... data section   : 1981 sectors missing; 0 CRC errors
+  ... crc section    : 0 sectors missing; 0 CRC errors
+  ... ecc section    : 11 sectors missing; 0 CRC errors
+  ... tags           : 0 of 33 missing
+- erasure counts   :  avg =  44.3; worst = 45 per ecc block.
+- prognosis        : 9073 of 11065 sectors recoverable (81.9%)
+
+Error correction properties:
+- type             : Augmented image
+- set              : 2 of 2, image sectors 0 - 10021
+- method           : RS04, 191+47 layers of 42 sectors, 24.6% redundancy.
+- sector size      : 2048 bytes
+- created by       : dvdisaster-0.80
+- data md5sum      : 85a24eb529119e79c540b623f47fc2a3
+
+Data integrity:
+- medium sectors   : 10022 total / 8000 data
+* missing sectors  : 100 - 2080 
+* BAD image/file   : 1981 sectors missing
+  ... data section   : 1981 sectors missing; 0 CRC errors
+  ... crc section    : 0 sectors missing; 0 CRC errors
+  ... ecc section    : 0 sectors missing; 0 CRC errors
+  ... tags           : 0 of 32 missing
+- erasure counts   :  avg =  47.2; worst = 48 per ecc block.
+- prognosis        : 9686 of 10022 sectors recoverable (96.6%)
+
+Combined prognosis of all 2 sets:
+- prognosis        : 11065 of 11065 sectors recoverable (100.0%)

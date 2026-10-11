@@ -502,7 +502,7 @@ void RS04InitIO(RS04IO *io, Image *image, RS04Set *set)
 
    if(set->target == ECC_FILE)
    {  io->dataOffset = 0;
-      io->zoneFile = image->eccFile;
+      io->zoneFile = set->file ? set->file : image->eccFile;
       io->zonePos = 0;
    }
    else

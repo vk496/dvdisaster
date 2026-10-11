@@ -1,0 +1,138 @@
+85a24eb529119e79c540b623f47fc2a3
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04f-tmp.iso: 8000 medium sectors.
+Using ecc file eccdir/master.ecc
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+
+Set 1 of 2 (ecc file eccdir/master.ecc):
+* ecc block 0: 45 erasures, but only 31 can be corrected
+* ecc block 1: 45 erasures, but only 31 can be corrected
+* ecc block 2: 45 erasures, but only 31 can be corrected
+* ecc block 3: 45 erasures, but only 31 can be corrected
+* ecc block 4: 45 erasures, but only 31 can be corrected
+* ecc block 5: 45 erasures, but only 31 can be corrected
+* ecc block 6: 45 erasures, but only 31 can be corrected
+* ecc block 7: 45 erasures, but only 31 can be corrected
+* ecc block 8: 45 erasures, but only 31 can be corrected
+* ecc block 9: 45 erasures, but only 31 can be corrected
+* ecc block 10: 45 erasures, but only 31 can be corrected
+* ecc block 11: 45 erasures, but only 31 can be corrected
+* ecc block 12: 45 erasures, but only 31 can be corrected
+* ecc block 13: 45 erasures, but only 31 can be corrected
+* ecc block 14: 45 erasures, but only 31 can be corrected
+* ecc block 15: 45 erasures, but only 31 can be corrected
+* ecc block 16: 45 erasures, but only 31 can be corrected
+* ecc block 17: 45 erasures, but only 31 can be corrected
+* ecc block 18: 44 erasures, but only 31 can be corrected
+* ecc block 19: 44 erasures, but only 31 can be corrected
+* ecc block 20: 44 erasures, but only 31 can be corrected
+* ecc block 21: 44 erasures, but only 31 can be corrected
+* ecc block 22: 44 erasures, but only 31 can be corrected
+* ecc block 23: 44 erasures, but only 31 can be corrected
+* ecc block 24: 44 erasures, but only 31 can be corrected
+* ecc block 25: 44 erasures, but only 31 can be corrected
+* ecc block 26: 44 erasures, but only 31 can be corrected
+* ecc block 27: 44 erasures, but only 31 can be corrected
+* ecc block 28: 45 erasures, but only 31 can be corrected
+* ecc block 29: 45 erasures, but only 31 can be corrected
+* ecc block 30: 45 erasures, but only 31 can be corrected
+* ecc block 31: 45 erasures, but only 31 can be corrected
+* ecc block 32: 45 erasures, but only 31 can be corrected
+* ecc block 33: 45 erasures, but only 31 can be corrected
+* ecc block 34: 45 erasures, but only 31 can be corrected
+* ecc block 35: 45 erasures, but only 31 can be corrected
+
+Set 2 of 2 (ecc file eccdir/supp.ecc):
+   38 repaired sectors: 126d 168d 210d 252d 294d 336d 378d 420d 462d 504d 546d 588d 630d 672d 714d 756d 798d 840d 882d 924d 966d 1008d 1050d 1092d 1134d 1176d 1218d 1260d 1302d 1344d 1386d 1428d 1470d 1512d 1554d 1596d 1638d 1680d 
+   38 repaired sectors: 127d 169d 211d 253d 295d 337d 379d 421d 463d 505d 547d 589d 631d 673d 715d 757d 799d 841d 883d 925d 967d 1009d 1051d 1093d 1135d 1177d 1219d 1261d 1303d 1345d 1387d 1429d 1471d 1513d 1555d 1597d 1639d 1681d 
+   38 repaired sectors: 128d 170d 212d 254d 296d 338d 380d 422d 464d 506d 548d 590d 632d 674d 716d 758d 800d 842d 884d 926d 968d 1010d 1052d 1094d 1136d 1178d 1220d 1262d 1304d 1346d 1388d 1430d 1472d 1514d 1556d 1598d 1640d 1682d 
+   38 repaired sectors: 129d 171d 213d 255d 297d 339d 381d 423d 465d 507d 549d 591d 633d 675d 717d 759d 801d 843d 885d 927d 969d 1011d 1053d 1095d 1137d 1179d 1221d 1263d 1305d 1347d 1389d 1431d 1473d 1515d 1557d 1599d 1641d 1683d 
+   38 repaired sectors: 130d 172d 214d 256d 298d 340d 382d 424d 466d 508d 550d 592d 634d 676d 718d 760d 802d 844d 886d 928d 970d 1012d 1054d 1096d 1138d 1180d 1222d 1264d 1306d 1348d 1390d 1432d 1474d 1516d 1558d 1600d 1642d 1684d 
+   38 repaired sectors: 131d 173d 215d 257d 299d 341d 383d 425d 467d 509d 551d 593d 635d 677d 719d 761d 803d 845d 887d 929d 971d 1013d 1055d 1097d 1139d 1181d 1223d 1265d 1307d 1349d 1391d 1433d 1475d 1517d 1559d 1601d 1643d 1685d 
+   38 repaired sectors: 132d 174d 216d 258d 300d 342d 384d 426d 468d 510d 552d 594d 636d 678d 720d 762d 804d 846d 888d 930d 972d 1014d 1056d 1098d 1140d 1182d 1224d 1266d 1308d 1350d 1392d 1434d 1476d 1518d 1560d 1602d 1644d 1686d 
+   38 repaired sectors: 133d 175d 217d 259d 301d 343d 385d 427d 469d 511d 553d 595d 637d 679d 721d 763d 805d 847d 889d 931d 973d 1015d 1057d 1099d 1141d 1183d 1225d 1267d 1309d 1351d 1393d 1435d 1477d 1519d 1561d 1603d 1645d 1687d 
+   38 repaired sectors: 134d 176d 218d 260d 302d 344d 386d 428d 470d 512d 554d 596d 638d 680d 722d 764d 806d 848d 890d 932d 974d 1016d 1058d 1100d 1142d 1184d 1226d 1268d 1310d 1352d 1394d 1436d 1478d 1520d 1562d 1604d 1646d 1688d 
+   38 repaired sectors: 135d 177d 219d 261d 303d 345d 387d 429d 471d 513d 555d 597d 639d 681d 723d 765d 807d 849d 891d 933d 975d 1017d 1059d 1101d 1143d 1185d 1227d 1269d 1311d 1353d 1395d 1437d 1479d 1521d 1563d 1605d 1647d 1689d 
+   38 repaired sectors: 136d 178d 220d 262d 304d 346d 388d 430d 472d 514d 556d 598d 640d 682d 724d 766d 808d 850d 892d 934d 976d 1018d 1060d 1102d 1144d 1186d 1228d 1270d 1312d 1354d 1396d 1438d 1480d 1522d 1564d 1606d 1648d 1690d 
+   38 repaired sectors: 137d 179d 221d 263d 305d 347d 389d 431d 473d 515d 557d 599d 641d 683d 725d 767d 809d 851d 893d 935d 977d 1019d 1061d 1103d 1145d 1187d 1229d 1271d 1313d 1355d 1397d 1439d 1481d 1523d 1565d 1607d 1649d 1691d 
+   38 repaired sectors: 138d 180d 222d 264d 306d 348d 390d 432d 474d 516d 558d 600d 642d 684d 726d 768d 810d 852d 894d 936d 978d 1020d 1062d 1104d 1146d 1188d 1230d 1272d 1314d 1356d 1398d 1440d 1482d 1524d 1566d 1608d 1650d 1692d 
+   38 repaired sectors: 139d 181d 223d 265d 307d 349d 391d 433d 475d 517d 559d 601d 643d 685d 727d 769d 811d 853d 895d 937d 979d 1021d 1063d 1105d 1147d 1189d 1231d 1273d 1315d 1357d 1399d 1441d 1483d 1525d 1567d 1609d 1651d 1693d 
+   38 repaired sectors: 140d 182d 224d 266d 308d 350d 392d 434d 476d 518d 560d 602d 644d 686d 728d 770d 812d 854d 896d 938d 980d 1022d 1064d 1106d 1148d 1190d 1232d 1274d 1316d 1358d 1400d 1442d 1484d 1526d 1568d 1610d 1652d 1694d 
+   38 repaired sectors: 141d 183d 225d 267d 309d 351d 393d 435d 477d 519d 561d 603d 645d 687d 729d 771d 813d 855d 897d 939d 981d 1023d 1065d 1107d 1149d 1191d 1233d 1275d 1317d 1359d 1401d 1443d 1485d 1527d 1569d 1611d 1653d 1695d 
+* ecc block 16: 39 erasures, but only 38 can be corrected
+* ecc block 17: 39 erasures, but only 38 can be corrected
+* ecc block 18: 39 erasures, but only 38 can be corrected
+* ecc block 19: 39 erasures, but only 38 can be corrected
+* ecc block 20: 39 erasures, but only 38 can be corrected
+* ecc block 21: 39 erasures, but only 38 can be corrected
+* ecc block 22: 39 erasures, but only 38 can be corrected
+* ecc block 23: 39 erasures, but only 38 can be corrected
+* ecc block 24: 39 erasures, but only 38 can be corrected
+* ecc block 25: 39 erasures, but only 38 can be corrected
+* ecc block 26: 39 erasures, but only 38 can be corrected
+* ecc block 27: 39 erasures, but only 38 can be corrected
+* ecc block 28: 39 erasures, but only 38 can be corrected
+* ecc block 29: 39 erasures, but only 38 can be corrected
+   38 repaired sectors: 114d 156d 198d 240d 282d 324d 366d 408d 450d 492d 534d 576d 618d 660d 702d 744d 786d 828d 870d 912d 954d 996d 1038d 1080d 1122d 1164d 1206d 1248d 1290d 1332d 1374d 1416d 1458d 1500d 1542d 1584d 1626d 1668d 
+   38 repaired sectors: 115d 157d 199d 241d 283d 325d 367d 409d 451d 493d 535d 577d 619d 661d 703d 745d 787d 829d 871d 913d 955d 997d 1039d 1081d 1123d 1165d 1207d 1249d 1291d 1333d 1375d 1417d 1459d 1501d 1543d 1585d 1627d 1669d 
+   38 repaired sectors: 116d 158d 200d 242d 284d 326d 368d 410d 452d 494d 536d 578d 620d 662d 704d 746d 788d 830d 872d 914d 956d 998d 1040d 1082d 1124d 1166d 1208d 1250d 1292d 1334d 1376d 1418d 1460d 1502d 1544d 1586d 1628d 1670d 
+   38 repaired sectors: 117d 159d 201d 243d 285d 327d 369d 411d 453d 495d 537d 579d 621d 663d 705d 747d 789d 831d 873d 915d 957d 999d 1041d 1083d 1125d 1167d 1209d 1251d 1293d 1335d 1377d 1419d 1461d 1503d 1545d 1587d 1629d 1671d 
+   38 repaired sectors: 118d 160d 202d 244d 286d 328d 370d 412d 454d 496d 538d 580d 622d 664d 706d 748d 790d 832d 874d 916d 958d 1000d 1042d 1084d 1126d 1168d 1210d 1252d 1294d 1336d 1378d 1420d 1462d 1504d 1546d 1588d 1630d 1672d 
+   38 repaired sectors: 119d 161d 203d 245d 287d 329d 371d 413d 455d 497d 539d 581d 623d 665d 707d 749d 791d 833d 875d 917d 959d 1001d 1043d 1085d 1127d 1169d 1211d 1253d 1295d 1337d 1379d 1421d 1463d 1505d 1547d 1589d 1631d 1673d 
+   38 repaired sectors: 120d 162d 204d 246d 288d 330d 372d 414d 456d 498d 540d 582d 624d 666d 708d 750d 792d 834d 876d 918d 960d 1002d 1044d 1086d 1128d 1170d 1212d 1254d 1296d 1338d 1380d 1422d 1464d 1506d 1548d 1590d 1632d 1674d 
+   38 repaired sectors: 121d 163d 205d 247d 289d 331d 373d 415d 457d 499d 541d 583d 625d 667d 709d 751d 793d 835d 877d 919d 961d 1003d 1045d 1087d 1129d 1171d 1213d 1255d 1297d 1339d 1381d 1423d 1465d 1507d 1549d 1591d 1633d 1675d 
+   38 repaired sectors: 122d 164d 206d 248d 290d 332d 374d 416d 458d 500d 542d 584d 626d 668d 710d 752d 794d 836d 878d 920d 962d 1004d 1046d 1088d 1130d 1172d 1214d 1256d 1298d 1340d 1382d 1424d 1466d 1508d 1550d 1592d 1634d 1676d 
+   38 repaired sectors: 123d 165d 207d 249d 291d 333d 375d 417d 459d 501d 543d 585d 627d 669d 711d 753d 795d 837d 879d 921d 963d 1005d 1047d 1089d 1131d 1173d 1215d 1257d 1299d 1341d 1383d 1425d 1467d 1509d 1551d 1593d 1635d 1677d 
+   38 repaired sectors: 124d 166d 208d 250d 292d 334d 376d 418d 460d 502d 544d 586d 628d 670d 712d 754d 796d 838d 880d 922d 964d 1006d 1048d 1090d 1132d 1174d 1216d 1258d 1300d 1342d 1384d 1426d 1468d 1510d 1552d 1594d 1636d 1678d 
+   38 repaired sectors: 125d 167d 209d 251d 293d 335d 377d 419d 461d 503d 545d 587d 629d 671d 713d 755d 797d 839d 881d 923d 965d 1007d 1049d 1091d 1133d 1175d 1217d 1259d 1301d 1343d 1385d 1427d 1469d 1511d 1553d 1595d 1637d 1679d 
+
+Repeating the repair with all sets (pass 2).
+
+Set 1 of 2 (ecc file eccdir/master.ecc):
+   14 repaired sectors: 108d 144d 360d 396d 612d 648d 864d 900d 1116d 1152d 1368d 1404d 1620d 1656d 
+   14 repaired sectors: 109d 145d 361d 397d 613d 649d 865d 901d 1117d 1153d 1369d 1405d 1621d 1657d 
+   14 repaired sectors: 110d 146d 362d 398d 614d 650d 866d 902d 1118d 1154d 1370d 1406d 1622d 1658d 
+   14 repaired sectors: 111d 147d 363d 399d 615d 651d 867d 903d 1119d 1155d 1371d 1407d 1623d 1659d 
+   21 repaired sectors: 112d 148d 184d 364d 400d 436d 616d 652d 688d 868d 904d 940d 1120d 1156d 1192d 1372d 1408d 1444d 1624d 1660d 1696d 
+   21 repaired sectors: 113d 149d 185d 365d 401d 437d 617d 653d 689d 869d 905d 941d 1121d 1157d 1193d 1373d 1409d 1445d 1625d 1661d 1697d 
+   14 repaired sectors: 150d 186d 402d 438d 654d 690d 906d 942d 1158d 1194d 1410d 1446d 1662d 1698d 
+   14 repaired sectors: 151d 187d 403d 439d 655d 691d 907d 943d 1159d 1195d 1411d 1447d 1663d 1699d 
+   14 repaired sectors: 152d 188d 404d 440d 656d 692d 908d 944d 1160d 1196d 1412d 1448d 1664d 1700d 
+   14 repaired sectors: 153d 189d 405d 441d 657d 693d 909d 945d 1161d 1197d 1413d 1449d 1665d 1701d 
+   20 repaired sectors: 154d 190d 226d 406d 442d 478d 658d 694d 730d 910d 946d 982d 1162d 1198d 1234d 1414d 1450d 1486d 1666d 1702d 
+   20 repaired sectors: 155d 191d 227d 407d 443d 479d 659d 695d 731d 911d 947d 983d 1163d 1199d 1235d 1415d 1451d 1487d 1667d 1703d 
+   13 repaired sectors: 192d 228d 444d 480d 696d 732d 948d 984d 1200d 1236d 1452d 1488d 1704d 
+   13 repaired sectors: 193d 229d 445d 481d 697d 733d 949d 985d 1201d 1237d 1453d 1489d 1705d 
+   13 repaired sectors: 194d 230d 446d 482d 698d 734d 950d 986d 1202d 1238d 1454d 1490d 1706d 
+   13 repaired sectors: 195d 231d 447d 483d 699d 735d 951d 987d 1203d 1239d 1455d 1491d 1707d 
+   19 repaired sectors: 196d 232d 268d 448d 484d 520d 700d 736d 772d 952d 988d 1024d 1204d 1240d 1276d 1456d 1492d 1528d 1708d 
+   19 repaired sectors: 197d 233d 269d 449d 485d 521d 701d 737d 773d 953d 989d 1025d 1205d 1241d 1277d 1457d 1493d 1529d 1709d 
+   12 repaired sectors: 234d 270d 486d 522d 738d 774d 990d 1026d 1242d 1278d 1494d 1530d 
+   12 repaired sectors: 235d 271d 487d 523d 739d 775d 991d 1027d 1243d 1279d 1495d 1531d 
+   12 repaired sectors: 236d 272d 488d 524d 740d 776d 992d 1028d 1244d 1280d 1496d 1532d 
+   12 repaired sectors: 237d 273d 489d 525d 741d 777d 993d 1029d 1245d 1281d 1497d 1533d 
+   18 repaired sectors: 238d 274d 310d 490d 526d 562d 742d 778d 814d 994d 1030d 1066d 1246d 1282d 1318d 1498d 1534d 1570d 
+   18 repaired sectors: 239d 275d 311d 491d 527d 563d 743d 779d 815d 995d 1031d 1067d 1247d 1283d 1319d 1499d 1535d 1571d 
+   12 repaired sectors: 276d 312d 528d 564d 780d 816d 1032d 1068d 1284d 1320d 1536d 1572d 
+   12 repaired sectors: 277d 313d 529d 565d 781d 817d 1033d 1069d 1285d 1321d 1537d 1573d 
+   12 repaired sectors: 278d 314d 530d 566d 782d 818d 1034d 1070d 1286d 1322d 1538d 1574d 
+   12 repaired sectors: 279d 315d 531d 567d 783d 819d 1035d 1071d 1287d 1323d 1539d 1575d 
+   19 repaired sectors: 100d 280d 316d 352d 532d 568d 604d 784d 820d 856d 1036d 1072d 1108d 1288d 1324d 1360d 1540d 1576d 1612d 
+   19 repaired sectors: 101d 281d 317d 353d 533d 569d 605d 785d 821d 857d 1037d 1073d 1109d 1289d 1325d 1361d 1541d 1577d 1613d 
+   13 repaired sectors: 102d 318d 354d 570d 606d 822d 858d 1074d 1110d 1326d 1362d 1578d 1614d 
+   13 repaired sectors: 103d 319d 355d 571d 607d 823d 859d 1075d 1111d 1327d 1363d 1579d 1615d 
+   13 repaired sectors: 104d 320d 356d 572d 608d 824d 860d 1076d 1112d 1328d 1364d 1580d 1616d 
+   13 repaired sectors: 105d 321d 357d 573d 609d 825d 861d 1077d 1113d 1329d 1365d 1581d 1617d 
+   20 repaired sectors: 106d 142d 322d 358d 394d 574d 610d 646d 826d 862d 898d 1078d 1114d 1150d 1330d 1366d 1402d 1582d 1618d 1654d 
+   20 repaired sectors: 107d 143d 323d 359d 395d 575d 611d 647d 827d 863d 899d 1079d 1115d 1151d 1331d 1367d 1403d 1583d 1619d 1655d 
+
+Set 2 of 2 (ecc file eccdir/supp.ecc):
+Repaired sectors: 1610 (1610 data, 0 crc, 0 ecc, 0 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  33.0; worst = 45.

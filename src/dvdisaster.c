@@ -175,6 +175,7 @@ int main(int argc, char *argv[])
 {  GThread *watchdog = NULL;
    int mode = MODE_NONE; 
    int sequence = MODE_NONE;
+   int ecc_given = FALSE;
    char *debug_arg = NULL;
    char *read_range = NULL;
    int debug_mode_required=FALSE;
@@ -385,10 +386,16 @@ int main(int argc, char *argv[])
 	              Closure->device = g_strdup(optarg); 
 	              break;
                    }
-         case 'e': if(optarg) 
+         case 'e': if(optarg && ecc_given)  /* RS04 supplementary sets */
+		   {  if(!Closure->moreEccNames)
+			 Closure->moreEccNames = g_ptr_array_new_with_free_func(g_free);
+		      g_ptr_array_add(Closure->moreEccNames, g_strdup(optarg));
+		   }
+		   else if(optarg) 
 		   {  if(Closure->eccName)
 		         g_free(Closure->eccName);
 		      Closure->eccName = g_strdup(optarg);
+		      ecc_given = TRUE;
 		   }
 	           break;
          case 'f': mode = MODE_SEQUENCE; sequence |= 1<<MODE_FIX; break;

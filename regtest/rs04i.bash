@@ -245,6 +245,18 @@ if try "two sessions, tag 0 of the first set missing" multisession_gap_scan; the
   run_regtest multisession_gap_scan "-t" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
+# Supplementary ecc file made later from the augmented image. Neither set
+# can repair the damage alone (the augmented set has 48 erasures in some
+# codewords, the ecc file set 44 in all), but both together can.
+
+if try "augmented image and supplementary ecc file" supplementary; then (
+  $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TMPECC -mRS04 -n 10% -o file -c >>$LOGFILE 2>&1
+  cp $MASTERISO $TMPISO
+  $NEWVER --debug -i$TMPISO --erase 100-2080 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPECC --erase 100-110 >>$LOGFILE 2>&1
+  run_regtest supplementary "-t" $TMPISO $TMPECC
+) & limit_jobs; fi
+
 ### Repair tests
 
 REGTEST_SECTION="Repair tests"
@@ -318,6 +330,14 @@ if try "fixing two sessions" fix_multisession; then (
   $NEWVER --debug -i$TMPISO --erase 7000-7010 >>$LOGFILE 2>&1
   $NEWVER --debug -i$TMPISO --erase 10212 >>$LOGFILE 2>&1
   run_regtest fix_multisession "-f" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+if try "fixing with augmented image and supplementary ecc file" fix_supplementary; then (
+  $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TMPECC -mRS04 -n 10% -o file -c >>$LOGFILE 2>&1
+  cp $MASTERISO $TMPISO
+  $NEWVER --debug -i$TMPISO --erase 100-2080 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPECC --erase 100-110 >>$LOGFILE 2>&1
+  run_regtest fix_supplementary "-f" $TMPISO $TMPECC
 ) & limit_jobs; fi
 
 ### Other actions
