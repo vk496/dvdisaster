@@ -6390,6 +6390,7 @@ RS03: try number = 2403, reading sector 236711
 RS03: try number = 2404, reading sector 236712
 ** All layers tested -> no RS03 data found
 RS03RecognizeImage: no RS03 data found
+...trying RS04
 ...no augmented image detected.
 # Calling query_size()
 # *** query_size(Simulated CD drive 1.00) ***
