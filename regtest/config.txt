@@ -31,6 +31,7 @@ RS01_crc_in_fingerprint yes
 RS01_missing_fingerprint yes
 RS01_missing_ecc_header yes
 RS01_ecc_header_crc_error yes
+RS01_ecc_header_zero_databytes yes
 RS01_uncorrectable_dsm_in_image yes
 RS01_uncorrectable_dsm_in_image_verbose yes
 RS01_uncorrectable_dsm_in_image2 yes
@@ -57,6 +58,8 @@ RS01_ecc_recreate_after_read_wrong_rs01 yes
 RS01_fix_good yes
 RS01_fix_no_read_perm yes
 RS01_fix_no_read_perm_ecc yes
+RS01_fix_negative_eccbytes yes
+RS01_fix_invalid_inlast yes
 RS01_fix_good_plus56 yes
 RS01_fix_no_write_perm yes
 RS01_fix_missing_sectors yes
@@ -185,6 +188,9 @@ RS02_plus17 yes
 RS02_bad_header yes
 RS02_bad_headers yes
 RS02_missing_headers yes
+RS02_header_zero_databytes yes
+RS02_header_invalid_inlast yes
+RS02_header_huge_sectors yes
 RS02_missing_data_sectors yes
 RS02_missing_crc_sectors yes
 RS02_missing_ecc_sectors yes
@@ -198,6 +204,7 @@ RS02_modulo_glitch yes
 RS02_modulo_glitch2 yes
 RS02_modulo_glitch3 yes
 RS02_modulo_glitch4 yes
+RS02_tiny_old_header yes
 RS02_with_rs01_file yes
 RS02_with_wrong_rs01_file yes
 RS02_with_rs03_file yes
@@ -210,6 +217,7 @@ RS02_uncorrectable_dsm_in_image3 yes
 
 # Creation tests
 RS02_ecc_create yes
+RS02_ecc_create_tiny yes
 RS02_ecc_missing_image yes
 RS02_ecc_no_read_perm yes
 RS02_ecc_no_write_perm yes
@@ -380,6 +388,10 @@ RS03i_missing_header3 yes
 RS03i_missing_header4 yes
 RS03i_missing_header5 yes
 RS03i_missing_header6 yes
+RS03i_header_zero_layer_size yes
+RS03i_header_huge_sectors yes
+RS03i_header_invalid_inlast yes
+RS03i_crc_block_zero_layer_size yes
 RS03i_missing_header_truncated yes
 RS03i_missing_header_no_crcsec yes
 RS03i_random_image yes
@@ -548,6 +560,9 @@ RS03f_missing_ecc_header yes
 RS03f_missing_ecc_header_and_crc yes
 RS03f_missing_ecc_header_and_defective_crc yes
 RS03f_ecc_header_crc_error yes
+RS03f_ecc_header_no_file_flag yes
+RS03f_ecc_header_huge_sectors yes
+RS03f_ecc_header_invalid_inlast yes
 RS03f_ecc_file_truncated yes
 RS03f_ecc_file_plus_garbage yes
 RS03f_ecc_file_cookieless_crc yes
