@@ -288,6 +288,11 @@ typedef struct _GlobalClosure
    int ignoreIsoSize;   /* get size per READ CAPACITY; ignore all ISO/UDF meta data */
    int examineRS02;     /* perform deep search for RS02 structures */
    int examineRS03;     /* perform deep search for RS03 structures */
+   int examineRS04;     /* scan whole images for RS04 tags */
+   int sectorBytes;     /* RS04: sector size of the protected data */
+   int audioOffset;     /* RS04: read offset of a CD-DA rip in samples */
+   int audioOffsetGiven;/* RS04: TRUE if audioOffset was specified */
+   int rs04MemoryMiB;   /* RS04: memory budget for de-/encoding */
    int readAndCreate;   /* automatically create .ecc file after reading an image */
    int enableCurveSwitch; /* TRUE in readAndCreateMode after reading is complete */
    int welcomeMessage;  /* just print dvdisaster logo if FALSE */

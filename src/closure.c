@@ -570,6 +570,8 @@ void InitClosure()
    Closure->noBdrDefectManagement = FALSE;
    Closure->bruteforceRS03Search = FALSE;
    Closure->ignoreRS03header = FALSE;
+   Closure->sectorBytes = 2048;
+   Closure->rs04MemoryMiB = 4096;
 
    /* default sizes for typical CD and DVD media */
 
