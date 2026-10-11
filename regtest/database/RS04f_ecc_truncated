@@ -25,4 +25,5 @@ Data integrity:
   ... ecc section    : 148 sectors missing; 0 CRC errors
   ... tags           : 2 of 18 missing
 - erasure counts   :  avg =  4.1; worst = 5 per ecc block.
+- ecc margin       : worst block uses 5 of 31 roots (16%)
 - prognosis        : 9150 of 9150 sectors recoverable (100.0%)
