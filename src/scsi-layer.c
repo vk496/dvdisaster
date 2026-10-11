@@ -535,7 +535,7 @@ static void parse_full_toc(DeviceHandle *dh, unsigned char *buf, int length)
       else t->end = leadout[t->session];
 
       for(j=4; j+11<=length; j+=11)
-	if(buf[j] == t->session && buf[j+3] == 0xa0 && buf[j+9] == 0x20)
+	if(buf[j] == t->session && buf[j+3] == 0xa0 && (buf[j+9] == 0x20 || buf[j+9] == 0x10))
 	  t->xa = !t->audio;
    }
 
@@ -811,7 +811,7 @@ static int query_cd(DeviceHandle *dh, int probe_only)
    if(control & 4)
      switch(disc_type)
      {  case 0x00: dh->typeDescr = g_strdup_printf("%s mode 1", dh->profileDescr); dh->subType = DATA1; break;
-        case 0x10: dh->typeDescr = g_strdup_printf("%s/CD-I", dh->profileDescr); dh->subType = UNSUPPORTED; break;
+        case 0x10: dh->typeDescr = g_strdup_printf("%s/CD-I", dh->profileDescr); dh->subType = XA21; dh->form2 = TRUE; break;
         case 0x20: dh->typeDescr = g_strdup_printf("%s XA",dh->profileDescr); dh->subType = XA21; break;
         default:   dh->typeDescr = g_strdup_printf("%s ??",dh->profileDescr); dh->subType = UNSUPPORTED; break;
      }
@@ -2696,6 +2696,31 @@ static int read_raw_cd_sector(DeviceHandle *dh, unsigned char *outbuf, int lba, 
 
 static TrackInfo* find_track(DeviceHandle*, gint64);
 
+/* EDC of a raw Mode 1, Mode 2 Form 1 or Form 2 data sector.
+   The Form 2 EDC is optional (zero if unused); Mode 0 sectors have none,
+   and without a sync pattern the mode byte means nothing. */
+
+static int raw_sector_edc_ok(unsigned char *frame)
+{  static unsigned char sync[12] = { 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0 };
+   int from = 16, len;   /* EDC covers len bytes from offset from and follows them */
+   guint32 edc;
+
+   if(memcmp(frame, sync, 12))
+      return TRUE;
+
+   switch(frame[15])
+   {  case 1:  from = 0; len = 2064; break;
+      case 2:  len = frame[18] & 0x20 ? 2332 : 2056; break;
+      default: return TRUE;
+   }
+
+   if(len == 2332 && !memcmp(frame+2348, "\0\0\0\0", 4))
+      return TRUE;
+
+   edc = EDCCrc32(frame+from, len);   /* byte order as on disc */
+   return !memcmp(&edc, frame+from+len, 4);
+}
+
 static int read_cdda_sector(DeviceHandle *dh, unsigned char *buf, int lba, int nsectors)
 {  Sense *sense = &dh->sense;
    unsigned char cmd[MAX_CDB_SIZE];
@@ -2737,6 +2762,16 @@ static int read_cdda_sector(DeviceHandle *dh, unsigned char *buf, int lba, int n
 	 memcpy(buf+i*CD_RAW_SECTOR_SIZE, rbuf+i*frame, CD_RAW_SECTOR_SIZE);
       }
    }
+
+   /* A data sector failing its EDC is unreadable, too */
+
+   for(i=0; !ret && !audio && i<nsectors; i++)
+      if(!raw_sector_edc_ok(buf+i*CD_RAW_SECTOR_SIZE))
+      {  sense->sense_key = 3;  /* medium error */
+	 sense->asc = 255;
+	 sense->ascq = 1;       /* EDC failure */
+	 ret = -1;
+      }
 
    if(ret<0) RememberSense(sense->sense_key, sense->asc, sense->ascq);
    if(ab) FreeAlignedBuffer(ab);
@@ -2890,6 +2925,47 @@ void PrintTrackTable(DeviceHandle *dh, void (*print)(char*, ...))
 }
 
 /*
+ * Mode 2 (XA) discs may contain Form 2 sectors (VCD/SVCD video, PlayStation
+ * XA audio, Photo CD) which do not fit into a 2048 byte image.
+ * Look at the subheaders of sectors spread over the data tracks.
+ * ponytail: 64 samples may miss rare Form 2 sectors; --cdda forces the raw image.
+ */
+
+#define FORM2_PROBES 64
+
+static int has_form2_sectors(DeviceHandle *dh)
+{  AlignedBuffer *ab = CreateAlignedBuffer(CD_RAW_SECTOR_SIZE);
+   gint64 total = 0;
+   int i,j,found = FALSE;
+
+   for(i=0; i<dh->nTracks; i++)   /* data sectors without the TAO run-out */
+     if(!dh->track[i].audio)
+       total += MAX(0, dh->track[i].end - dh->track[i].start - 2);
+
+   for(j=0; j<FORM2_PROBES && total && !found; j++)
+   {  gint64 pos = j*total/FORM2_PROBES;
+
+      for(i=0; i<dh->nTracks; i++)
+      {  TrackInfo *t = &dh->track[i];
+	 gint64 len = MAX(0, t->end - t->start - 2);
+
+	 if(t->audio) continue;
+	 if(pos < len)
+	 {  if(   !read_cdda_sector(dh, ab->buf, t->start+pos, 1)
+	       && ab->buf[15] == 2 && (ab->buf[18] & 0x20))
+	      found = TRUE;
+	    break;
+	 }
+	 pos -= len;
+      }
+   }
+
+   FreeAlignedBuffer(ab);
+   Verbose("# Mode 2 Form 2 sectors %sfound\n", found ? "" : "not ");
+   return found;
+}
+
+/*
  * Switch to reading a CD-DA image (2352 bytes per sector).
  * Done automatically for audio CDs, and for all CDs with --cdda.
  */
@@ -2900,8 +2976,12 @@ int UseCDDAImage(Image *image)
    gint64 lba;
    int i,status;
 
-   if(!Closure->cdda && dh->subType != CDDA)
+   if(!Closure->cdda && dh->subType != CDDA && !dh->form2)
       return FALSE;
+
+   if(!Closure->cdda && dh->form2)
+      PrintLog(_("This CD contains Mode 2 Form 2 sectors (e.g. VCD, PlayStation or CD-i)\n"
+		 "which do not fit into 2048 byte sectors; reading it as a CD-DA image (see --cdda).\n"));
 
    if(dh->mainType != CD || !dh->nTracks)
       Stop(_("--cdda requires a CD with a readable table of contents."));
@@ -3250,6 +3330,11 @@ Image* OpenImageFromDevice(char *device, int query_only)
       Stop(_("This software does not support multisession (%d sessions) media."), sessions);
       return NULL;
    }
+
+   /* Mode 2 discs with Form 2 sectors are read as CD-DA images */
+
+   if(dh->subType == XA21 && !dh->form2 && dh->nTracks && !query_only)
+      dh->form2 = has_form2_sectors(dh);
 
    /* Create the Image structure.
       From here we need it to store additional information about the image. */

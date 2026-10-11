@@ -1,0 +1,13 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening disc.cue
+*
+* dvdisaster - can not continue:
+*
+disc.cue: .cue and .gdi images can only be protected by RS04 error correction files.
+

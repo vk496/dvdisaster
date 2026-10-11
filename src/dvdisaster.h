@@ -474,6 +474,7 @@ typedef struct _LargeFile
    char *path;
    guint64 size;
    int flags;
+   GPtrArray *parts;  /* multi-file image (.cue/.gdi): its files in order */
 } LargeFile;
 
 /***
@@ -976,6 +977,7 @@ void WarnAboutImagePadding(Image*);
 int ImageReadSectors(Image*, void*, guint64, int);
 int TruncateImage(Image*, guint64);
 void CloseImage(Image*);
+void RefuseMultiFileImage(Image*);
 
 /***
  *** large-io.c

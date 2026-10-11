@@ -1,0 +1,27 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening disc.cue: 2285 medium sectors and 800 bytes.
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+    1 repaired sectors: 1990c 
+    1 repaired sectors: 1991c 
+    1 repaired sectors: 1992c 
+    1 repaired sectors: 1993c 
+    1 repaired sectors: 1994c 
+    1 repaired sectors: 1995c 
+    1 repaired sectors: 1996c 
+    1 repaired sectors: 1997c 
+    1 repaired sectors: 1998c 
+    1 repaired sectors: 1999c 
+    1 repaired sectors: 699c 
+    1 repaired sectors: 700c 
+    1 repaired sectors: 701c 
+    1 repaired sectors: 1000c 
+Repaired sectors: 14 (14 data, 0 crc, 0 ecc, 0 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  1.0; worst = 1.

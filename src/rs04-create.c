@@ -561,6 +561,8 @@ void RS04Create(void)
       Stop(_("Image file %s: %s."),Closure->imageName, strerror(errno));
    }
    ec->image = image;
+   if(Closure->eccTarget == ECC_IMAGE)
+      RefuseMultiFileImage(image);
 
    if(image->inLast == 2048)
         PrintLog(_(": %" PRId64 " medium sectors.\n"), image->sectorSize);
@@ -571,7 +573,7 @@ void RS04Create(void)
 
    /*** Describe the data */
 
-   set->B = Closure->sectorBytes;
+   set->B = image->file->parts ? CD_RAW_SECTOR_SIZE : Closure->sectorBytes;
    set->dataBytes = image->file->size;
    set->target = Closure->eccTarget;
    set->creatorVersion = Closure->version;

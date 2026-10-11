@@ -692,7 +692,7 @@ static void open_and_determine_mode(read_closure *rc)
    rc->dh = rc->medium->dh;
    rc->readMode = IMAGE_ONLY;
 
-   if(rc->dh->subType == CDDA || Closure->cdda)
+   if(rc->dh->subType == CDDA || Closure->cdda || rc->dh->form2)
       Stop(_("Adaptive reading does not support CD-DA (audio) images.\n"
 	     "Please use linear reading."));
 

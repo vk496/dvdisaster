@@ -203,6 +203,16 @@ Anfang der .iso/.ecc - Dateien (Standard: medium.* ).
 .TP
 .B \-i, \-\-image imagefile
 Name der Abbild - Datei (Standard: medium.iso).
+Zum Erzeugen, Pr\[:u]fen und Reparieren von RS04-Fehlerkorrektur-Dateien (\-o file)
+kann stattdessen ein Cue-Sheet (.cue) oder eine Dreamcast-.gdi-Datei angegeben
+werden, z.B. ein mit redumper erstellter Abzug mit einer .bin-Datei pro Spur.
+Deren Dateien werden in der Reihenfolge des Sheets als ein Abbild mit
+2352-Byte-Sektoren verwendet; Pregaps, die nicht in den Dateien gespeichert sind,
+geh\[:o]ren nicht zum Abbild. Eine Reparatur schreibt in die .bin-Dateien zur\[:u]ck.
+Unterst\[:u]tzt werden nur BINARY-Dateien mit 2352-Byte-Sektoren (AUDIO, MODE1/2352,
+MODE2/2352, CDI/2352). Nur die Gr\[:o]\[ss]e der letzten Datei kann bei der Reparatur
+korrigiert werden; eine fehlende oder verk\[:u]rzte Datei dazwischen kann nicht
+wiederhergestellt werden.
 .TP
 .B \-e, \-\-ecc eccfile
 Name der Fehlerkorrektur-Datei (Standard: medium.ecc).
@@ -352,6 +362,13 @@ C2-Unterst\[:u]tzung interpolieren besch\[:a]digte Audio-Sektoren eventuell
 unbemerkt; dvdisaster gibt in diesem Fall eine Warnung aus. Das angepasste
 Lesen ist f\[:u]r CD-DA-Abbilder nicht verf\[:u]gbar, und RS01-, RS02- und
 RS03-Fehlerkorrekturdaten werden beim Lesen nicht verwendet.
+Datensektoren werden anhand ihres EDC gepr\[:u]ft (Mode 1, Mode 2 Form 1 und Form 2,
+sofern der Sektor einen tr\[:a]gt); ein Sektor, der die Pr\[:u]fung nicht besteht, gilt
+wie ein Sektor mit C2-Fehlern als unlesbar, so dass RS04 ihn reparieren kann.
+CDs mit Mode-2-Form-2-Sektoren (Video-CD, Super-Video-CD, PlayStation, CD-i) werden
+immer als CD-DA-Abbild gelesen, da diese Sektoren nicht in 2048 Bytes passen. Bei
+Mode-2-(XA)-Datentr\[:a]gern sucht dvdisaster sie in 64 \[:u]ber die Datenspuren
+verteilten Sektoren; verwenden Sie \-\-cdda, wenn sie auf dem Datentr\[:a]ger selten sind.
 .RS
 Datentr\[:a]ger mit mehreren Sitzungen (CD, DVD und BD) werden immer als ein
 Abbild gelesen, in dem die Sektoren an ihrer tats\[:a]chlichen Position liegen.
