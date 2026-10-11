@@ -158,6 +158,7 @@ RS01_read_time_limit_stop_crc yes
 RS01_read_abort_file_unusable yes
 RS01_read_abort_file_empty yes
 RS01_read_time_limit_requires_read yes
+RS01_catalog_report yes
 RS01_read_no_ecc_good_file yes
 RS01_read_no_device yes
 RS01_read_no_device_access yes

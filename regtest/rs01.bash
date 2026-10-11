@@ -1291,6 +1291,7 @@ if try "scanning image, tao tail case, json report" scan_tao_tail_json; then (
   run_regtest scan_tao_tail_json "--ignore-iso-size --spinup-delay=0 -s --json -" $ISODIR/no.iso  $MASTERECC EXITCODE
 ) & limit_jobs; fi
 
+# Same, with a json report: the run-out sectors are not counted as unreadable
 # Scan image with error correction data available
 # with two defective sectors at the end and the --dao option
 
@@ -1491,6 +1492,16 @@ if try "reading with empty abort file name" read_abort_file_empty; then (
   rm -f $TMPISO
   extra_args="--debug --sim-cd=$MASTERISO --fixed-speed-values"
   run_regtest read_abort_file_empty "--spinup-delay=0 --abort-file= -r" $TMPISO $ISODIR/no.ecc EXITCODES
+) & limit_jobs; fi
+
+# Catalog of scan results and history report
+
+if try "catalog of scan results" catalog_report; then (
+  cp $MASTERISO $SIMISO
+  $NEWVER --regtest --debug --sim-cd=$SIMISO --fixed-speed-values --spinup-delay=0 -s --catalog=$TMPISO.cat >>$LOGFILE 2>&1
+  $NEWVER --debug -i$SIMISO --erase 1000-1049 >>$LOGFILE 2>&1
+  $NEWVER --regtest --debug --sim-cd=$SIMISO --fixed-speed-values --spinup-delay=0 -s --catalog=$TMPISO.cat >>$LOGFILE 2>&1
+  run_regtest catalog_report "--catalog-report=$TMPISO.cat" $TMPISO $ISODIR/no.ecc
 ) & limit_jobs; fi
 
 # Read into existing and complete image file

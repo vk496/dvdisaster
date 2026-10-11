@@ -788,6 +788,8 @@ void FreeClosure()
    if(Closure->stopTimer) g_timer_destroy(Closure->stopTimer);
    if(Closure->moreEccNames)
      g_ptr_array_free(Closure->moreEccNames, TRUE);
+   cond_free(Closure->catalogFile);
+   cond_free(Closure->catalogReport);
    cond_free(Closure->redundancy);
 
    CallMethodDestructors();
