@@ -27,4 +27,12 @@ dvdisaster.desktop
 
 dvdisaster.spec
 	meant to be a starting point for .rpm building
+
+rs04-layout-sim.py
+	damage simulator used to choose the RS04 layout
+	(see documentation/codec-specs, RS04 design rationale).
+
+rs04-reference.py
+	slow reference encoder of the RS04 format; prints the
+	test vectors of the RS04 specification.
 	
