@@ -257,7 +257,7 @@ typedef struct _GlobalClosure
    int cacheMiB;        /* Cache setting for the parity codec, in megabytes */
    int prefetchSectors; /* Prefetch setting per encoder thread */
    int codecThreads;    /* Number of threads to use for RS encoders */
-   int encodingAlgorithm; /* Force a certain codec type for RS03 */
+   int encodingAlgorithm; /* Force a certain codec type for RS03/RS04 */
    int encodingIOStrategy; /* Force a IO strategy for RS03 encoding */
    int sectorSkip;      /* Number of sectors to skip after read error occurs */
    char *redundancy;    /* Error correction code redundancy */

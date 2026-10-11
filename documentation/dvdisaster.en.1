@@ -368,6 +368,11 @@ and will usually provide the fastest encoding variant. The
 SSE2/AltiVec algorithms will automatically be selected 
 if the processor supports them and nothing else is specified by this option.
 .RE
+.RS
+RS04 picks GFNI, AVX2, SSSE3 or NEON automatically; 32bit and 64bit select
+its portable code and SSE2 its SSSE3 code. All variants create
+identical error correction data.
+.RE
 .TP
 .B \-\-encoding-io-strategy [readwrite|mmap]
 This option controls how dvdisaster performs its disk I/O while creating error

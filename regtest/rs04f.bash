@@ -75,6 +75,12 @@ if try "ecc file creation with 4 threads" ecc_create_threads; then (
   run_regtest ecc_create_threads "--debug --set-version $SETVERSION -mRS04 -o file -x 4 -c" $MASTERISO $TMPECC
 ) & limit_jobs; fi
 
+# Portable codec kernels instead of SIMD; must give the same ecc file
+
+if try "ecc file creation with portable codec" ecc_create_portable; then (
+  run_regtest ecc_create_portable "--debug --set-version $SETVERSION -mRS04 -o file --encoding-algorithm 32bit -c" $MASTERISO $TMPECC
+) & limit_jobs; fi
+
 # Create with explicit redundancies
 
 if try "ecc file creation with 25% redundancy" ecc_create_percent; then (
@@ -280,6 +286,15 @@ if try "fixing with 3 threads" fix_correctable_threads; then (
   $NEWVER --debug -i$TMPISO --erase 7999 >>$LOGFILE 2>&1
   $NEWVER --debug -i$TMPISO --byteset 300,1,1 >>$LOGFILE 2>&1
   run_regtest fix_correctable_threads "-x 3 -f" $TMPISO $TMPECC
+) & limit_jobs; fi
+
+if try "fixing with portable codec" fix_correctable_portable; then (
+  cp $MASTERISO $TMPISO
+  cp $MASTERECC $TMPECC
+  $NEWVER --debug -i$TMPISO --erase 1000-1050 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --erase 7999 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 300,1,1 >>$LOGFILE 2>&1
+  run_regtest fix_correctable_portable "--encoding-algorithm 32bit -f" $TMPISO $TMPECC
 ) & limit_jobs; fi
 
 # Small memory budget: one codeword per pass
