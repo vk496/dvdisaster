@@ -779,6 +779,10 @@ READ_audio_c2_error yes
 READ_audio_no_c2 yes
 READ_audio_complete yes
 READ_audio_adaptive_refused yes
+READ_audio_checksums_offset yes
+READ_audio_cdtext yes
+READ_audio_test_and_copy yes
+READ_audio_test_and_copy_unstable yes
 READ_cdextra_read yes
 READ_cdextra_cdda yes
 READ_cdextra_medium_info yes

@@ -77,12 +77,14 @@ static void write_sense(Sense *sense, int sense_key, int asc, int ascq)
  * or "a0-1199,a1200-2399" (audio CD). An appended ":noc2" simulates
  * a drive without C2 error pointers, ":offset=n" a drive with a read
  * offset of n samples for audio sectors (it delivers sample i of the
- * disc as sample i+n of the rip).
+ * disc as sample i+n of the rip), ":cdtext" a disc with CD-TEXT
+ * (one pack of it has a CRC error).
  * Sector n is taken from the image at n*2048 bytes, or at n*2352 bytes
  * if the layout contains audio tracks; data sectors are then stored raw
  * (user data at offset 16). Sectors outside of the tracks are unreadable.
  * A dead sector marker with the simulation hint "c2 error" in an audio
- * sector simulates a sector with C2 errors (interpolated as silence).
+ * sector simulates a sector with C2 errors (interpolated as silence),
+ * the hint "unstable" a sector which reads differently each time.
  */
 
 typedef struct
@@ -96,6 +98,7 @@ static int sim_sessions;
 static int sim_sector_size;
 static int sim_no_c2;
 static int sim_offset;
+static int sim_cdtext;
 
 static void parse_sim_toc(void)
 {  char *p = Closure->simulateTOC;
@@ -113,6 +116,7 @@ static void parse_sim_toc(void)
       if(*p == '/') { sim_sessions++; p++; continue; }
       if(*p == ',') { p++; continue; }
       if(!strncmp(p, ":noc2", 5)) { sim_no_c2 = TRUE; p += 5; continue; }
+      if(!strncmp(p, ":cdtext", 7)) { sim_cdtext = TRUE; p += 7; continue; }
       if(!strncmp(p, ":offset=", 8)) { sim_offset = g_ascii_strtoll(p+8, &p, 10); continue; }
 
       if((*p != 'a' && *p != 'd') || sim_tracks >= 99)
@@ -205,6 +209,65 @@ static int simulate_read_toc(unsigned char *cdb, unsigned char *out_buf, int siz
       buf[3] = sim_sessions;
    }
 
+   buf[0] = ((len-2)>>8) & 0xff;
+   buf[1] = (len-2) & 0xff;
+   memcpy(out_buf, buf, size < len ? size : len);
+   return 0;
+}
+
+/* READ TOC format 5 (CD-TEXT): disc and track titles, performers given
+   for track 1 and as "same as before" (TAB) for the others, songwriters
+   in a pack with a CRC error, and the size information (ISO 8859-1). */
+
+static int simulate_cdtext(unsigned char *out_buf, int size)
+{  static unsigned char buf[4+18*1024];
+   unsigned char *p = buf+4;
+   int type, seq = 0, len;
+   guint16 crc;
+
+   for(type=0x80; type<=0x82; type++)
+   {  char text[2048];
+      int trk[2048], pos[2048];
+      int n = 0, t, k;
+
+      for(t=0; t<=sim_tracks; t++)
+      {  char *s;
+
+	 switch(type)
+	 {  case 0x80: s = t ? g_strdup_printf("Track %d", t) : g_strdup("Caf\xe9 \"Live\""); break;
+	    case 0x81: s = g_strdup(t > 1 ? "\t" : "Simulated Artist"); break;
+	    default:   s = g_strdup("Simulated Writer"); break;
+	 }
+	 for(k=0; k<=(int)strlen(s) && n<2048; k++, n++)
+	 {  text[n] = s[k];
+	    trk[n] = t;
+	    pos[n] = k;
+	 }
+	 g_free(s);
+      }
+
+      for(k=0; k<n; k+=12, p+=18)
+      {  p[0] = type;
+	 p[1] = trk[k];
+	 p[2] = seq++;
+	 p[3] = MIN(pos[k], 15);
+	 memset(p+4, 0, 12);
+	 memcpy(p+4, text+k, MIN(12, n-k));
+	 crc = CDTextCrc(p);
+	 p[16] = crc >> 8;
+	 p[17] = (crc & 0xff) ^ (type == 0x82 && !k);  /* CRC error */
+      }
+   }
+
+   memset(p, 0, 18);  /* size information, character code 0 */
+   p[0] = 0x8f;
+   p[2] = seq;
+   crc = CDTextCrc(p);
+   p[16] = crc >> 8;
+   p[17] = crc & 0xff;
+   p += 18;
+
+   len = p - buf;
    buf[0] = ((len-2)>>8) & 0xff;
    buf[1] = (len-2) & 0xff;
    memcpy(out_buf, buf, size < len ? size : len);
@@ -304,6 +367,12 @@ static int simulate_read_cd(DeviceHandle *dh, unsigned char *cdb, unsigned char 
 	 if(t->audio && sim_hint && !strcmp(sim_hint, "c2 error"))
 	 {  memset(rec, 0, sizeof(rec));   /* drive interpolates silence */
 	    c2_error = TRUE;
+	    g_free(sim_hint);
+	 }
+	 else if(t->audio && sim_hint && !strcmp(sim_hint, "unstable"))
+	 {  static int reads;
+
+	    memset(rec, ++reads, sizeof(rec));
 	    g_free(sim_hint);
 	 }
 	 else
@@ -413,6 +482,13 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
 		 if(Closure->simulateTOC && ((cdb[2] & 0xf) == 0 || (cdb[2] & 0xf) == 2))
 		 {  parse_sim_toc();
 		    return simulate_read_toc(cdb, out_buf, alloc_len);
+		 }
+		 if(Closure->simulateTOC && (cdb[2] & 0xf) == 5)
+		 {  parse_sim_toc();
+		    if(sim_cdtext)
+		       return simulate_cdtext(out_buf, alloc_len);
+		    write_sense(sense, 5, 0x24, 0x00);  /* invalid field in CDB */
+		    return -1;
 		 }
 		 switch(cdb[2] & 0xf)  /* format field */
 		 {  case 0x00:         /* formatted TOC */
