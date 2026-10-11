@@ -674,6 +674,7 @@ RS03f_adaptive_good yes
 
 RS04f_ecc_create yes
 RS04f_ecc_create_threads yes
+RS04f_ecc_create_portable yes
 RS04f_ecc_create_percent yes
 RS04f_ecc_create_roots yes
 RS04f_ecc_create_size yes
@@ -704,6 +705,7 @@ RS04f_wrong_image yes
 RS04f_fix_good yes
 RS04f_fix_correctable yes
 RS04f_fix_correctable_threads yes
+RS04f_fix_correctable_portable yes
 RS04f_fix_low_memory yes
 RS04f_fix_crc_sectors yes
 RS04f_fix_ecc_damaged yes
