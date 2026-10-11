@@ -29,9 +29,12 @@ oder Kratzer
 .RB [\| -x
 .IR n \|]
 .RB [\| \-\-adaptive-read \|]
+.RB [\| \-\-audio-offset
+.IR n \|]
 .RB [\| \-\-auto-suffix \|]
 .RB [\| \-\-cache-size
 .IR n \|]
+.RB [\| \-\-cdda \|]
 .RB [\| \-\-dao \|]
 .RB [\| \-\-defective-dump \|
 .IR d \|]
@@ -51,6 +54,8 @@ oder Kratzer
 .RB [\| \-\-medium-info \|]
 .RB [\| \-\-no-progress \|]
 .RB [\| \-\-old-ds-marker \|]
+.RB [\| \-\-pause-after-errors
+.IR n[:s] \|]
 .RB [\| \-\-prefetch-sectors
 .IR n \|]
 .RB [\| \-\-raw-mode
@@ -62,6 +67,10 @@ oder Kratzer
 .RB [\| \-\-read-raw \|]
 .RB [\| \-\-regtest \|]
 .RB [\| \-\-resource-file
+.IR n \|]
+.RB [\| \-\-rs04-memory
+.IR n \|]
+.RB [\| \-\-sector-size
 .IR n \|]
 .RB [\| \-\-speed-warning
 .IR n \|]
@@ -96,6 +105,10 @@ Erstellt ein Abbild wie oben beschrieben. F\[:u]r besch\[:a]digte Sektoren werde
 mindestens \fIn\fP und h\[:o]chstens \fIm\fP Leseversuche unternommen. Die
 Lesbarkeit von besch\[:a]digten CD-Datentr\[:a]gern kann in Verbindung mit
 \fB--read-raw\fI besser werden.
+.TP
+\fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-i\fP \fIaudio.bin\fP \fB-r\fP
+Liest eine Audio-CD in die Datei \fIaudio.bin\fP (2352 Bytes pro Sektor)
+und schreibt das Cue-Sheet \fIaudio.cue\fP; siehe \fB--cdda\fP.
 .TP
 \fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-i\fP \fIabbild.iso\fP \fB-e\fP \fIkorr.ecc\fP \fB-r\fP \fB--adaptive-read\fP
 Verwendet die angepasste Lesestrategie, um ein Abbild vom 
@@ -256,14 +269,14 @@ Es wird automatisch die n\[:a]chste passende Datentr\[:a]gergr\[:o]\[ss]e ausgew
 .B \-m, \-\-method n
 Fehlerkorrektur-Methoden anzeigen/ausw\[:a]hlen (Standard: RS01).
 .RS
-M\[:o]gliche Werte sind RS01 und RS02.
+M\[:o]gliche Werte sind RS01, RS02, RS03 und RS04.
 .RE
 .TP
 .B \-v, \-\-verbose n%
 mehr erl\[:a]uternde Ausgaben
 .TP
 .B \-x, \-\-threads n
-Verwende n Kontrollf\[:a]den f\[:u]r den RS03-Kodierer/Dekodierer. Empfohlen
+Verwende n Kontrollf\[:a]den f\[:u]r den RS03- und RS04-Kodierer/Dekodierer. Empfohlen
 sind 2 bzw. 4 Kontrollf\[:a]den f\[:u]r 2- bzw. 4-Kern-Prozessoren. Lassen Sie
 auf gr\[:o]\[ss]eren Systemen einen Kontrollfaden f\[:u]r Verwaltungszwecke frei,
 d.h. benutzen Sie 7 Kontrollf\[:a]den auf einem 8-Kern-System.
@@ -271,11 +284,43 @@ d.h. benutzen Sie 7 Kontrollf\[:a]den auf einem 8-Kern-System.
 .B \-\-adaptive-read
 verwende optimierte Lesestrategie f\[:u]r defekte Datentr\[:a]ger.
 .TP
+.B \-\-audio-offset n
+Nur RS04: Leseversatz eines CD-DA-Abbilds gegen\[:u]ber dem Abbild, aus dem
+die Fehlerkorrektur-Datei erzeugt wurde, in Samples (4 Bytes). Normalerweise
+wird der Versatz beim Reparieren automatisch erkannt; diese Option ist nur
+n\[:o]tig, wenn die Erkennung scheitert.
+.TP
 .B \-\-auto-suffix
 automatisches Anf\[:u]gen der .iso- und .ecc-Dateiendungen.
 .TP
 .B \-\-cache-size n
 Zwischenspeicher in MiB bei .ecc-Datei-Erzeugung - (Standard: 32MiB).
+.TP
+.B \-\-cdda
+liest eine CD als CD-DA-Abbild: jeder Sektor wird mit 2352 Bytes gespeichert
+(Audio-Samples, oder der rohe Datensektor mit Sync-Muster, Kopf und EDC/ECC)
+in einem .bin-Abbild, und ein Cue-Sheet mit gleichem Namen und der Endung .cue
+wird geschrieben. Bei Audio-CDs geschieht dies automatisch; verwenden Sie \-\-cdda
+f\[:u]r Mixed-Mode- und CD-Extra-Datentr\[:a]ger, um auch deren Audio-Spuren zu lesen.
+Audio-Sektoren werden mit C2-Fehlerzeigern gelesen, sofern das Laufwerk diese
+unterst\[:u]tzt; ein Sektor mit C2-Fehlern gilt als unlesbar (er wird gem\[:a]\[ss]
+\-\-read-attempts wiederholt gelesen) und wird als Markierung f\[:u]r defekte
+Sektoren (2048 Bytes) gefolgt von 304 Null-Bytes gespeichert. Laufwerke ohne
+C2-Unterst\[:u]tzung interpolieren besch\[:a]digte Audio-Sektoren eventuell
+unbemerkt; dvdisaster gibt in diesem Fall eine Warnung aus. Das angepasste
+Lesen ist f\[:u]r CD-DA-Abbilder nicht verf\[:u]gbar, und RS01-, RS02- und
+RS03-Fehlerkorrekturdaten werden beim Lesen nicht verwendet.
+.RS
+Datentr\[:a]ger mit mehreren Sitzungen (CD, DVD und BD) werden immer als ein
+Abbild gelesen, in dem die Sektoren an ihrer tats\[:a]chlichen Position liegen.
+Die Sektoren zwischen den Sitzungen werden nicht gelesen; sie werden mit Nullen
+gef\[:u]llt gespeichert und nicht als Lesefehler gez\[:a]hlt. Unlesbare Sektoren
+unter den letzten beiden Sektoren einer Sitzung (der Auslauf von im TAO-Modus
+geschriebenen Sitzungen) werden gesondert gemeldet.
+Ohne \-\-cdda werden die Audio-Spuren einer CD mit Datenspuren genauso gespeichert.
+Datentr\[:a]ger mit RS02- oder RS03-Fehlerkorrekturdaten k\[:o]nnen nicht im
+Mehrfachsitzungs-Modus gelesen werden.
+.RE
 .TP
 .B \-\-dao
 unterstelle DAO; Abbild am Ende nicht k\[:u]rzen.
@@ -386,6 +431,10 @@ Bearbeiten Sie ein Abbild nicht mit wechselnden Einstellungen f\[:u]r
 diese Option.
 .RE
 .TP
+.B \-\-pause-after-errors n[:s]
+legt nach jeweils n Lesefehlern eine Lesepause von s Sekunden ein (Standard: 60),
+damit sich Laufwerke, die bei defekten Datentr\[:a]gern \[:u]berhitzen, abk\[:u]hlen k\[:o]nnen.
+.TP
 .B \-\-prefetch-sectors n
 n Sektoren f\[:u]r die RS03-(De)kodierung im Voraus laden (Standard: 32)
 .RS
@@ -417,6 +466,18 @@ ver\[:a]ndert einige Ausgaben so da\[ss] sie von den Regressionstest-Skripten be
 .TP
 .B \-\-resource-file n
 Gibt den Pfad zur Konfigurationsdatei an (Voreinstellung: $HOME/.dvdisaster)
+.TP
+.B \-\-rs04-memory n
+Nur RS04: Speicherbudget in MiB f\[:u]r das Kodieren und Dekodieren (Standard: 4096).
+Es bestimmt die Codewortl\[:a]nge neu erzeugter Fehlerkorrekturdaten: l\[:a]ngere
+Codew\[:o]rter vertragen mehr verstreute Sch\[:a]den, ben\[:o]tigen aber mehr Speicher
+oder mehr Durchl\[:a]ufe \[:u]ber das Abbild. Jede Codewortl\[:a]nge kann mit jedem
+Budget repariert werden; ein kleineres Budget macht die Reparatur nur langsamer.
+.TP
+.B \-\-sector-size n
+Nur RS04: Sektorgr\[:o]\[ss]e der Daten beim Erzeugen einer Fehlerkorrektur-Datei:
+2048 (Standard), 2324 (Mode 2 Form 2, z.B. VCD/SVCD-Videospuren) oder 2352
+(CD-DA-Audioabbilder, siehe \-\-cdda).
 .TP
 .B \-\-speed-warning n
 warnt bei Geschwindigkeits\[:a]nderung um mehr als n Prozent.
