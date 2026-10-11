@@ -1,0 +1,20 @@
+e12da8c588415bd5e2f4e95af254fd11
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ CD.
+Medium "Random Image": CD-R mode 1, 3000 sectors, created 16-07-2006.
+
+  Session 1, track  1: sectors 0 - 999, data
+  Sectors 1000 - 1599: not part of a session
+  Session 2, track  2: sectors 1600 - 2999, data
+600 sectors between sessions are not part of the image;
+they are stored as zero-filled sectors and are not read.
+
+Creating new reading-tmp.iso image.
+
+All sectors successfully read.

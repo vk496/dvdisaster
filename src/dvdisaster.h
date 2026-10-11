@@ -270,6 +270,7 @@ typedef struct _GlobalClosure
    char *redundancy;    /* Error correction code redundancy */
    int eccTarget;       /* 0=file; 1=augmented image */
    int readRaw;         /* Read CD sectors raw + verify them */
+   int cdda;            /* Read CDs as CD-DA images (2352 bytes per sector) */
    int rawMode;         /* mode for mode page */
    int minReadAttempts; /* minimum reading attempts */
    int maxReadAttempts; /* maximal reading attempts */
@@ -317,6 +318,7 @@ typedef struct _GlobalClosure
    int simulateDefects; /* if >0, this is the percentage of simulated media defects */
    char *simulateCD;    /* Simulate CD from given image */
    int simulateProfile; /* MMC profile for the simulated medium (default CD-R) */
+   char *simulateTOC;   /* Session/track layout of the simulated CD */
    int defectiveDump;   /* dump non-recoverable sectors into given path */
    char *dDumpDir;      /* directory for above */
    char *dDumpPrefix;   /* file name prefix for above */
@@ -638,6 +640,7 @@ typedef struct _CrcBuf
    guint32 *crcbuf;
    guint64 crcSize;
    Bitmap *valid;
+   Bitmap *covered;             /* if not NULL: sectors which have a CRC at all */
    gint32 crcCached;            /* CRC has been retrieved from ECC or previous run */
   
    /* MD5 sum of image sectors */

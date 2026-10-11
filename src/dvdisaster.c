@@ -84,6 +84,7 @@ typedef enum
    MODIFIER_CACHE_SIZE, 
    MODIFIER_CLV_SPEED,    /* unused */ 
    MODIFIER_CAV_SPEED,    /* unused */
+   MODIFIER_CDDA,
    MODIFIER_CDUMP, 
    MODIFIER_DAO, 
    MODIFIER_DEBUG,
@@ -125,6 +126,7 @@ typedef enum
    MODIFIER_SIMULATE_PROFILE,
    MODIFIER_SIMULATE_DEFECTS,
    MODIFIER_SIMULATE_STOP,
+   MODIFIER_SIMULATE_TOC,
    MODIFIER_SPEED_WARNING, 
    MODIFIER_SPINUP_DELAY, 
    MODIFIER_TIME_LIMIT,
@@ -310,6 +312,7 @@ int main(int argc, char *argv[])
 	{"bruteforce-rs03-search", 0, 0, MODIFIER_BRUTEFORCE_RS03_SEARCH },
 	{"cache-size", 1, 0, MODIFIER_CACHE_SIZE },
 	{"cav", 1, 0, MODIFIER_CAV_SPEED },
+	{"cdda", 0, 0, MODIFIER_CDDA },
 	{"cdump", 0, 0, MODIFIER_CDUMP },
 	{"clv", 1, 0, MODIFIER_CLV_SPEED },
 	{"create", 0, 0, 'c'},
@@ -377,6 +380,7 @@ int main(int argc, char *argv[])
 	{"sim-profile", 1, 0, MODIFIER_SIMULATE_PROFILE},
 	{"sim-defects", 1, 0, MODIFIER_SIMULATE_DEFECTS},
 	{"sim-stop-at", 1, 0, MODIFIER_SIMULATE_STOP},
+	{"sim-toc", 1, 0, MODIFIER_SIMULATE_TOC},
 	{"speed-warning", 2, 0, MODIFIER_SPEED_WARNING},
 	{"spinup-delay", 1, 0, MODIFIER_SPINUP_DELAY},
 	{"strip", 0, 0, 'z'},
@@ -739,6 +743,9 @@ int main(int argc, char *argv[])
          case MODIFIER_READ_RAW:
 	   Closure->readRaw = TRUE;
 	   break;
+         case MODIFIER_CDDA:
+	   Closure->cdda = TRUE;
+	   break;
          case MODIFIER_REGTEST:
 	   Closure->regtestMode = TRUE;
 	   break;
@@ -824,6 +831,11 @@ int main(int argc, char *argv[])
 	   debug_mode_required = TRUE;
 	   break;
 	}
+        case MODIFIER_SIMULATE_TOC:
+	   g_free(Closure->simulateTOC);
+	   Closure->simulateTOC = g_strdup(optarg);
+	   debug_mode_required = TRUE;
+	   break;
         case MODIFIER_SIMULATE_DEFECTS:
 	   if(optarg) Closure->simulateDefects = atoi(optarg);
 	   else Closure->simulateDefects = 10;
@@ -1280,7 +1292,7 @@ int main(int argc, char *argv[])
 	     "  -p, --prefix prefix         - prefix of .iso/.ecc file (default: medium.*  )\n"
 	     "  -i, --image imagefile       - name of image file       (default: medium.iso)\n"
 	     "  -e, --ecc eccfile           - name of parity file      (default: medium.ecc)\n"
-	     "  -o, --ecc-target imagefile  - where to put ecc data in RS03\n"),
+	     "  -o, --ecc-target file|image - where to put ecc data in RS03/RS04\n"),
 	       Closure->device);
 
       PrintCLI("\n");
@@ -1305,6 +1317,7 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --audio-offset n           - RS04: read offset of a CD-DA rip in samples (default: detect)\n"));
       PrintCLI(_("  --auto-suffix              - automatically add .iso and .ecc file suffixes\n"));
       PrintCLI(_("  --cache-size n             - image cache size in MiB during -c mode (default: 32MiB)\n"));
+      PrintCLI(_("  --cdda                     - read CD as 2352 byte sectors (.bin + .cue; automatic for audio CDs)\n"));
       PrintCLI(_("  --dao                      - assume DAO disc; do not trim image end\n"));
       PrintCLI(_("  --defective-dump d         - directory for saving incomplete raw sectors\n"));
 #ifdef SYS_LINUX

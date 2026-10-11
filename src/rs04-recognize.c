@@ -155,6 +155,14 @@ static gint64 image_bytes(Image *image)
    return RS04MediumSectors(image) * 2048;
 }
 
+/* Tags of one set should be identical except for their position and CRCs */
+
+static int same_params(RS04Set *a, RS04Set *b)
+{  return a->B == b->B && a->T == b->T && a->dataBytes == b->dataBytes
+       && a->L == b->L && a->k == b->k && a->m == b->m && a->flags == b->flags
+       && a->creatorVersion == b->creatorVersion && !memcmp(a->dataMD5, b->dataMD5, 16);
+}
+
 static int image_tag_found(unsigned char *buf, gint64 pos, gpointer data)
 {  image_scan *is = (image_scan*)data;
    RS04Set set;
@@ -179,7 +187,7 @@ static int image_tag_found(unsigned char *buf, gint64 pos, gpointer data)
    for(i=0; i<is->cands->len; i++)
    {  RS04Set *c = &g_array_index(is->cands, RS04Set, i);
 
-      if(c->start == set.start && !memcmp(c->setID, set.setID, 8))
+      if(c->start == set.start && !memcmp(c->setID, set.setID, 8) && same_params(c, &set))
       {  c->tags++;
 	 return FALSE;
       }
@@ -242,29 +250,31 @@ static void check_sector(image_scan *is, gint64 sector)
    image_tag_found(buf, sector*2048, is);
 }
 
-/* Compare data sectors with their Crc32 from a CRC sector.
+/* Compare up to 16 readable data sectors with their Crc32 from readable
+   CRC sectors. Up to 16 CRC sectors spread over the set are tried, and
+   the first 16 data sectors behind each of them.
    Returns the number of matches, or -1 if nothing could be compared. */
 
 static int confirm(Image *image, RS04Set *set)
 {  RS04IO io;
-   unsigned char *buf = g_malloc((size_t)RS04_CRCS_PER_SECTOR*set->B);
-   guint8 present[RS04_CRCS_PER_SECTOR];
-   guint64 j;
+   unsigned char *buf = g_malloc((size_t)16*set->B);
+   guint8 present[16];
+   guint32 crc[16];
+   int probe, probes = MIN(set->c, 16);
    int i, n, compared = 0, matches = 0;
 
    RS04InitIO(&io, image, set);
 
-   for(j=0; j<MIN(set->c, 8); j++)
-     if(RS04ReadPayload(&io, j, 1, buf, present))
-       break;
+   for(probe=0; probe<probes && compared<16; probe++)
+   {  guint64 j = probe*set->c/probes;
 
-   if(j < MIN(set->c, 8))
-   {  guint32 crc[RS04_CRCS_PER_SECTOR];
+      if(!RS04ReadPayload(&io, j, 1, buf, present))
+	continue;
 
-      for(i=0; i<RS04_CRCS_PER_SECTOR; i++)
+      for(i=0; i<16; i++)
 	crc[i] = buf[4*i] | buf[4*i+1]<<8 | buf[4*i+2]<<16 | (guint32)buf[4*i+3]<<24;
 
-      n = MIN(RS04_CRCS_PER_SECTOR, set->S - j*RS04_CRCS_PER_SECTOR);
+      n = MIN(16, set->S - j*RS04_CRCS_PER_SECTOR);
       RS04ReadData(&io, j*RS04_CRCS_PER_SECTOR, n, buf, present);
       for(i=0; i<n && compared<16; i++)
 	if(present[i])
@@ -278,10 +288,35 @@ static int confirm(Image *image, RS04Set *set)
    return compared ? matches : -1;
 }
 
+/* Tags of one set which disagree yield several candidates with the same
+   set ID and start; the one held by the majority of the tags wins. */
+
+static int outvoted(image_scan *is, guint i)
+{  RS04Set *c = &g_array_index(is->cands, RS04Set, i);
+   guint j;
+
+   for(j=0; j<is->cands->len; j++)
+   {  RS04Set *d = &g_array_index(is->cands, RS04Set, j);
+
+      if(   j != i && d->start == c->start && !memcmp(d->setID, c->setID, 8)
+	 && (d->tags > c->tags || (d->tags == c->tags && j < i)))
+	return TRUE;
+   }
+
+   return FALSE;
+}
+
 /* Confirm new candidates and drop the rejected ones */
 
 static void confirm_all(image_scan *is)
 {  guint i, n = 0;
+
+   for(i=0; i<is->cands->len; i++)
+     if(outvoted(is, i))
+     {  Verbose("RS04: candidate start %" PRId64 " outvoted by other tags of its set\n",
+		g_array_index(is->cands, RS04Set, i).start);
+	g_array_index(is->cands, RS04Set, i).matches = 0;
+     }
 
    for(i=0; i<is->cands->len; i++)
    {  RS04Set *c = &g_array_index(is->cands, RS04Set, i);
@@ -364,9 +399,17 @@ int RS04RecognizeImage(Image *image)
       check_sector(&is, image->isoInfo->volumeSize + 150);
    }
 
-   /* 2. The last 256 sectors (of the largest sector size) */
+   /* 2. The last 256 sectors (of the largest sector size),
+      also of every session of a multi-session medium */
 
    scan_region(&is, MAX(0, size - 256*2352), size);
+   if(image->type == IMAGE_MEDIUM)
+     for(i=0; (int)i+1<image->dh->nTracks; i++)
+       if(image->dh->track[i].session != image->dh->track[i+1].session)
+       {  gint64 end = image->dh->track[i].end*2048;
+
+	  scan_region(&is, MAX(0, end - 256*2352), end);
+       }
 
    /* 3. Further sets in the uncovered parts, or a full scan on request.
       Stale or embedded sets are rejected first so that they do not

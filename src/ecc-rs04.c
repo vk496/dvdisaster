@@ -49,6 +49,7 @@ void register_rs04(void)
    method->expectedImageSize = RS04ExpectedImageSize;
    method->recognizeEccFile  = RS04RecognizeFile;
    method->recognizeEccImage = RS04RecognizeImage;
+   method->getCrcBuf         = RS04GetCrcBuf;
 
    method->widgetList = g_malloc0(sizeof(RS04Widgets));
 

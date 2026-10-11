@@ -106,9 +106,14 @@ static void range_add(ranges *r, gint64 s)
 /***
  *** Read the added zone: tags, CRC sectors and parity sectors.
  *** Missing ranges and CRC errors are appended to report (if not NULL).
+ *** RS04ScanZonePart() only reads the first zone_sectors sectors.
  ***/
 
 void RS04ScanZone(RS04State *st, GString *report)
+{  RS04ScanZonePart(st, report, st->set->A);
+}
+
+void RS04ScanZonePart(RS04State *st, GString *report, guint64 zone_sectors)
 {  RS04Set *set = st->set;
    unsigned char *buf = g_malloc((size_t)CHUNK*set->B);
    guint8 present[CHUNK];
@@ -121,8 +126,9 @@ void RS04ScanZone(RS04State *st, GString *report)
    r.suffix = set->target == ECC_FILE ? _(" (in ecc file)") : " ";
    r.out = report ? report : g_string_new(NULL);
 
-   for(a0=0; a0<set->A; a0+=CHUNK)
-   {  int i, n = MIN(CHUNK, set->A - a0);
+   zone_sectors = MIN(zone_sectors, set->A);
+   for(a0=0; a0<zone_sectors; a0+=CHUNK)
+   {  int i, n = MIN(CHUNK, zone_sectors - a0);
 
       RS04ReadZone(&st->io, a0, n, buf, present);
 

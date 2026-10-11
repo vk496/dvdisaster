@@ -44,6 +44,7 @@ typedef struct
    int doChecksumsFromImage;    /* calculate sector CRC and MD5 from image */
    int doChecksumsFromCodec;    /* let codec compute its own/additional checksums */
    int savedSectorSkip;
+   int sectorBytes;             /* 2048, or 2352 for CD-DA images */
    char *volumeLabel;
 
    /* Data exchange between reader and worker */

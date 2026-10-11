@@ -85,6 +85,10 @@ if try "ecc file creation with 40 roots" ecc_create_roots; then (
   run_regtest ecc_create_roots "--debug --set-version $SETVERSION -mRS04 -n 40r -o file -c" $MASTERISO $TMPECC
 ) & limit_jobs; fi
 
+if try "ecc file creation with size limit" ecc_create_size; then (
+  run_regtest ecc_create_size "--debug --set-version $SETVERSION -mRS04 -n 4m -o file -c" $MASTERISO $TMPECC
+) & limit_jobs; fi
+
 # Small memory budget: other code parameters and many encoding passes
 
 if try "ecc file creation with small memory budget" ecc_create_low_memory; then (
@@ -99,7 +103,7 @@ if try "redundancy out of range" ecc_bad_redundancy; then (
 ) & limit_jobs; fi
 
 if try "invalid redundancy" ecc_invalid_redundancy; then (
-  run_regtest ecc_invalid_redundancy "--debug --set-version $SETVERSION -mRS04 -n 200m -o file -c" $MASTERISO $TMPECC
+  run_regtest ecc_invalid_redundancy "--debug --set-version $SETVERSION -mRS04 -n 200x -o file -c" $MASTERISO $TMPECC
 ) & limit_jobs; fi
 
 if try "invalid sector size" ecc_invalid_sector_size; then (

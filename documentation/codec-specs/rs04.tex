@@ -145,6 +145,23 @@ require $dataBytes = S \cdot B$, otherwise the added zone would not start on
 a sector boundary. Ecc files may protect data of any length, e.g. arbitrary
 files.
 
+\paragraph{Missing sectors in image files.}
+\label{rs04-missing}
+dvdisaster stores a sector which could not be read as its {\em dead sector
+marker}: 2048 bytes starting with the text {\tt dvdisaster dead sector
+marker} (the marker used for RS01--RS03 images), or 2048 copies of a fill
+byte if the user requested one (e.g.\ zero for images made by other
+tools). For $B > 2048$ a missing sector is this 2048-byte marker followed by
+$B - 2048$ zero bytes (fill bytes if a fill byte is used). Readers recognise
+a missing sector by its first 2048 bytes only. A missing sector is an
+erasure; its Crc32 is meaningless.
+
+\paragraph{Whole-disc images (informative).} dvdisaster reads a
+multi-session medium as one image in which every sector is at its absolute
+position. The sectors between the sessions (lead-out, lead-in and pregap) can
+not be read; they are stored as zero-filled $B$-byte sectors. They belong to
+no set (section \ref{rs04-sessions}) and are not erasures.
+
 \subsubsection{Sector to shard mapping}
 \label{rs04-shard}
 
@@ -501,8 +518,9 @@ can be decoded. dvdisaster chooses them as follows.
   redundancy $\rho$ (parity sectors per protected sector). The size of the
   set is $C_{tot} = D + E$. dvdisaster takes $\rho$ from the option
   {\tt -n}: $p${\tt \%} gives $\rho = p/100$, $r${\tt r} (``roots'' as for
-  RS03) $\rho = r/(255-r)$, {\tt normal} (the default) $32/223$ and
-  {\tt high} $64/191$.
+  RS03; also without the suffix) $\rho = r/(255-r)$, {\tt normal} (the
+  default) $32/223$ and {\tt high} $64/191$. $x${\tt m} chooses the
+  largest $\rho$ for which the ecc file has at most $x$ MiB.
 \item {\em Augmented images (default): fill the medium.} Let $C$ be the
   number of sectors available for the whole set: the capacity of the target
   medium (as reported by the drive, from the medium size table also used by
@@ -653,7 +671,10 @@ by the sets found so far (gaps between and before sessions), and to a whole
 image without any set found only on request (option {\tt -a RS04}), since
 reading every sector of every opened image would be too slow. A set whose
 tag 0 is lost and whose image has more than 256 sectors appended is
-therefore only found with {\tt -a RS04}. On a medium, steps 1 and 2 are used.
+therefore only found with {\tt -a RS04}. On a medium, steps 1 and 2 are used,
+step 2 also for the end of every session in the table of contents.
+To confirm a candidate, dvdisaster tries up to 16 CRC sectors spread over
+the set and the first 16 data sectors covered by each of them.
 
 \paragraph{Ecc files.} Sector 0 of an ecc file is tag 0. If it is
 unreadable or invalid, the reader searches the file for the 16-byte
@@ -687,8 +708,9 @@ $2352\,t + 4\delta$. The recommended procedure is:
 
 \begin{enumerate}
 \item {\bf Probe sectors.} Take every data sector $t$ with
-  $10 \le t < S - 10$ whose $crc_t$ is known (from a readable or recovered
-  CRC sector) and differs from {\tt 0x416831C0}, the Crc32 of digital
+  $10 \le t < S - 10$ whose $crc_t$ is known from a readable CRC sector
+  (a lost CRC sector can only be recovered after the rip has been aligned,
+  since its codeword contains data sectors) and differs from {\tt 0x416831C0}, the Crc32 of digital
   silence (silence matches at every offset). Choose up to 64 of them, evenly
   spread over this range.
 \item {\bf Fast path.} If all probe sectors match for $\delta = 0$, the rip
@@ -732,7 +754,8 @@ format.
   first ($C_j$ is in codeword $(S+j) \bmod L$). Data sectors whose Crc32 is
   not known yet are assumed to be correct if they are readable.
 \item For every codeword: a data sector is an erasure if it is unreadable
-  (in image files: contains the dead sector marker of dvdisaster) or its
+  (in image files: contains the dead sector marker of dvdisaster, section
+  \ref{rs04-missing}) or its
   Crc32 does not match. Zero sectors are known. With at most $m$
   erasures the codeword is decoded, otherwise its erased sectors stay
   unrecoverable. The data sector Crc32 values are checked after decoding.
@@ -743,6 +766,26 @@ format.
 The decoder only needs one $B_s$-byte shard per layer and codeword at a
 time; an implementation processes $W$ consecutive codewords per pass to read
 the image in larger pieces.
+
+\subsection{Reading media (informative)}
+\label{rs04-reading}
+
+While reading a medium, dvdisaster checks the data sectors of every set
+with $B = 2048$ (the augmented sets on the medium, or an ecc file given for
+it) against their Crc32 values, and the CRC sectors of augmented sets
+against their tags. Only the beginning of each added zone, up to the last
+CRC sector, is read in advance; parity sectors are checked when the image
+is verified or repaired.
+
+\medskip
+
+Adaptive reading stops as soon as every codeword of every set has at most
+$m$ erasures (sectors which could not be read, or whose Crc32 does not
+match). Tags are not part of the code and are recreated by the repair, but
+the image must remain recognizable (section \ref{rs04-recognize}): one
+valid tag among the last 256 sectors of every augmented set must have been
+read. Sectors between sessions are not read, and the last 2 sectors of a
+session (TAO run-out) are not needed if they belong to no set.
 
 \subsection{Versioning and compatibility}
 \label{rs04-versions}
