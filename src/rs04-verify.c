@@ -372,7 +372,7 @@ static int print_sizes(Image *image, RS04Set *set, int idx, int last)
 	 PrintLog(_("* Warning          : %s\n"), msg);
 	 RS04VerifyField(idx, RS04_V_ECCRESULT, "<span %s>%s</span>", Closure->redMarkup, msg);
 	 g_free(msg);
-	 exitCode = EXIT_CODE_SIZE_MISMATCH;
+	 SetExitCode(EXIT_CODE_DEFECTS);
       }
 
       if(img_bytes == set->dataBytes)
@@ -390,7 +390,7 @@ static int print_sizes(Image *image, RS04Set *set, int idx, int last)
 			 Closure->redMarkup, have, want);
 	 g_free(have);
 	 g_free(want);
-	 exitCode = EXIT_CODE_SIZE_MISMATCH;
+	 SetExitCode(EXIT_CODE_DEFECTS);
       }
    }
    else
@@ -413,7 +413,7 @@ static int print_sizes(Image *image, RS04Set *set, int idx, int last)
 	 g_free(have);
 	 g_free(want);
 	 if(sectors < end)
-	   exitCode = EXIT_CODE_SIZE_MISMATCH;
+	   SetExitCode(EXIT_CODE_DEFECTS);
       }
    }
 
@@ -606,8 +606,8 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
 
    total_missing = data_missing + st.crcMissing + st.eccMissing + st.tagsBad;
    total_crc_errors = data_crc_errors + st.crcErrors + st.eccErrors;
-   if(total_missing) exitCode = EXIT_CODE_MISSING_SECTOR;
-   else if(total_crc_errors) exitCode = EXIT_CODE_CHECKSUM_ERROR;
+   if(total_missing) SetExitCode(EXIT_CODE_DEFECTS);
+   else if(total_crc_errors) SetExitCode(EXIT_CODE_DEFECTS);
 
    show_section(idx, RS04_V_DATA, data_missing, data_crc_errors);
    show_section(idx, RS04_V_CRC, st.crcMissing, st.crcErrors);
@@ -623,7 +623,7 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
 		 "- data md5sum      : %s\n"),digest);
       if(memcmp(sum, set->dataMD5, 16))
       {  PrintLog(_("* data md5sum      : BAD, does not match the ecc data\n"));
-	 exitCode = EXIT_CODE_CHECKSUM_ERROR;
+	 SetExitCode(EXIT_CODE_DEFECTS);
 	 RS04VerifyField(idx, RS04_V_IMGMD5, "<span %s>%s</span>", Closure->redMarkup, digest);
 	 RS04VerifyField(idx, RS04_V_RESULT, _("<span %s>Damaged image.</span>"), Closure->redMarkup);
       }
@@ -681,6 +681,8 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
 	 RS04VerifyField(idx, RS04_V_PROGNOSIS, _("<span %s>%" PRId64 " of %" PRId64 " sectors recoverable (%d.%d%%)</span>"),
 			 recoverable < expected ? Closure->redMarkup : Closure->greenMarkup,
 			 recoverable, expected, percentage/10, percentage%10);
+	 if(recoverable < expected)
+	    SetExitCode(EXIT_CODE_DATA_LOSS);
 	 if(recoverable < expected)
 	      RS04VerifyField(idx, RS04_V_RESULT, _("<span %s>Full data recovery is NOT possible.</span>"),
 			      Closure->redMarkup);

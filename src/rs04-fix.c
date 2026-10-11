@@ -785,16 +785,15 @@ void RS04Fix(Image *image)
 			      _("Image sectors could not be fully restored "
 				      "(%" PRId64 " repaired; <span %s>%" PRId64 " unrepaired</span>)"),
 		      corrected, Closure->redMarkup, fc->uncorrected);
-      exitCode = 2;
+      SetExitCode(EXIT_CODE_DATA_LOSS);
    }
    else
    {  if(!corrected && !fc->tagCorr)
       {  t = _("Good! All sectors are already present.");
-	 exitCode = 0;
       }
       else
       {  t = _("Good! All sectors are repaired.");
-	 exitCode = 1;
+	 SetExitCode(EXIT_CODE_DEFECTS);
 
 	 for(i=0; i<fc->info->nSets; i++)
 	 {  fc->set = &fc->info->set[i];
@@ -802,7 +801,7 @@ void RS04Fix(Image *image)
 	    fc->st.set = fc->set;
 	    if(!data_md5_good(fc))
 	    {  t = _("* Warning: the md5sum of the repaired data does not match.");
-	       exitCode = 2;
+	       SetExitCode(EXIT_CODE_DATA_LOSS);
 	    }
 	 }
       }

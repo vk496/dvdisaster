@@ -1420,6 +1420,7 @@ step_counter:
       if(corrupted_sectors > 0 && !Closure->readErrors)
 	{  t = g_strdup_printf(_("All sectors are readable, but %d contain defective content."),
 			       corrupted_sectors);
+	   SetExitCode(EXIT_CODE_DEFECTS);
       }
       else
       /* Image was fully readable and had no CRC errors (if CRC was available at all!).
@@ -1437,10 +1438,13 @@ step_counter:
 	 {  t = g_strdup(_("All sectors successfully read, but wrong ecc md5sum."));
 	 }
 
-	 if(!t) 
+	 if(t) SetExitCode(EXIT_CODE_DEFECTS);
+	 else
 	 {  if(rc->eccMethod) /* we had CRC sums to compare against */
 	    {  if(rc->crcIncomplete)
-		    t = g_strdup(_("All sectors successfully read, but incomplete or damaged checksums."));
+	       {  t = g_strdup(_("All sectors successfully read, but incomplete or damaged checksums."));
+		  SetExitCode(EXIT_CODE_DEFECTS);
+	       }
 	       else t = g_strdup(_("All sectors successfully read. Checksums match."));
 	    }
 	    else t = g_strdup(_("All sectors successfully read."));
@@ -1460,7 +1464,19 @@ step_counter:
       }
    }
 
+   /* Unreadable sectors set the exit code further below (TAO tail case) */
+
+   if(Closure->crcErrors)
+      SetExitCode(EXIT_CODE_DEFECTS);
+
    PrintLog("\n%s\n",t);
+
+   ReportDevice(rc->image->dh);
+   ReportEccHeader(rc->image->eccFileHeader ? rc->image->eccFileHeader : rc->image->eccHeader);
+   ReportNumber(rc->scanMode ? "scan" : "read", "readable", rc->readOK);
+   ReportNumber(rc->scanMode ? "scan" : "read", "unreadable", Closure->readErrors);
+   ReportNumber(rc->scanMode ? "scan" : "read", "crc_errors", Closure->crcErrors);
+
    if(Closure->guiMode)
    {  if(rc->scanMode)
       {  GuiSwitchAndSetFootline(Closure->readLinearNotebook,
@@ -1516,7 +1532,7 @@ step_counter:
         if(!LargeTruncate(rc->writerImage, (gint64)rc->sectorBytes*(rc->image->dh->sectors-tao_tail)))
 	  Stop(_("Could not truncate %s: %s\n"),Closure->imageName,strerror(errno));
    }
-   else if(Closure->readErrors > session_tails) exitCode = EXIT_FAILURE;
+   else if(Closure->readErrors > session_tails) SetExitCode(EXIT_CODE_DEFECTS);
 
    /*** CD-DA images get a cue sheet */
 

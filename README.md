@@ -22,6 +22,7 @@ This version is built on top of the latest upstream version, with the following 
 - Reading of multi-session discs (all sessions in one image) and of audio CDs (2352-byte `.bin` + `.cue`, with C2 error pointers)
 - Optional pause after a given number of read errors, to let drives that overheat on damaged media cool down (`--pause-after-errors`)
 - A new CLI-only version, not depending on gtk (`./configure --with-gui=no && make clean && make -j4`)
+- Scripting support: documented exit codes, a machine-readable JSON report (`--json`) and a quiet mode (`-q`)
 - GUI codebase ported from gtk2 to gtk3 to ensure future-proofness
 - Windows and macOS builds are supported again, those were dropped upstream a few versions back
 - Non-regression tests on each code change (also run under AddressSanitizer/UBSan), along with prebuilt binaries for Linux64, Windows32/64 and macOS, for both CLI and GUI versions

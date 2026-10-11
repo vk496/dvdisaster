@@ -1425,7 +1425,7 @@ void fill_gap(read_closure *rc)
      if(j++ % 2000)
      {  int seq = (j/2000)%10;
 
-	if(!Closure->guiMode)
+	if(!Closure->guiMode && !Closure->quiet)
 	{  g_printf("%s", anim[seq]);
 	   fflush(stdout);
 	}
@@ -2340,6 +2340,12 @@ finished:
 		 "This is okay if the session was written in TAO (track at once) mode;\n"
 		 "these sectors do not contain data.\n"), rc->sessionTails);
 
+   ReportDevice(rc->dh);
+   ReportEccHeader(rc->eh);
+   ReportNumber("read", "readable", rc->readable);
+   ReportNumber("read", "correctable", rc->correctable);
+   ReportNumber("read", "missing", rc->expectedSectors - rc->readable - rc->correctable);
+
    /* We were in ECC_IN_FILE or ECC_IN_IMAGE mode,
       but did not recover sufficient data. */
 
@@ -2355,8 +2361,10 @@ finished:
       GuiSetAdaptiveReadFootline(t, 0);
 
       g_free(t);
-      exitCode = EXIT_FAILURE;
+      SetExitCode(EXIT_CODE_DATA_LOSS);
    }
+   else if(rc->map && rc->readable < rc->expectedSectors)
+      SetExitCode(EXIT_CODE_DEFECTS);
 
    /* Results for reading in IMAGE_ONLY mode */
 
@@ -2379,7 +2387,7 @@ finished:
 
 	 GuiSetAdaptiveReadFootline(t, 0);
 	 g_free(t);
-	 exitCode = EXIT_FAILURE;
+	 SetExitCode(EXIT_CODE_DEFECTS);
       }
    }
 
