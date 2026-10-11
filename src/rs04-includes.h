@@ -117,20 +117,89 @@ typedef struct _RS04IO
    gint64 zonePos;          /* byte position of added zone sector 0 in zoneFile */
 } RS04IO;
 
+/* Widgets and GUI state, see rs04-window.c and rs04-preferences.c */
+
+#define RS04_SPIRAL_SEGMENTS 1000
+
+enum  /* per-set fields of the verify window */
+{  RS04_V_TYPE, RS04_V_METHOD, RS04_V_CREATOR, RS04_V_ECCMD5, RS04_V_ECCRESULT,
+   RS04_V_SECTORS, RS04_V_IMGMD5, RS04_V_DATA, RS04_V_CRC, RS04_V_ECC, RS04_V_TAGS,
+   RS04_V_OFFSET_KEY, RS04_V_OFFSET, RS04_V_ERASURE_KEY, RS04_V_ERASURE,
+   RS04_V_PROGNOSIS_KEY, RS04_V_PROGNOSIS, RS04_V_RESULT, RS04_V_FIELDS
+};
+
 typedef struct
-{  GtkWidget *createLabel, *fixLabel, *verifyLabel;
+{  /* Encoding window */
+
+   GtkWidget *encHeadline, *encLabel2, *encPBar1, *encPBar2;
+   GtkWidget *encLabel3, *encInfo, *encLabel4, *encPerformance;
+   GtkWidget *encFootline, *encFootline2;
+
+   /* Fix window */
+
+   GtkWidget *fixHeadline, *fixDrawingArea, *fixNotebook, *fixFootline, *fixFootlineBox;
+   GtkWidget *fixCorrected, *fixProgress, *fixUncorrected;
+   Curve *fixCurve;
+   gint64 corrected, uncorrected;
+   int eccMax, percent;
+
+   /* Verify window; the per-set texts are only touched by the main thread */
+
+   GtkWidget *cmpHeadline, *cmpDrawingArea, *cmpImageNotebook, *cmpSetCombo;
+   GtkWidget *cmpField[RS04_V_FIELDS];
+   char *cmpText[RS04_MAX_SETS][RS04_V_FIELDS];
+   int cmpSets, cmpShown;
+   Spiral *cmpSpiral;
+   PangoLayout *cmpLayout;
+   guint8 cmpSegment[RS04_SPIRAL_SEGMENTS];
+   gint64 cmpSectors;       /* image sectors mapped onto the spiral */
+
+   /* Preferences page */
+
+   GtkWidget *eccFile, *eccImage, *redundancyFrame;
+   GtkWidget *fillRadio, *normalRadio, *highRadio, *rootsRadio, *sizeRadio;
+   GtkWidget *mediumAuto, *mediumForce, *mediumManual, *mediumCombo, *mediumSpin;
+   GtkWidget *rootsScale, *sizeSpin;
+   GtkWidget *memorySpin, *threadsSpin, *sectorCombo, *offsetAuto, *offsetSpin;
+   int prefsUpdating;
 } RS04Widgets;
 
-#define RS04_LABEL(name) (((RS04Widgets*)FindMethod("RS04")->widgetList)->name)
+/* rs04-window.c; the functions do nothing in CLI mode */
 
-/* ecc-rs04.c */
-
+#ifdef WITH_GUI_YES
 void CreateRS04EncWindow(Method*, GtkWidget*);
 void CreateRS04FixWindow(Method*, GtkWidget*);
 void CreateRS04VerifyWindow(Method*, GtkWidget*);
 void ResetRS04EncWindow(Method*);
 void ResetRS04FixWindow(Method*);
 void ResetRS04VerifyWindow(Method*);
+void FreeRS04Widgets(RS04Widgets*);
+
+void RS04SetFixMaxValues(int);
+void RS04AddFixValue(int, int, int);
+void RS04UpdateFixResults(int, gint64, gint64);
+void RS04VerifyInit(RS04Info*, Image*);
+void RS04VerifyShowSet(int);
+void RS04VerifyResult(int);
+void RS04VerifyField(int, int, char*, ...) PRINTF_FORMAT(3);
+void RS04VerifySpiral(gint64, gint64, int);
+#else
+#define RS04SetFixMaxValues(m)
+#define RS04AddFixValue(f, t, v)
+#define RS04UpdateFixResults(p, c, u)
+#define RS04VerifyInit(i, s)
+#define RS04VerifyShowSet(i)
+#define RS04VerifyResult(g)
+#define RS04VerifyField(i, f, ...)
+#define RS04VerifySpiral(f, n, s)
+#endif
+
+/* rs04-preferences.c */
+
+#ifdef WITH_GUI_YES
+void CreateRS04PrefsPage(Method*, GtkWidget*);
+void ResetRS04PrefsPage(Method*);
+#endif
 
 /* rs04-common.c */
 

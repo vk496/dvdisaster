@@ -20,7 +20,7 @@
  *  along with dvdisaster. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*** src type: no GUI code ***/
+/*** src type: some GUI code ***/
 
 #include "dvdisaster.h"
 
@@ -49,7 +49,8 @@ typedef struct
 } worker;
 
 struct _fix_closure
-{  Image *image;
+{  RS04Widgets *wl;
+   Image *image;
    RS04Info *info;
    RS04Set *set;
    RS04State st;
@@ -68,7 +69,10 @@ struct _fix_closure
    guint64 dataCorr, crcCorr, eccCorr, tagCorr, uncorrected;
    guint64 damaged, damagedCw;
    guint32 worst;
+   guint64 Ldone, Ltotal;   /* codewords of the previous / all sets (GUI progress) */
 };
+
+#define GUI_PERMILLE(fc, col) ((int)((1000*((fc)->Ldone + (gint64)(col) + 1))/(fc)->Ltotal))
 
 static void free_buffers(fix_closure *fc)
 {  int i;
@@ -203,9 +207,9 @@ static void expand_file(LargeFile *file, gint64 base, int B, guint64 total)
    g_free(buf);
 }
 
-/* Returns FALSE if the image has superfluous bytes which may not be removed */
+/* Returns FALSE if the user does not want superfluous bytes to be removed */
 
-static void check_sizes(fix_closure *fc)
+static int check_sizes(fix_closure *fc)
 {  RS04Set *set = fc->set;
    Image *image = fc->image;
 
@@ -213,21 +217,36 @@ static void check_sizes(fix_closure *fc)
    {  gint64 diff = (gint64)image->file->size - (gint64)set->dataBytes;
 
       if(diff > 0)
-      {  if(!Closure->truncate)
+      {  char *add_truncate = _("Add the --truncate option to the program call\n"
+				"to have the superfluous sectors removed.");
+	 char *longer = _("The image file is %lld sectors longer as noted in the\n"
+			  "ecc data. This might simply be zero padding, but could\n"
+			  "also mean that the image was manipulated after appending\n"
+			  "the error correction information.\n\n%s");
+
+	 if(Closure->guiMode && !Closure->truncate)
+	 {  int answer;
+
+	    if(diff < set->B)
+	         answer = GuiModalDialog(GTK_MESSAGE_QUESTION, GTK_BUTTONS_OK_CANCEL, NULL,
+					 _("The image file is %d bytes longer than noted\n"
+					   "in the ecc file. Shall the superfluous bytes\n"
+					   "be removed from the image file?\n"),
+					 (int)diff);
+	    else answer = GuiModalDialog(GTK_MESSAGE_QUESTION, GTK_BUTTONS_OK_CANCEL, NULL,
+					 longer, (long long)(diff / set->B),
+					 _("Is it okay to remove the superfluous sectors?"));
+	    if(!answer)
+	      return FALSE;
+	 }
+	 else if(!Closure->truncate)
 	 {  if(diff < set->B)
 	      Stop(_("The image file is %d bytes longer than noted\n"
 		     "in the ecc file.\n"
 		     "Add the --truncate option to the program call\n"
 		     "to have the superfluous sectors removed."),
 		   (int)diff);
-	    else
-	      Stop(_("The image file is %lld sectors longer as noted in the\n"
-		     "ecc data. This might simply be zero padding, but could\n"
-		     "also mean that the image was manipulated after appending\n"
-		     "the error correction information.\n\n%s"),
-		   (long long)(diff / set->B),
-		   _("Add the --truncate option to the program call\n"
-		     "to have the superfluous sectors removed."));
+	    else Stop(longer, (long long)(diff / set->B), add_truncate);
 	 }
 	 if(!LargeTruncate(image->file, set->dataBytes))
 	   Stop(_("Could not truncate %s: %s\n"),Closure->imageName,strerror(errno));
@@ -239,6 +258,8 @@ static void check_sizes(fix_closure *fc)
    }
    else expand_file(image->file, set->start*set->B, set->B,
 		    (set->start + set->S + set->A)*set->B);
+
+   return TRUE;
 }
 
 /***
@@ -327,6 +348,7 @@ static gpointer decoder_thread(gpointer data)
 
 	 if(permille != fc->lastPermille)
 	 {  PrintProgressETA(fc->timer, permille, _("Ecc progress: %3d.%1d%%"), permille/10, permille%10);
+	    RS04UpdateFixResults(GUI_PERMILLE(fc, fc->i0+w), fc->dataCorr+fc->crcCorr+fc->eccCorr, fc->uncorrected);
 	    fc->lastPermille = permille;
 	 }
       }
@@ -449,6 +471,7 @@ static void finish_pass(fix_closure *fc)
       fc->damaged += count;
       fc->damagedCw++;
       fc->worst = MAX(fc->worst, count);
+      RS04AddFixValue(GUI_PERMILLE(fc, col-1)+1, GUI_PERMILLE(fc, col), count);
 
       if(fc->result[w] != CW_REPAIRED)
       {  if(fc->result[w] == CW_TOO_MANY)
@@ -506,6 +529,10 @@ static void finish_pass(fix_closure *fc)
 
       PrintCLI("\n");
    }
+
+   if(!fc->select)
+     RS04UpdateFixResults(GUI_PERMILLE(fc, fc->i0+fc->pw-1),
+			  fc->dataCorr+fc->crcCorr+fc->eccCorr, fc->uncorrected);
 }
 
 /* Decode all columns, or only those selected */
@@ -648,14 +675,34 @@ static int fix_set(fix_closure *fc, int idx)
      PrintLog(_("\nSet %d of %d (image sectors %" PRId64 " - %" PRId64 "):\n"),
 	      idx+1, fc->info->nSets, set->start, set->start + (gint64)(set->S + set->A) - 1);
 
+   if(Closure->guiMode)
+   {  char *desc = g_strdup_printf(_("RS04, %u+%u layers of %" PRIu64 " sectors (%d bytes), %4.1f%% redundancy"),
+				   set->k, set->m, set->L, set->B, (100.0*set->m*set->L)/set->D);
+
+      if(fc->info->nSets > 1)
+      {  char *where = g_strdup_printf(_("Set %d of %d (image sectors %" PRId64 " - %" PRId64 ")"),
+				       idx+1, fc->info->nSets, set->start,
+				       set->start + (gint64)(set->S + set->A) - 1);
+	 char *tmp = g_strdup_printf("%s: %s", where, desc);
+
+	 g_free(where);
+	 g_free(desc);
+	 desc = tmp;
+      }
+      GuiSetLabelText(fc->wl->fixHeadline, _("<big>Repairing the image.</big>\n<i>%s</i>"), desc);
+      g_free(desc);
+   }
+
    RS04InitState(st, fc->image, set);
    RS04ScanZone(st, NULL);
 
    if(set->target == ECC_FILE && set->B == 2352)
      handle_audio_offset(fc);
 
-   check_sizes(fc);
+   if(!check_sizes(fc))
+     return FALSE;
    alloc_buffers(fc);
+   RS04SetFixMaxValues(set->m);
    fc->lastPermille = -1;
 
    /* Recover lost CRC sectors first (only their codewords) */
@@ -675,6 +722,7 @@ static int fix_set(fix_closure *fc, int idx)
 
    repair_tags(fc);
    free_buffers(fc);
+   fc->Ldone += set->L;
    return TRUE;
 }
 
@@ -688,8 +736,11 @@ void RS04Fix(Image *image)
    char *t = NULL;
    int i;
 
+   fc->wl = (RS04Widgets*)FindMethod("RS04")->widgetList;
    fc->image = image;
    RegisterCleanup(_("Repairing of image aborted"), fix_cleanup, fc);
+   GuiSetLabelText(fc->wl->fixHeadline, _("<big>Repairing the image.</big>\n<i>%s</i>"),
+		   _("Opening files..."));
 
    fc->info = RS04GetSets(image);
    if(!fc->info)
@@ -699,11 +750,15 @@ void RS04Fix(Image *image)
 	    fc->info->set[0].target == ECC_FILE ? "RS04f" : "RS04i");
 
    fc->timer = g_timer_new();
+   for(i=0; i<fc->info->nSets; i++)
+     fc->Ltotal += fc->info->set[i].L;
 
    for(i=0; i<fc->info->nSets; i++)
    {  fc->set = &fc->info->set[i];
       if(!fix_set(fc, i))
       {  PrintLog(_("Aborted by user request!\n"));
+	 GuiSwitchAndSetFootline(fc->wl->fixNotebook, 1, fc->wl->fixFootline,
+				 _("<span %s>Aborted by user request!</span>"), Closure->redMarkup);
 	 fix_cleanup((gpointer)fc);
 	 return;
       }
@@ -714,13 +769,15 @@ void RS04Fix(Image *image)
    PrintProgress(_("Ecc progress: 100.0%%\n"));
 
    corrected = fc->dataCorr + fc->crcCorr + fc->eccCorr;
+   RS04UpdateFixResults(1000, corrected, fc->uncorrected);
    if(corrected || fc->tagCorr)
      PrintLog(_("Repaired sectors: %" PRId64 " (%" PRId64 " data, %" PRId64 " crc, %" PRId64 " ecc, %" PRId64 " tags)\n"),
 	      corrected + fc->tagCorr, fc->dataCorr, fc->crcCorr, fc->eccCorr, fc->tagCorr);
 
    if(fc->uncorrected)
    {  PrintLog(_("Unrepaired sectors: %" PRId64 "\n"), fc->uncorrected);
-      GuiSetLabelText(RS04_LABEL(fixLabel), _("Image sectors could not be fully restored "
+      GuiSwitchAndSetFootline(fc->wl->fixNotebook, 1, fc->wl->fixFootline,
+			      _("Image sectors could not be fully restored "
 				      "(%" PRId64 " repaired; <span %s>%" PRId64 " unrepaired</span>)"),
 		      corrected, Closure->redMarkup, fc->uncorrected);
       exitCode = 2;
@@ -745,7 +802,8 @@ void RS04Fix(Image *image)
 	 }
       }
       PrintLog("%s\n", t);
-      GuiSetLabelText(RS04_LABEL(fixLabel), "%s %s", _("Repair results:"), t);
+      GuiSwitchAndSetFootline(fc->wl->fixNotebook, 1, fc->wl->fixFootline,
+			      "%s %s", _("Repair results:"), t);
    }
 
    if(fc->damagedCw)
