@@ -456,6 +456,33 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
 
 		 alloc_len = cdb[7]<<8 | cdb[8];
 
+		 if((cdb[1] & 3) == 2)  /* one feature (--drive-test) */
+		 {  int feature = cdb[2]<<8 | cdb[3];
+
+		    memset(buf, 0, 32);
+		    real_size = 8;
+		    buf[7] = 9;          /* CD-R profile */
+		    if(feature == 0x0000)  /* profile list: CD-ROM, CD-R */
+		    {  buf[11] = 8;
+		       buf[13] = 0x08;
+		       buf[17] = 0x09; buf[18] = 1;
+		       real_size += 12;
+		    }
+		    if(feature == 0x001e)  /* CD read; C2 pointers with --sim-toc */
+		    {  buf[8] = 0x00; buf[9] = 0x1e;
+		       buf[10] = 0x09;   /* version 2, current */
+		       buf[11] = 4;
+		       if(Closure->simulateTOC)
+		       {  parse_sim_toc();
+			  if(!sim_no_c2 && sim_sector_size == 2352) buf[12] = 0x02;
+		       }
+		       real_size += 8;
+		    }
+		    buf[3] = real_size-4;  /* data length */
+		    memcpy(out_buf, buf, alloc_len < real_size ? alloc_len : real_size);
+		    return 0;
+		 }
+
 		 memset(out_buf, 0, 8);
 		 out_buf[3] = 8;  /* data length */
 		 out_buf[7] = 9;  /* CD-R profile */
@@ -477,15 +504,32 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
 		 return 0;
 	 break;
 
+      case 0x5a: assert_cdb_length(cdb[0], cdb_size, 10);  /* MODE SENSE */
+                 assert_cdb_direction(cdb[0], DATA_READ, direction);
+
+		 if((cdb[2] & 0x3f) != 1)  /* only page 01h (read error recovery) */
+		 {  write_sense(sense, 5, 0x24, 0x00);  /* invalid field in CDB */
+		    return -1;
+		 }
+
+		 alloc_len = cdb[7]<<8 | cdb[8];
+		 memset(buf, 0, 20);
+		 buf[1] = 18;    /* mode data length */
+		 buf[8] = 0x01;  /* page code */
+		 buf[9] = 0x0a;  /* page length */
+		 if((cdb[2] & 0xc0) == 0x40)  /* changeable values: read retries only */
+		    buf[11] = 0xff;
+		 else buf[11] = 32;  /* current values: ERP 00h, 32 read retries */
+		 memcpy(out_buf, buf, alloc_len < 20 ? alloc_len : 20);
+		 return 0;
+	 break;
+
 #if 0
       case 0x52: assert_cdb_length(cdb[0], cdb_size, 10);  /* READ TRACK INFORMATION */
                  assert_cdb_direction(cdb[0], DATA_READ, direction);
 	 break;
       case 0x55: assert_cdb_length(cdb[0], cdb_size, 10);  /* MODE SELECT */
                  assert_cdb_direction(cdb[0], DATA_WRITE, direction);
-	 break;
-      case 0x5a: assert_cdb_length(cdb[0], cdb_size, 10);  /* MODE SENSE */
-                 assert_cdb_direction(cdb[0], DATA_READ, direction);
 	 break;
       case 0xad: assert_cdb_length(cdb[0], cdb_size, 12);  /* READ DVD STRUCTURE */
                  assert_cdb_direction(cdb[0], DATA_READ, direction);

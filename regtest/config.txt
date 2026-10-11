@@ -782,6 +782,9 @@ READ_audio_adaptive_refused yes
 READ_cdextra_read yes
 READ_cdextra_cdda yes
 READ_cdextra_medium_info yes
+READ_drive_test_data yes
+READ_drive_test_cdextra yes
+READ_drive_test_no_c2 yes
 
 ### RS04 reading workflows
 
