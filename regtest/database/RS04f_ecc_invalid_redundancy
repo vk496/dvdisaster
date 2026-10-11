@@ -10,7 +10,7 @@ Opening rs04f-master.iso: 8000 medium sectors.
 *
 * dvdisaster - can not continue:
 *
-Invalid redundancy specification '200m' for RS04.
-Valid formats: normal, high, <number>%, <number>r
+Invalid redundancy specification '200x'.
+Valid formats: normal, high, <number>%, <number>r, <number>m
 
 Aborted by unrecoverable error.

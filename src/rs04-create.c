@@ -189,7 +189,7 @@ static void remove_old_ecc(ecc_closure *ec)
  *** Determine the encoding parameters
  ***/
 
-static double get_ratio(void)
+static double get_ratio(RS04Set *set)
 {  char *r = Closure->redundancy;
    int len = r ? strlen(r) : 0;
 
@@ -204,7 +204,7 @@ static double get_ratio(void)
       return p/100.0;
    }
 
-   if(r[len-1] == 'r')
+   if(r[len-1] == 'r' || g_ascii_isdigit(r[len-1]))  /* roots, as RS03 */
    {  int n = atoi(r);
 
       if(n < 8 || n > 170)
@@ -212,8 +212,28 @@ static double get_ratio(void)
       return (double)n/(255.0-n);
    }
 
-   Stop(_("Invalid redundancy specification '%s' for RS04.\n"
-	  "Valid formats: normal, high, <number>%%, <number>r"), r);
+   if(r[len-1] == 'm')   /* largest ecc data within the given MiB */
+   {  guint64 S = (set->dataBytes + set->B - 1) / set->B;
+      double mib = (double)S * set->B / 1048576.0;
+      gint64 size = strtoll(r, NULL, 10);
+      double limit = size * 1048576.0 / set->B;   /* in sectors */
+      double ratio = limit / S;
+      RS04Set tmp = *set;
+      int i;
+
+      if(ratio < 8.0/247.0 || ratio > 2.0)
+	Stop(_("Ecc file size %" PRId64 "m out of useful range [%" PRId64 " .. %" PRId64 "]"),
+	     size, (gint64)ceil(mib*8.0/247.0), (gint64)(mib*2.0));
+
+      /* CRC sectors and tags come on top of the parity */
+
+      for(i=0; i<10 && RS04ChooseParameters(&tmp, ratio, 0, RS04MemoryBudget()) && tmp.A > limit; i++)
+	ratio *= (limit - 1) / tmp.A;
+      return MIN(ratio, 2.0);
+   }
+
+   Stop(_("Invalid redundancy specification '%s'.\n"
+	  "Valid formats: normal, high, <number>%%, <number>r, <number>m"), r);
    return 0.0;
 }
 
@@ -222,7 +242,7 @@ static void choose_parameters(ecc_closure *ec)
    guint64 ram = RS04MemoryBudget();
 
    if(Closure->eccTarget == ECC_FILE)
-   {  if(!RS04ChooseParameters(set, get_ratio(), 0, ram))
+   {  if(!RS04ChooseParameters(set, get_ratio(set), 0, ram))
 	Stop(_("The data is too small for RS04 with the requested redundancy."));
       return;
    }
@@ -238,7 +258,7 @@ static void choose_parameters(ecc_closure *ec)
 	     set->S, Closure->mediumSize);
    }
    else if(Closure->redundancy && strlen(Closure->redundancy))
-   {  if(!RS04ChooseParameters(set, get_ratio(), 0, ram))
+   {  if(!RS04ChooseParameters(set, get_ratio(set), 0, ram))
 	Stop(_("The data is too small for RS04 with the requested redundancy."));
    }
    else
