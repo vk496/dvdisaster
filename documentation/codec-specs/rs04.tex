@@ -3,8 +3,9 @@
 \sloppy
 
 This section describes the data format of the dvdisaster RS04 codec.
-{\bf Status: draft.} RS04 is not implemented by dvdisaster yet; the format
-may still change until this section is declared final (see the changelog).
+{\bf Status: draft.} dvdisaster implements RS04 as an experimental codec
+(command line only); the format may still change until this section is
+declared final (see the changelog).
 
 \medskip
 
@@ -496,9 +497,12 @@ can be decoded. dvdisaster chooses them as follows.
 \paragraph{1. Parity budget $E$.}
 \begin{itemize}
 \item {\em Ecc files} and explicitly requested redundancy:
-  $E = {\rm round}(\rho D)$ for the requested redundancy $\rho$ (parity
-  sectors per protected sector). The size of the set is
-  $C_{tot} = D + E$.
+  $E = \lfloor \rho D + 1/2 \rfloor$ (rounded half up) for the requested
+  redundancy $\rho$ (parity sectors per protected sector). The size of the
+  set is $C_{tot} = D + E$. dvdisaster takes $\rho$ from the option
+  {\tt -n}: $p${\tt \%} gives $\rho = p/100$, $r${\tt r} (``roots'' as for
+  RS03) $\rho = r/(255-r)$, {\tt normal} (the default) $32/223$ and
+  {\tt high} $64/191$.
 \item {\em Augmented images (default): fill the medium.} Let $C$ be the
   number of sectors available for the whole set: the capacity of the target
   medium (as reported by the drive, from the medium size table also used by
@@ -517,7 +521,8 @@ can be decoded. dvdisaster chooses them as follows.
 \[ N = \min\left(65536,\ {\rm Pow2Floor}\left(\left\lfloor
     \frac{C_{tot}}{32} \right\rfloor\right),\ {\rm Pow2Floor}\left(
     \left\lfloor\frac{R}{128 \cdot B_s}\right\rfloor\right)\right) \]
-where $R$ is the memory budget of the repair (default 4 GiB). A repair pass
+where $R$ is the memory budget of the repair (default 4 GiB, dvdisaster
+option {\tt --rs04-memory}). A repair pass
 holds 128 consecutive codewords of up to $N$ shards each in memory (with
 fewer codewords per pass a hard disk seeks too much); with 4 GiB this gives
 $N = 16384$ for DVD and BD. The $C_{tot}/32$ term keeps $L \ge 32$ on small media
@@ -642,6 +647,14 @@ all mismatch is rejected. If confirmed candidates overlap, the one with more
 matching sectors wins, then the one with more valid tags. A candidate
 without readable data or CRC sectors is kept but reported as unconfirmed.
 
+{\em Informative:} dvdisaster applies steps 1 and 2 to every image it
+opens. Step 3 is applied to the parts of an image file which are not covered
+by the sets found so far (gaps between and before sessions), and to a whole
+image without any set found only on request (option {\tt -a RS04}), since
+reading every sector of every opened image would be too slow. A set whose
+tag 0 is lost and whose image has more than 256 sectors appended is
+therefore only found with {\tt -a RS04}. On a medium, steps 1 and 2 are used.
+
 \paragraph{Ecc files.} Sector 0 of an ecc file is tag 0. If it is
 unreadable or invalid, the reader searches the file for the 16-byte
 signature at byte offsets which are multiples of 4 (all three sector sizes
@@ -689,8 +702,8 @@ $2352\,t + 4\delta$. The recommended procedure is:
 \item {\bf Decision.} The offset with the highest score is accepted if the
   score is at least 2 and at least twice the second highest score. Otherwise
   (e.g. too much damage, or the audio repeats exactly with a period of whole
-  samples) the user has to specify the offset; manual offsets are not
-  limited to the search window.
+  samples) the user has to specify the offset (dvdisaster option
+  {\tt --audio-offset}); manual offsets are not limited to the search window.
 \end{enumerate}
 
 With the accepted $\delta$, aligned sectors which are not completely inside
@@ -698,7 +711,9 @@ $R$ or overlap unreadable parts of the rip are erasures. With $\delta \ne 0$
 this concerns the first or the last $\lceil 4|\delta| / 2352 \rceil$ sectors,
 because drives normally cannot read into the lead-in or lead-out; they are
 recovered like any other erasure, and the repaired rip is identical to the
-original one ($dataMD5$ matches). Rips which differ in more than a constant
+original one ($dataMD5$ matches). dvdisaster repairs such a rip by first
+rewriting the file shifted by $4\delta$ bytes (missing bytes at the edges
+become zero) and then decoding it with $\delta = 0$. Rips which differ in more than a constant
 shift (other track splitting, pregaps or hidden track audio removed) are out
 of scope; the user has to provide a rip of the same range. Reading audio
 sectors from a drive (READ CD with C2 error pointers) does not affect the
@@ -777,6 +792,10 @@ zeros; they are never stored. \\
 \hline
 Tags & At least one ($Q \ge 2$). The last group of the added zone may
 have fewer than $T-1$ payload sectors. \\
+\hline
+Implementation & {\em Informative:} dvdisaster handles sets with
+$S$, $kL$ and $A$ below $2^{31}$ sectors (4 TiB of 2048-byte sectors) and
+treats tags describing larger sets as invalid. \\
 \hline
 \end{tabular}
 
