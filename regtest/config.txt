@@ -723,6 +723,13 @@ RS04f_audio_offset_fix_negative yes
 RS04f_audio_offset_fix_damaged yes
 RS04f_audio_offset_given yes
 RS04f_audio_offset_wrong yes
+RS04f_bincue_create yes
+RS04f_gdi_create yes
+RS04f_bincue_verify yes
+RS04f_bincue_fix yes
+RS04f_bincue_fixed yes
+RS04f_bincue_rs01 yes
+RS04f_bincue_mode1_2048 yes
 
 ### RS04i tests
 

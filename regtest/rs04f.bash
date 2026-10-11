@@ -423,5 +423,75 @@ if try "fixing rip with wrong given read offset" audio_offset_wrong; then (
   run_regtest audio_offset_wrong "--audio-offset 0 -f" $RIP $MASTERRIPECC
 ) & limit_jobs; fi
 
+### BIN/CUE and GDI images
+
+REGTEST_SECTION="BIN/CUE and GDI images"
+
+# The rip split into one file per track (700, 800 and 500 sectors),
+# with a cue sheet and a gdi file in directory $1. Their ecc files
+# are the same as the one of the rip.
+
+function bincue()
+{  dd if=$MASTERRIP of="$1/track 01.bin" bs=2352 count=700 >>$LOGFILE 2>&1
+   dd if=$MASTERRIP of=$1/track02.bin bs=2352 skip=700 count=800 >>$LOGFILE 2>&1
+   dd if=$MASTERRIP of=$1/track03.bin bs=2352 skip=1500 >>$LOGFILE 2>&1
+   printf 'FILE "track 01.bin" BINARY\r\n  TRACK 01 MODE1/2352\r\n    INDEX 01 00:00:00\r\n' >$1/disc.cue
+   printf 'FILE "track02.bin" BINARY\n  TRACK 02 AUDIO\n    PREGAP 00:02:00\n    INDEX 01 00:00:00\n' >>$1/disc.cue
+   printf 'FILE track03.bin BINARY\n  TRACK 03 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:01:00\n' >>$1/disc.cue
+   printf '3\n1 0 4 2352 "track 01.bin" 0\n2 850 0 2352 track02.bin 0\n3 45000 0 2352 track03.bin 0\n' >$1/disc.gdi
+}
+
+if try "ecc file from a cue sheet" bincue_create; then (
+  bincue $TEST_TMPDIR
+  run_regtest bincue_create "--debug --set-version $SETVERSION -n 20% -mRS04 -o file -c" $TEST_TMPDIR/disc.cue $TMPECC
+) & limit_jobs; fi
+
+if try "ecc file from a gdi file" gdi_create; then (
+  bincue $TEST_TMPDIR
+  run_regtest gdi_create "--debug --set-version $SETVERSION -n 20% -mRS04 -o file -c" $TEST_TMPDIR/disc.gdi $TMPECC
+) & limit_jobs; fi
+
+# Damage in all files, across the first file boundary,
+# and the last file is 10 sectors too short
+
+function damaged_bincue()
+{  bincue $1
+   dd if=/dev/zero of="$1/track 01.bin" bs=2352 seek=699 count=1 conv=notrunc >>$LOGFILE 2>&1
+   dd if=/dev/zero of=$1/track02.bin bs=2352 seek=0 count=2 conv=notrunc >>$LOGFILE 2>&1
+   printf 'XXXX' | dd of=$1/track02.bin bs=1 seek=$((2352*300+100)) conv=notrunc >>$LOGFILE 2>&1
+   truncate -s $((490*2352)) $1/track03.bin
+}
+
+if try "verifying damaged BIN/CUE image" bincue_verify; then (
+  damaged_bincue $TEST_TMPDIR
+  run_regtest bincue_verify "-t" $TEST_TMPDIR/disc.cue $MASTERRIPECC
+) & limit_jobs; fi
+
+if try "fixing damaged BIN/CUE image" bincue_fix; then (
+  damaged_bincue $TEST_TMPDIR
+  run_regtest bincue_fix "-f" $TEST_TMPDIR/disc.cue $MASTERRIPECC
+) & limit_jobs; fi
+
+# The repaired files put together must be the rip again
+
+if try "fixed BIN/CUE image equals the rip" bincue_fixed; then (
+  damaged_bincue $TEST_TMPDIR
+  echo "$NEWVER --regtest -i$TEST_TMPDIR/disc.gdi -e$MASTERRIPECC -f" >>$LOGFILE
+  $NEWVER --regtest -i$TEST_TMPDIR/disc.gdi -e$MASTERRIPECC -f >>$LOGFILE 2>&1
+  cat "$TEST_TMPDIR/track 01.bin" $TEST_TMPDIR/track02.bin $TEST_TMPDIR/track03.bin >$TEST_TMPDIR/rip.bin
+  run_regtest bincue_fixed "-t" $TEST_TMPDIR/rip.bin $MASTERRIPECC
+) & limit_jobs; fi
+
+if try "BIN/CUE image with RS01" bincue_rs01; then (
+  bincue $TEST_TMPDIR
+  run_regtest bincue_rs01 "-mRS01 -c" $TEST_TMPDIR/disc.cue $TMPECC
+) & limit_jobs; fi
+
+if try "BIN/CUE image with 2048 byte sectors" bincue_mode1_2048; then (
+  bincue $TEST_TMPDIR
+  sed -i -e 's,MODE1/2352,MODE1/2048,' $TEST_TMPDIR/disc.cue
+  run_regtest bincue_mode1_2048 "-mRS04 -o file -c" $TEST_TMPDIR/disc.cue $TMPECC
+) & limit_jobs; fi
+
 collect_results
 exit $nbfailed
