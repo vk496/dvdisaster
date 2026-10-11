@@ -96,6 +96,7 @@ typedef struct _RS04Set
    int target;              /* ECC_FILE or ECC_IMAGE */
    int tags;                /* valid tags seen during recognition */
    int matches;             /* confirmed data sectors (-1 = not confirmable) */
+   LargeFile *file;         /* ecc file holding the added zone (NULL = Image->eccFile) */
 } RS04Set;
 
 /* All sets of an image. Kept in Image->cachedLayout for augmented images;
@@ -125,8 +126,16 @@ enum  /* per-set fields of the verify window */
 {  RS04_V_TYPE, RS04_V_METHOD, RS04_V_CREATOR, RS04_V_ECCMD5, RS04_V_ECCRESULT,
    RS04_V_SECTORS, RS04_V_IMGMD5, RS04_V_DATA, RS04_V_CRC, RS04_V_ECC, RS04_V_TAGS,
    RS04_V_OFFSET_KEY, RS04_V_OFFSET, RS04_V_ERASURE_KEY, RS04_V_ERASURE,
-   RS04_V_PROGNOSIS_KEY, RS04_V_PROGNOSIS, RS04_V_RESULT, RS04_V_FIELDS
+   RS04_V_MARGIN_KEY, RS04_V_MARGIN, RS04_V_PROGNOSIS_KEY, RS04_V_PROGNOSIS, RS04_V_RESULT, RS04_V_FIELDS
 };
+
+typedef struct
+{  GtkWidget *eccFile, *eccImage;
+   GtkWidget *fillRadio, *normalRadio, *highRadio, *rootsRadio, *sizeRadio;
+   GtkWidget *mediumAuto, *mediumForce, *mediumManual, *mediumCombo, *mediumSpin;
+   GtkWidget *rootsScale, *sizeSpin;
+   GtkWidget *memorySpin, *threadsSpin, *sectorCombo, *offsetAuto, *offsetSpin;
+} RS04Prefs;
 
 typedef struct
 {  /* Encoding window */
@@ -154,14 +163,9 @@ typedef struct
    guint8 cmpSegment[RS04_SPIRAL_SEGMENTS];
    gint64 cmpSectors;       /* image sectors mapped onto the spiral */
 
-   /* Preferences page */
+   /* Preferences page [0] and its copies in the help windows [1] */
 
-   GtkWidget *eccFile, *eccImage, *redundancyFrame;
-   GtkWidget *fillRadio, *normalRadio, *highRadio, *rootsRadio, *sizeRadio;
-   GtkWidget *mediumAuto, *mediumForce, *mediumManual, *mediumCombo, *mediumSpin;
-   GtkWidget *rootsScale, *sizeSpin;
-   GtkWidget *memorySpin, *threadsSpin, *sectorCombo, *offsetAuto, *offsetSpin;
-   int prefsUpdating;
+   RS04Prefs prefs[2];
 } RS04Widgets;
 
 /* rs04-window.c; the functions do nothing in CLI mode */
@@ -239,6 +243,10 @@ void RS04Create(void);
 
 int RS04RecognizeFile(LargeFile*, EccHeader**);
 int RS04RecognizeImage(Image*);
+int  RS04ConfirmEccFile(Image*, LargeFile*, EccHeader*);
+RS04Info* RS04GetAllSets(Image*, int);
+void RS04FreeSets(Image*, RS04Info*);
+int  RS04Combined(RS04Info*);
 
 /* rs04-verify.c */
 

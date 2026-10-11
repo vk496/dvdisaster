@@ -242,6 +242,7 @@ typedef struct _GlobalClosure
    struct _Bitmap *mapFailedBlock; /* sectors of a failed multi-sector read */
    gint64 mapSectors;              /* medium size covered by the mapfile */
    GArray *mapPrevious;            /* blocks of an existing mapfile being updated */
+   GPtrArray *moreEccNames; /* further ecc files given with -e (RS04 supplementary sets) */
    GPtrArray *methodList; /* List of available methods */
    char *methodName;    /* Name of currently selected codec */
    gint64 readStart;    /* Range to read */

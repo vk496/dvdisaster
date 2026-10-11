@@ -338,7 +338,7 @@ EccHeader* RS04CreateEccHeader(RS04Set *set, int nsets)
    memcpy(eh->cookie, "*dvdisaster*", 12);
    memcpy(eh->method, "RS04", 4);
    eh->methodFlags[0] = set->target == ECC_FILE ? MFLAG_ECC_FILE : 0;
-   eh->methodFlags[1] = MIN(nsets, 255);
+   eh->methodFlags[1] = MIN(nsets, 127);  /* gint8 */
    eh->methodFlags[3] = set->flags;
    memcpy(eh->mediumSum, set->dataMD5, 16);
    gint64_to_uchar(eh->sectors, (end+2047)/2048);
@@ -502,7 +502,7 @@ void RS04InitIO(RS04IO *io, Image *image, RS04Set *set)
 
    if(set->target == ECC_FILE)
    {  io->dataOffset = 0;
-      io->zoneFile = image->eccFile;
+      io->zoneFile = set->file ? set->file : image->eccFile;
       io->zonePos = 0;
    }
    else

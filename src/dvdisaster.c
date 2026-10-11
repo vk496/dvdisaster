@@ -193,6 +193,7 @@ int main(int argc, char *argv[])
 {  int started = 0;              /* actions started before a --time-limit/--abort-file stop */
    int mode = MODE_NONE; 
    int sequence = MODE_NONE;
+   int ecc_given = FALSE;
    char *debug_arg = NULL;
    char *read_range = NULL;
    int debug_mode_required=FALSE;
@@ -417,11 +418,17 @@ int main(int argc, char *argv[])
 	              Closure->device = g_strdup(optarg); 
 	              break;
                    }
-         case 'e': if(optarg) 
+         case 'e': if(optarg && ecc_given)  /* RS04 supplementary sets */
+		   {  if(!Closure->moreEccNames)
+			 Closure->moreEccNames = g_ptr_array_new_with_free_func(g_free);
+		      g_ptr_array_add(Closure->moreEccNames, g_strdup(optarg));
+		   }
+		   else if(optarg) 
 		   {  if(Closure->eccName)
 		         g_free(Closure->eccName);
 		      Closure->eccName = g_strdup(optarg);
 		      Closure->eccNameExplicit = TRUE;
+		      ecc_given = TRUE;
 		   }
 	           break;
          case 'f': mode = MODE_SEQUENCE; sequence |= 1<<MODE_FIX; break;
@@ -1336,7 +1343,7 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --mapfile f                - with -r: write a GNU ddrescue mapfile to file f\n"));
       PrintCLI(_("                               an existing ddrescue mapfile is updated\n"));
       PrintCLI(_("  --medium-info              - print info about medium in drive\n"));
-      PrintCLI(_("  --no-bdr-defect-management - use bigger RS03 images for BD-R (see man page!)\n"));
+      PrintCLI(_("  --no-bdr-defect-management - use bigger RS03/RS04 images for BD-R (see man page!)\n"));
       PrintCLI(_("  --no-progress              - do not print progress information\n"));
       PrintCLI(_("  --old-ds-marker            - mark missing sectors compatible with dvdisaster <= 0.70\n"));
       PrintCLI(_("  --pause-after-errors n[:s] - pause s seconds (default: 60) after n failed reads; n=0 disables\n"));

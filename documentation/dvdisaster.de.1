@@ -223,6 +223,9 @@ Passt keine Datei oder ist der Fingerabdruck-Sektor unlesbar, wird eine Warnung
 ausgegeben und ohne Fehlerkorrektur-Datei fortgefahren.
 dvdisaster endet dann mit einem Fehlerstatus, sofern das Abbild nicht
 selbst Fehlerkorrektur-Daten enth\[:a]lt.
+Bei RS04 darf \fB-e\fP mehrfach angegeben werden (oder ein Verzeichnis mehrere
+passende .ecc-Dateien enthalten): Reparieren und Pr\[:u]fen verwenden dann alle
+RS04-Datens\[:a]tze des Abbilds gemeinsam, auch die eines erweiterten Abbilds.
 .TP
 .B \-o, \-\-ecc-target file|image
 Gibt an ob mit RS03 und RS04 Fehlerkorrektur-Dateien oder erweiterte

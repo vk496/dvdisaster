@@ -260,6 +260,16 @@ if try "ecc file of another (smaller) image" wrong_image; then (
   run_regtest wrong_image "-t" $TMPISO $MASTERECC
 ) & limit_jobs; fi
 
+# Two ecc files for the same image (given with -e twice); neither can
+# repair the damage alone. The CD-DA ecc file does not belong to the image.
+
+if try "two ecc files for the image" supplementary; then (
+  $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TEST_TMPDIR/supp.ecc -mRS04 -n 20% -o file -c >>$LOGFILE 2>&1
+  cp $MASTERISO $TMPISO
+  $NEWVER --debug -i$TMPISO --erase 100-1709 >>$LOGFILE 2>&1
+  run_regtest supplementary "-e $TEST_TMPDIR/supp.ecc -e $MASTERRIPECC -t" $TMPISO $MASTERECC
+) & limit_jobs; fi
+
 ### Repair tests
 
 REGTEST_SECTION="Repair tests"
@@ -372,6 +382,17 @@ if try "fixing partial last sector" fix_partial_last_sector; then (
   dd if=$TEST_TMPDIR/good.iso of=$TMPISO bs=2048 count=7999 >>$LOGFILE 2>&1
   $NEWVER --debug -i$TMPISO --erase 10 >>$LOGFILE 2>&1
   run_regtest fix_partial_last_sector "-f" $TMPISO $TMPECC
+) & limit_jobs; fi
+
+# Both ecc files are picked from a directory
+
+if try "fixing with two ecc files from a directory" fix_supplementary_dir; then (
+  mkdir -p $TEST_TMPDIR/eccdir
+  cp $MASTERECC $TEST_TMPDIR/eccdir/master.ecc
+  $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TEST_TMPDIR/eccdir/supp.ecc -mRS04 -n 20% -o file -c >>$LOGFILE 2>&1
+  cp $MASTERISO $TMPISO
+  $NEWVER --debug -i$TMPISO --erase 100-1709 >>$LOGFILE 2>&1
+  run_regtest fix_supplementary_dir "-f" $TMPISO $TEST_TMPDIR/eccdir
 ) & limit_jobs; fi
 
 ### CD-DA rips

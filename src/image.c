@@ -26,6 +26,8 @@
 #include "scsi-layer.h"
 #include "udf.h"
 
+#include "rs04-includes.h"
+
 /***
  *** Open image from a given device or file.
  ***
@@ -169,12 +171,14 @@ void WarnAboutImagePadding(Image *image)
  *** Search a directory for the .ecc file matching the image
  ***
  * Only *.ecc files directly inside the directory are examined.
- * A file matches if its header fingerprint equals the image fingerprint;
+ * A file matches if its header fingerprint equals the image fingerprint
+ * (RS04: if its CRC sectors match the image);
  * copies with identical headers count as one match.
  * Returns the newly allocated path of the single match, or NULL with
  * *state telling why: ECCFILE_MISSING (no match, or the fingerprint
  * could not be read; the caller then proceeds as without an ecc file)
  * or ECCFILE_CANCELLED.
+ * Further matching RS04 files are added as supplementary sets.
  * Stops in CLI mode if the directory can not be read or more than
  * one file matches; the GUI calls this from its main thread where
  * Stop() is not usable, so it shows the error and proceeds as
@@ -220,6 +224,7 @@ static char *find_ecc_file(Image *image, char *dir, int *state)
    EccHeader *found_eh = NULL;
    int fp_unreadable = FALSE;
    int ambiguous = FALSE;
+   int found_rs04 = FALSE;
    int n;
 
    *state = ECCFILE_MISSING;
@@ -244,7 +249,7 @@ static char *find_ecc_file(Image *image, char *dir, int *state)
    {  char *path = g_ptr_array_index(names, n);
       LargeFile *file = LargeOpen(path, O_RDONLY, IMG_PERMS);
       EccHeader *eh = NULL;
-      int i, match = FALSE;
+      int i, match = FALSE, rs04 = FALSE;
 
       if(!file)
 	continue;
@@ -264,7 +269,9 @@ static char *find_ecc_file(Image *image, char *dir, int *state)
 	 if(result == ECCFILE_PRESENT)
 	 {  guint8 fp[16];
 
-	    if(GetImageFingerprint(image, fp, eh->fpSector))
+	    if(!strncmp((char*)eh->method, "RS04", 4))
+	         match = rs04 = RS04ConfirmEccFile(image, file, eh);
+	    else if(GetImageFingerprint(image, fp, eh->fpSector))
 	         match = !memcmp(fp, eh->mediumFP, 16);
 	    else fp_unreadable = TRUE;
 	    break;
@@ -286,6 +293,16 @@ static char *find_ecc_file(Image *image, char *dir, int *state)
 	 continue;
       }
 
+      /* Further RS04 files are supplementary sets */
+
+      if(found && found_rs04 && rs04)
+      {  if(!Closure->moreEccNames)
+	   Closure->moreEccNames = g_ptr_array_new_with_free_func(g_free);
+	 g_ptr_array_add(Closure->moreEccNames, g_strdup(path));
+	 g_free(eh);
+	 continue;
+      }
+
       if(found)
       {  find_ecc_error(_("Both %s and %s match the image; please select one with -e.\n"), found, path);
 	 g_free(eh);
@@ -297,6 +314,7 @@ static char *find_ecc_file(Image *image, char *dir, int *state)
 
       found = g_strdup(path);
       found_eh = eh;
+      found_rs04 = rs04;
    }
    g_ptr_array_free(names, TRUE);
    g_free(found_eh);

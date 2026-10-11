@@ -767,6 +767,47 @@ The decoder only needs one $B_s$-byte shard per layer and codeword at a
 time; an implementation processes $W$ consecutive codewords per pass to read
 the image in larger pieces.
 
+\subsection{Supplementary sets (informative)}
+\label{rs04-supplementary}
+
+Error correction data can be added to an image later, without changing the
+data or the existing sets: a {\em supplementary set} is an ordinary RS04
+set, normally an ecc file, which protects the same data as an existing set.
+It has its own $setID$ and may use other parameters (e.g.\ a different
+redundancy). It protects either exactly the same bytes (equal $dataBytes$
+and $dataMD5$, e.g.\ a second ecc file for the image), or a superset: an
+ecc file created from an augmented image protects the data and the added
+zone of the augmented set.
+
+\medskip
+
+The format does not link the sets; every set can be verified and decoded
+on its own. A decoder may combine all sets covering the same sectors.
+Since the codewords of the sets are different (other $L$, $k$ and $m$), a
+sector recovered by one set is no longer an erasure for the others:
+
+\begin{enumerate}
+\item Decode every set as in section \ref{rs04-decode}, writing the
+  recovered sectors back to the image (and to the ecc files).
+\item If some set recovered sectors and some codewords were not decodable,
+  repeat step 1, as the other sets now see fewer erasures.
+\end{enumerate}
+
+This way damage can be repaired which exceeds the capacity of each single
+set. The prognosis for the combined sets is obtained by applying the same
+iteration to the erasure maps: every codeword with at most $m$ erasures is
+assumed to be recovered until no set makes progress.
+
+\medskip
+
+dvdisaster combines the sets of an ecc file given with {\tt -e}, of further
+ecc files given with additional {\tt -e} options (or found in a directory
+given with {\tt -e}), and the augmented sets of the image which overlap the
+data of the first ecc file. A further ecc file is only used if it has the
+same sector size, does not reach beyond the end of the data of the first ecc
+file and of the augmented sets, and its CRC sectors match the image (as for
+the confirmation of candidates in section \ref{rs04-recognize}).
+
 \subsection{Reading media (informative)}
 \label{rs04-reading}
 
