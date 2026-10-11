@@ -137,6 +137,49 @@ LargeFile* LargeOpen(char *name, int flags, mode_t mode)
 }
 
 /*
+ * Multi-file images (the .bin files of a .cue or .gdi, see image.c)
+ * are accessed as the concatenation of their files. Writing behind
+ * the end and truncating changes the last file.
+ */
+
+static ssize_t parts_io(LargeFile *lf, unsigned char *buf, size_t count, int writing)
+{  guint64 base = 0;
+   ssize_t total = 0;
+   int i;
+
+   for(i=0; i<lf->parts->len && count; i++)
+   {  LargeFile *part = g_ptr_array_index(lf->parts, i);
+      int last = (i == lf->parts->len-1);
+      guint64 end = base + part->size;
+
+      if(lf->offset < end || (last && writing))
+      {  size_t n = last && writing ? count : MIN(count, end - lf->offset);
+	 ssize_t done;
+
+	 if(!LargeSeek(part, lf->offset - base))
+	    break;
+	 done = writing ? LargeWrite(part, buf, n) : LargeRead(part, buf, n);
+	 if(done <= 0)
+	    break;
+
+	 total += done;
+	 buf   += done;
+	 count -= done;
+	 lf->offset += done;
+	 if(writing && part->offset > part->size)
+	 {  lf->size  += part->offset - part->size;
+	    part->size = part->offset;
+	 }
+	 if(done != n)
+	    break;
+      }
+      base = end;
+   }
+
+   return total;
+}
+
+/*
  * Seeking in large files.
  * Note: Seeking beyond the end of a split file is undefined.
  */
@@ -144,6 +187,8 @@ LargeFile* LargeOpen(char *name, int flags, mode_t mode)
 int LargeSeek(LargeFile *lf, off_t pos)
 {  
    lf->offset = pos;
+   if(lf->parts)
+      return pos >= 0;
    if(large_lseek(lf->fileHandle, pos, SEEK_SET) != pos)
       return FALSE;
 
@@ -167,6 +212,9 @@ int LargeEOF(LargeFile *lf)
 
 ssize_t LargeRead(LargeFile *lf, void *buf, size_t count)
 {  ssize_t n;
+
+   if(lf->parts)
+      return parts_io(lf, buf, count, FALSE);
 
    n = read(lf->fileHandle, buf, count);
    lf->offset += n;
@@ -244,6 +292,9 @@ static ssize_t xwrite(int fdes, void *buf_base, size_t count)
 ssize_t LargeWrite(LargeFile *lf, void *buf, size_t count)
 {  ssize_t n;
 
+   if(lf->parts)
+      return parts_io(lf, buf, count, TRUE);
+
    n = xwrite(lf->fileHandle, buf, count);
    lf->offset += n;
 
@@ -256,8 +307,14 @@ ssize_t LargeWrite(LargeFile *lf, void *buf, size_t count)
 
 int LargeClose(LargeFile *lf)
 {  int result = TRUE;
+   int i;
 
-   result = (close(lf->fileHandle) == 0);
+   if(lf->parts)
+   {  for(i=0; i<lf->parts->len; i++)
+	 result &= LargeClose(g_ptr_array_index(lf->parts, i));
+      g_ptr_array_free(lf->parts, TRUE);
+   }
+   else result = (close(lf->fileHandle) == 0);
 
    /* Free the LargeFile struct and return results */
 
@@ -274,7 +331,17 @@ int LargeClose(LargeFile *lf)
 int LargeTruncate(LargeFile *lf, off_t length)
 {  int result;
 
-   result = (large_ftruncate(lf->fileHandle, length) == 0);
+   if(lf->parts)
+   {  LargeFile *last = g_ptr_array_index(lf->parts, lf->parts->len-1);
+      gint64 rest = length - (gint64)(lf->size - last->size);
+
+      if(rest < 0)
+      {  errno = EINVAL;
+	 return FALSE;
+      }
+      result = LargeTruncate(last, rest);
+   }
+   else result = (large_ftruncate(lf->fileHandle, length) == 0);
 
    if(result)
      lf->size = length;
