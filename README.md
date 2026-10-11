@@ -19,6 +19,7 @@ This version is built on top of the latest upstream version, with the following 
 - Re-enabled adaptive reading for RS01 and RS02, and optionally for RS03 on user request (more on that below)
 - Ability to strip an augmented image from its additional ECC-data
 - New experimental RS04 codec with long codewords and self-describing layout (more on that below)
+- List which files of an ISO image are affected by unreadable sectors (`--list-damaged-files`)
 - Reading of multi-session discs (all sessions in one image) and of audio CDs (2352-byte `.bin` + `.cue`, with C2 error pointers)
 - Optional pause after a given number of read errors, to let drives that overheat on damaged media cool down (`--pause-after-errors`)
 - A new CLI-only version, not depending on gtk (`./configure --with-gui=no && make clean && make -j4`)

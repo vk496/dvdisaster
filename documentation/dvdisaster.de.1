@@ -57,6 +57,7 @@ oder Kratzer
 .IR n \|]
 .RB [\| \-\-json
 .IR file \|]
+.RB [\| \-\-list-damaged-files \|]
 .RB [\| \-\-mapfile
 .IR f \|]
 .RB [\| \-\-medium-info \|]
@@ -514,6 +515,12 @@ Nicht zutreffende Eintr\[:a]ge
 werden weggelassen. Ein durch \-\-time-limit oder \-\-abort-file abgebrochener
 Lauf enth\[:a]lt "stopped_by" ("time_limit" oder "abort_file").
 .RE
+.TP
+.B \-\-list-damaged-files
+listet die Dateien eines ISO-9660-Abbilds auf (Joliet-Namen werden verwendet, sofern
+vorhanden), die fehlende Sektoren enthalten, und wie viele fehlende Sektoren
+au\[ss]erhalb von Dateien liegen. Kann mit dem Lesen (\-r) kombiniert oder alleine
+auf ein Abbild angewendet werden. Reine UDF-Abbilder werden noch nicht unterst\[:u]tzt.
 .TP
 .B \-\-mapfile f
 zusammen mit \-r: schreibt eine zu GNU ddrescue kompatible Map-Datei mit dem

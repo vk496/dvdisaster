@@ -70,6 +70,29 @@ if try "good image, quick test" good_quick; then (
   run_regtest good_quick "-tq" $MASTERISO $MASTERECC
 ) & limit_jobs; fi
 
+# List the files containing missing sectors
+if try "listing damaged files" list_damaged_files; then (
+   cp $MASTERISO $TMPISO
+   $NEWVER --debug -i$TMPISO --erase 1000-1099 >>$LOGFILE 2>&1
+   $NEWVER --debug -i$TMPISO --erase 5 >>$LOGFILE 2>&1
+   run_regtest list_damaged_files "--list-damaged-files" $TMPISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
+# Multi-session image: the files are taken from the last session,
+# which also lists the files of the first one. Needs xorriso.
+if try "listing damaged files, multi-session image" list_damaged_files_ms; then (
+   command -v xorriso >/dev/null 2>&1 || exit 0
+   mkdir -p $TEST_TMPDIR/s1 $TEST_TMPDIR/s2
+   head -c 1000000 $MASTERISO >$TEST_TMPDIR/s1/one.bin
+   tail -c 2000000 $MASTERISO >$TEST_TMPDIR/s2/two.bin
+   xorriso -as mkisofs -quiet -V S1 -o $TEST_TMPDIR/s1.iso $TEST_TMPDIR/s1 >>$LOGFILE 2>&1
+   xorriso -as mkisofs -quiet -V S2 -C 0,1000 -M $TEST_TMPDIR/s1.iso -o $TEST_TMPDIR/s2.iso $TEST_TMPDIR/s2 >>$LOGFILE 2>&1
+   truncate -s $((1000*2048)) $TEST_TMPDIR/s1.iso
+   cat $TEST_TMPDIR/s1.iso $TEST_TMPDIR/s2.iso >$TMPISO
+   $NEWVER --debug -i$TMPISO --erase 1300-1399 >>$LOGFILE 2>&1
+   run_regtest list_damaged_files_ms "--list-damaged-files" $TMPISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
 # Test with neither image nor ecc file
 if try "missing files" no_files; then (
    run_regtest no_files "-t" $ISODIR/no.iso  $ISODIR/no.ecc EXITCODES

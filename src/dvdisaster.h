@@ -287,6 +287,7 @@ typedef struct _GlobalClosure
    char *stopReason;    /* "time_limit" or "abort_file" once reading was stopped */
    int abortFileWarned; /* an error checking abortFile was reported */
    gint64 simStopSector;/* debug: act as if --time-limit expired at this sector (-1 = off) */
+   int listDamagedFiles;/* list files containing missing sectors */
    int truncate;        /* confirms truncation of large images */
    int noTruncate;      /* do not truncate image at the end */
    int noProgress;      /* do not print the percentage progress indicator */
@@ -985,6 +986,12 @@ void MapfileReadOK(gint64, gint64);
 void MapfileReadBad(gint64, gint64);
 void MapfileBlockFailed(gint64, gint64);
 void MapfileFree(void);
+
+/***
+ *** iso-files.c
+ ***/
+
+void ListDamagedFiles(char*);
 Image* OpenImageFromDevice(char*, int);   /* really in scsi-layer.h */
 Image* OpenEccFileForImage(Image*, char*, int, mode_t);
 int ReportImageEccInconsistencies(Image*);

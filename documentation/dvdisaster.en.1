@@ -56,6 +56,7 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .IR n \|]
 .RB [\| \-\-json
 .IR file \|]
+.RB [\| \-\-list-damaged-files \|]
 .RB [\| \-\-mapfile
 .IR f \|]
 .RB [\| \-\-medium-info \|]
@@ -526,6 +527,12 @@ otherwise the verdict is "ok" or "error". Keys which do not apply to a run
 are left out. A run stopped by \-\-time-limit or \-\-abort-file contains
 "stopped_by" ("time_limit" or "abort_file").
 .RE
+.TP
+.B \-\-list-damaged-files
+list the files of an ISO 9660 image (Joliet names are used if present) which contain
+missing sectors, and how many missing sectors are outside of files.
+Can be combined with reading (\-r) or used alone on an image file.
+UDF-only images are not supported yet.
 .TP
 .B \-\-mapfile f
 together with \-r: writes a GNU ddrescue compatible mapfile describing the

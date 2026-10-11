@@ -1,0 +1,10 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Files affected by missing sectors:
+- /random.data: 100 of 20975 sectors missing
+1 damaged files; 101 missing sectors in total, 1 of them outside of files (file system data or unused).
