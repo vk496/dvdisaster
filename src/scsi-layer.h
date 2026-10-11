@@ -325,4 +325,11 @@ void PrintTrackTable(DeviceHandle*, void (*)(char*, ...));
 int UseCDDAImage(Image*);
 void WriteCueSheet(DeviceHandle*, char*);
 
+/*
+ * cdda.c
+ */
+
+guint16 CDTextCrc(unsigned char*);
+GString **CDDACueLines(DeviceHandle*, char*);
+
 #endif /* SCSI_LAYER_H */

@@ -264,6 +264,7 @@ typedef struct _GlobalClosure
    int eccTarget;       /* 0=file; 1=augmented image */
    int readRaw;         /* Read CD sectors raw + verify them */
    int cdda;            /* Read CDs as CD-DA images (2352 bytes per sector) */
+   int testAndCopy;     /* Read audio tracks twice and compare their CRC32 */
    int rawMode;         /* mode for mode page */
    int minReadAttempts; /* minimum reading attempts */
    int maxReadAttempts; /* maximal reading attempts */
@@ -595,6 +596,7 @@ void GuiUpdateMarkup(char**, GdkRGBA*);
  ***/
 
 guint32 Crc32(unsigned char*, int);
+guint32 Crc32Update(guint32, unsigned char*, int);
 guint32 EDCCrc32(unsigned char*, int);
 
 /***

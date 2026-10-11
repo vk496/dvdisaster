@@ -2957,6 +2957,7 @@ void WriteCueSheet(DeviceHandle *dh, char *image_name)
    char *base = g_path_get_basename(image_name);
    char *cue;
    FILE *file;
+   GString **extra;
    int i;
 
    if(len > 4 && (!g_ascii_strcasecmp(image_name+len-4, ".bin") || !g_ascii_strcasecmp(image_name+len-4, ".iso")))
@@ -2971,6 +2972,8 @@ void WriteCueSheet(DeviceHandle *dh, char *image_name)
       return;
    }
 
+   extra = CDDACueLines(dh, image_name);
+   fputs(extra[0]->str, file);
    fprintf(file, "FILE \"%s\" BINARY\n", base);
    for(i=0; i<dh->nTracks; i++)
    {  TrackInfo *t = &dh->track[i];
@@ -2979,12 +2982,16 @@ void WriteCueSheet(DeviceHandle *dh, char *image_name)
 	fprintf(file, "REM SESSION %02d\n", t->session);
       fprintf(file, "  TRACK %02d %s\n", t->number,
 	      t->audio ? "AUDIO" : (t->xa ? "MODE2/2352" : "MODE1/2352"));
+      fputs(extra[i+1]->str, file);
       if(!i && t->audio && t->start > 0)
 	fprintf(file, "    INDEX 00 00:00:00\n");
       fprintf(file, "    INDEX 01 %02d:%02d:%02d\n",
 	      (int)(t->start/4500), (int)((t->start/75)%60), (int)(t->start%75));
    }
    fclose(file);
+   for(i=0; i<=dh->nTracks; i++)
+      g_string_free(extra[i], TRUE);
+   g_free(extra);
 
    PrintLog(_("Cue sheet written to %s.\n"), cue);
    g_free(cue);
