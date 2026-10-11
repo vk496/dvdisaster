@@ -127,6 +127,15 @@ if try "reading the disc" ms_read; then (
   run_regtest ms_read "--spinup-delay=0 -r" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
+# The CRC sums cached while reading are complete (from the RS04 data and,
+# for parity, tags and gaps, from the image), so the RS01 ecc file created
+# in the same run equals one created from the image file.
+
+if try "reading the disc and creating an RS01 ecc file" ms_read_create_rs01; then (
+  extra_args="--debug --sim-cd=$MSDISC $MSTOC --fixed-speed-values --set-version $SETVERSION"
+  run_regtest ms_read_create_rs01 "--spinup-delay=0 -mRS01 -r -c" $TMPISO $TMPECC
+) & limit_jobs; fi
+
 if try "medium info lists both sets" ms_medium_info; then (
   extra_args="--debug --sim-cd=$MSDISC $MSTOC"
   run_regtest ms_medium_info "--medium-info" $TMPISO $NO_FILE

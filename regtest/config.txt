@@ -783,6 +783,7 @@ READ_cdextra_medium_info yes
 ### RS04 reading workflows
 
 RS04r_ms_read yes
+RS04r_ms_read_create_rs01 yes
 RS04r_ms_medium_info yes
 RS04r_ms_verify yes
 RS04r_ms_read_damaged yes
