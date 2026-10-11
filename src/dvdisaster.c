@@ -60,6 +60,7 @@ typedef enum
    MODE_COPY_SECTOR,
    MODE_CMP_IMAGES,
    MODE_DEBUG_MAINT1,
+   MODE_DRIVE_TEST,
    MODE_ERASE, 
    MODE_MARKED_IMAGE,
    MODE_MEDIUM_INFO,
@@ -329,6 +330,7 @@ int main(int argc, char *argv[])
 	{"defective-dump", 1, 0, MODIFIER_DEFECTIVE_DUMP },
 	{"detailed-exit-status", 0, 0, MODIFIER_DETAILED_EXIT_STATUS },
 	{"device", 0, 0, 'd'},
+	{"drive-test", 0, 0, MODE_DRIVE_TEST },
 	{"driver", 1, 0, MODIFIER_DRIVER },
         {"ecc", 1, 0, 'e'},
 	{"ecc-target", 1, 0, 'o'},
@@ -931,6 +933,9 @@ int main(int argc, char *argv[])
 	   mode = MODE_MARKED_IMAGE;
 	   debug_arg = g_strdup(optarg);
 	   break;
+         case MODE_DRIVE_TEST:
+	   mode = MODE_DRIVE_TEST;
+	   break;
          case MODE_MEDIUM_INFO:
 	   mode = MODE_MEDIUM_INFO;
 	   debug_arg = g_strdup(optarg);
@@ -1267,6 +1272,11 @@ int main(int argc, char *argv[])
 	 RandomImage(Closure->imageName, debug_arg, 1);
 	 break;
 
+      case MODE_DRIVE_TEST:
+         if(!Closure->device) Closure->device = DefaultDevice();
+	 DriveTest(Closure->device);
+	 break;
+
       case MODE_MEDIUM_INFO:
          if(!Closure->device) Closure->device = DefaultDevice();
 	 PrintMediumInfo(NULL);
@@ -1365,6 +1375,7 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --cdda                     - read CD as 2352 byte sectors (.bin + .cue; automatic for audio CDs)\n"));
       PrintCLI(_("  --dao                      - assume DAO disc; do not trim image end\n"));
       PrintCLI(_("  --defective-dump d         - directory for saving incomplete raw sectors\n"));
+      PrintCLI(_("  --drive-test               - print what the drive can do (read-only queries)\n"));
 #ifdef SYS_LINUX
       PrintCLI(_("  --driver=sg/cdrom          - use sg(default) or alternative cdrom driver (see man page!)\n"));
 #endif

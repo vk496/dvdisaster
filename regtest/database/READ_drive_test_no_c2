@@ -1,0 +1,46 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Drive capability report for sim-cd
+
+Drive:    Simulated CD drive
+Firmware: 1.00
+
+Profiles (GET CONFIGURATION):
+  0008h CD-ROM
+  0009h CD-R (current)
+
+Features:
+  CD read (001Eh):               yes
+    C2 error pointers:           no
+    CD-TEXT:                     no
+  DVD read (001Fh):              no
+  BD read (0040h):               no
+  HD DVD read (0050h):           no
+  Real time streaming (0107h):   no
+
+Read error recovery (mode page 01h):
+  Current parameters:            00h, 32 read retries
+  Changeable parameters:         00h
+  Delivers defective sectors:    no (TB bit not changeable)
+
+Medium:
+  CD-R Audio
+  1 session(s), 2 track(s), 2 audio
+
+Read tests (audio sector 0):
+  READ CD CD-DA                              yes
+  READ CD CD-DA with C2 error pointers       no (Illegal Request; Invalid field in cdb.)
+
+Read offset: unknown; dvdisaster does not measure it.
+  Look up the drive in the AccurateRip drive offset list if needed;
+  RS04 detects offset differences between CD-DA rips (see --audio-offset).
+
+Suitable for:
+  data CDs, raw reading (--read-raw) without C2 scanning (not tested)
+  audio CDs (--cdda) without C2 error detection;
+  damaged audio sectors may be interpolated silently

@@ -216,5 +216,24 @@ if try "medium info of CD Extra" cdextra_medium_info; then (
   run_regtest cdextra_medium_info "--medium-info" $ISODIR/no.iso $ISODIR/no.ecc
 ) & limit_jobs; fi
 
+### Drive capability report
+
+REGTEST_SECTION="Drive test"
+
+if try "drive test with data CD" drive_test_data; then (
+  extra_args="--debug --sim-cd=$MASTERISO"
+  run_regtest drive_test_data "--drive-test" $ISODIR/no.iso $ISODIR/no.ecc
+) & limit_jobs; fi
+
+if try "drive test with CD Extra" drive_test_cdextra; then (
+  extra_args="--debug --sim-cd=$AUDIOBIN $CDEXTRA"
+  run_regtest drive_test_cdextra "--drive-test" $ISODIR/no.iso $ISODIR/no.ecc
+) & limit_jobs; fi
+
+if try "drive test without C2 support" drive_test_no_c2; then (
+  extra_args="--debug --sim-cd=$AUDIOBIN $AUDIOCD:noc2"
+  run_regtest drive_test_no_c2 "--drive-test" $ISODIR/no.iso $ISODIR/no.ecc
+) & limit_jobs; fi
+
 collect_results
 exit $nbfailed

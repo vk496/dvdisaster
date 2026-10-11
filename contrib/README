@@ -28,6 +28,18 @@ dvdisaster.desktop
 dvdisaster.spec
 	meant to be a starting point for .rpm building
 
+dvdisaster-burn.sh
+	one step from a folder to a protected disc: creates an ISO image
+	with xorriso, augments it with error correction data (RS04 by
+	default), burns it with xorriso and verifies the disc by reading
+	it back. Run it with --help for the options; --dry-run only prints
+	the commands. Requires bash and xorriso.
+
+dvdisaster-burn-test.sh
+	tests for dvdisaster-burn.sh which need no burner (xorriso writes
+	to a file which dvdisaster reads as a simulated drive). Run it after
+	building dvdisaster: contrib/dvdisaster-burn-test.sh
+
 rs04-layout-sim.py
 	damage simulator used to choose the RS04 layout
 	(see documentation/codec-specs, RS04 design rationale).
