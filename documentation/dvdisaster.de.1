@@ -51,6 +51,7 @@ oder Kratzer
 .RB [\| \-\-ignore-iso-size \|]
 .RB [\| \-\-internal-rereads
 .IR n \|]
+.RB [\| \-\-list-damaged-files \|]
 .RB [\| \-\-medium-info \|]
 .RB [\| \-\-no-progress \|]
 .RB [\| \-\-old-ds-marker \|]
@@ -416,6 +417,12 @@ und die Anzahl der Leseversuche \[:u]ber den Parameter \-\-read-attempts zu steu
 Viele Laufwerke ignorieren diese Einstellung ohnehin. Benutzen Sie den Wert \-1 um
 die Standardeinstellungen des Laufwerks zu verwenden.
 .RE
+.TP
+.B \-\-list-damaged-files
+listet die Dateien eines ISO-9660-Abbilds auf (Joliet-Namen werden verwendet, sofern
+vorhanden), die fehlende Sektoren enthalten, und wie viele fehlende Sektoren
+au\[ss]erhalb von Dateien liegen. Kann mit dem Lesen (\-r) kombiniert oder alleine
+auf ein Abbild angewendet werden. Reine UDF-Abbilder werden noch nicht unterst\[:u]tzt.
 .TP
 .B \-\-medium-info
 Gibt Informationen \[:u]ber den Datentr\[:a]ger im ausgew\[:a]hlten Laufwerk aus.

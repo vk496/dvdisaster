@@ -272,6 +272,7 @@ typedef struct _GlobalClosure
    int speedWarning;    /* Print warning if speed changes by more than given percentage */
    int fillUnreadable;  /* Byte value for filling unreadable sectors or -1 */
    int spinupDelay;     /* Seconds to wait for drive to spin up */
+   int listDamagedFiles;/* list files containing missing sectors */
    int truncate;        /* confirms truncation of large images */
    int noTruncate;      /* do not truncate image at the end */
    int noProgress;      /* do not print the percentage progress indicator */
@@ -946,6 +947,12 @@ typedef struct _Image
 } Image;
 
 Image* OpenImageFromFile(char*, int, mode_t);
+
+/***
+ *** iso-files.c
+ ***/
+
+void ListDamagedFiles(char*);
 Image* OpenImageFromDevice(char*, int);   /* really in scsi-layer.h */
 Image* OpenEccFileForImage(Image*, char*, int, mode_t);
 int ReportImageEccInconsistencies(Image*);

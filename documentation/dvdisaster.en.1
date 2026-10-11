@@ -50,6 +50,7 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .RB [\| \-\-ignore-iso-size \|]
 .RB [\| \-\-internal-rereads
 .IR n \|]
+.RB [\| \-\-list-damaged-files \|]
 .RB [\| \-\-medium-info \|]
 .RB [\| \-\-no-progress \|]
 .RB [\| \-\-old-ds-marker \|]
@@ -423,6 +424,12 @@ giving up and returning a read error. It is more efficient to set this to 0 or 1
 and manage read attempts through the \-\-read-attempts parameter. Most drives ignore
 this setting anyways. Use \-1 to leave the drive at its default setting.
 .RE
+.TP
+.B \-\-list-damaged-files
+list the files of an ISO 9660 image (Joliet names are used if present) which contain
+missing sectors, and how many missing sectors are outside of files.
+Can be combined with reading (\-r) or used alone on an image file.
+UDF-only images are not supported yet.
 .TP
 .B \-\-medium-info
 Prints information about the currently inserted medium.
