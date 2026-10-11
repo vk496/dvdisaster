@@ -136,7 +136,7 @@ recovered the file system stored within is also fully repaired. A protection
 at the image level is therefore more extensive than error correction at the file level.
 
 dvdisaster is working exclusively at the image level to take advantage of these properties. 
-The \tlnk{background-methods}{RS02 and RS03 methods} even allow 
+The \tlnk{background-methods}{RS02, RS03 and RS04 methods} even allow 
 for \tlnk{howto-augment}{storing the error correction data at the same medium}. 
 This is possible since reading the error correction information at the image level 
 can not be blocked by errors at other medium locations (damaged sectors with error 
@@ -181,16 +181,17 @@ better spent at the image level: The Reed-Solomon error correction works best
 better to protect the image as a whole than individually protecting each file within.
 
  
-\subsection{The RS01, RS02 and RS03 methods}
+\subsection{The RS01, RS02, RS03 and RS04 methods}
 \label{background-methods}
 
-dvdisaster contains three error correction methods.
+dvdisaster contains four error correction methods.
 RS01 and RS02 have been available right from the start of the project.
 RS03 has been added recently to take advantage of 
 recent hardware, and to implement improvements
 learned from evaluating its predecessors.
+RS04 is the newest method; it is still experimental.
 
-\paragraph{Comparison of the methods.} All three methods build on the 
+\paragraph{Comparison of the methods.} All four methods build on the 
 same \tlnk{background-properties}{Reed-Solomon} error correction. They calculate error 
 correction information for ISO images which is used to recover unreadable sectors if 
 the disc becomes damaged afterwards.
@@ -235,10 +236,39 @@ The changes for parallel computation and higher robustness make RS03 a bit less 
 e.g. RS03 error correction data has slighly less error correction capacity than 
 its RS01/RS02 counterparts on images with equal size.
 
+\smallskip
+
+RS04 is a further development of RS03. It can create both error correction files and
+augmented images, and keeps the robustness of RS03 against damage of the error correction data:
+
+\begin{itemize}
+\item RS04 uses Reed-Solomon codes over a larger field, so that one error correction block
+can span thousands of sectors spread over the whole medium instead of 255. This makes a big
+difference if the damage is {\bf scattered over the medium} (e.g. aging dye or many small scratches):
+With about 14\% redundancy on a BD-25, RS03 reliably recovers media with about 5\% of such
+unreadable sectors, RS04 with about 11.6\% (the theoretical limit being 12.5\%).
+Against one contiguous damaged area, e.g. an outer region going bad, both methods are equally good.
+\item RS04 stores small self-describing {\bf tags} all over its error correction data. It therefore
+never needs to know the medium size: augmented images can have any size, and no setting must be
+remembered for repairing them.
+\item RS04 can protect {\bf multi-session media}: each session is augmented on its own, and reading the
+medium verifies and repairs all sessions at once.
+\item RS04 error correction files can also be created for {\bf audio CD images} (2352 bytes per sector)
+and for Mode 2 Form 2 tracks (VCD/SVCD, 2324 bytes per sector). Drive read offsets of audio
+images are detected automatically.
+\item The \tlnk{background-adaptive}{adaptive reading strategy} is available for RS04.
+\end{itemize}
+
+RS04 is new: Its format is fully specified and covered by regression tests, but it has not seen much
+real-world use yet. Keep using RS02 or RS03 for important data until RS04 has been tested more,
+or protect important data with both. RS04 error correction data can not be used by dvdisaster versions
+without RS04 support. Long error correction blocks also need more memory; dvdisaster sizes them for
+4~GiB by default (any RS04 data can be repaired with less memory, but more slowly).
+
 \newpage
 
 \paragraph{Comparison of error correction storage.} The following table summarizes the differences 
-between error correction files (RS01, RS03) and augmented images (RS02, RS03):
+between error correction files (RS01, RS03, RS04) and augmented images (RS02, RS03, RS04):
 
 \smallskip
 
@@ -387,9 +417,9 @@ that the medium could not be read at these places during the current reading pas
 \subsection{The adaptive reading strategy}
 \label{background-adaptive}
 
-Please note: Adaptive reading is unavailable in the current
-version of dvdisaster as it requires rework for RS03. It
-will be re-introuced soon. It is documented here for completeness:
+Please note: Adaptive reading works with RS01, RS02 and RS04 error correction data.
+With RS03 error correction data, the image is read the same way, but reading does not
+stop automatically once enough data for the repair has been collected.
 %dvdisaster contains two different reading strategies.
 
 \medskip
@@ -577,7 +607,7 @@ respective error correction file might have aged beyond full readability, too.
 
 Therefore it is important to protect your error correction files with the same
 care as your other data\footnote{You might also choose
-  an \tlnk{howto-augment}{augmented image} using RS02 or RS03 instead
+  an \tlnk{howto-augment}{augmented image} using RS02, RS03 or RS04 instead
   of creating an error correction file.}.
 This is best achieved by integrating the error correction files into
 your normal data backup scheme. Here are two ideas:
