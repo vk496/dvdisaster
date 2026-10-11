@@ -1,0 +1,96 @@
+764ac228abbd2a0ade90cbc239093819
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04r-tmp.iso: 10213 medium sectors.
+
+Fix mode(RS04i): Repairable sectors will be fixed in the image.
+
+Set 1 of 2 (image sectors 0 - 5995):
+    1 repaired sectors: 106d 
+    1 repaired sectors: 107d 
+    1 repaired sectors: 108d 
+    1 repaired sectors: 109d 
+    1 repaired sectors: 110d 
+    1 repaired sectors: 111d 
+    1 repaired sectors: 5200d 
+    1 repaired sectors: 5201d 
+    1 repaired sectors: 5202d 
+    1 repaired sectors: 5203d 
+    1 repaired sectors: 5204d 
+    1 repaired sectors: 5205d 
+    1 repaired sectors: 5206d 
+    1 repaired sectors: 5207d 
+    1 repaired sectors: 5208d 
+    1 repaired sectors: 5209d 
+    1 repaired sectors: 5210d 
+    2 repaired sectors: 300c 5211d 
+    1 repaired sectors: 5212d 
+    1 repaired sectors: 5213d 
+    1 repaired sectors: 5214d 
+    1 repaired sectors: 5215d 
+    1 repaired sectors: 96d 
+    1 repaired sectors: 97d 
+    1 repaired sectors: 98d 
+    1 repaired sectors: 99d 
+    1 repaired sectors: 100d 
+    1 repaired sectors: 101d 
+    1 repaired sectors: 102d 
+    1 repaired sectors: 103d 
+    1 repaired sectors: 104d 
+    1 repaired sectors: 105d 
+
+Set 2 of 2 (image sectors 6296 - 10212):
+    1 repaired sectors: 6992d 
+    1 repaired sectors: 6993d 
+    1 repaired sectors: 6994d 
+    1 repaired sectors: 6995d 
+    1 repaired sectors: 6996d 
+    1 repaired sectors: 6997d 
+    1 repaired sectors: 6998d 
+    1 repaired sectors: 6999d 
+    1 repaired sectors: 7000d 
+    1 repaired sectors: 7001d 
+    1 repaired sectors: 7002d 
+    1 repaired sectors: 7003d 
+    1 repaired sectors: 7004d 
+    1 repaired sectors: 7005d 
+    1 repaired sectors: 7006d 
+    1 repaired sectors: 7007d 
+    1 repaired sectors: 7008d 
+    1 repaired sectors: 7009d 
+    1 repaired sectors: 7010d 
+    1 repaired sectors: 7011d 
+    1 repaired sectors: 7012d 
+    1 repaired sectors: 7013d 
+    1 repaired sectors: 7014d 
+    1 repaired sectors: 7015d 
+    1 repaired sectors: 7016d 
+    1 repaired sectors: 7017d 
+    1 repaired sectors: 7018d 
+    1 repaired sectors: 7019d 
+    1 repaired sectors: 7020d 
+    1 repaired sectors: 7021d 
+    1 repaired sectors: 7022d 
+    1 repaired sectors: 7023d 
+    1 repaired sectors: 10001d 
+    1 repaired sectors: 10002d 
+    1 repaired sectors: 10003d 
+    1 repaired sectors: 10004d 
+    1 repaired sectors: 10005d 
+    1 repaired sectors: 10006d 
+    1 repaired sectors: 10007d 
+    1 repaired sectors: 10008d 
+    1 repaired sectors: 10009d 
+    1 repaired sectors: 10010d 
+    1 repaired sectors: 10011d 
+    1 repaired sectors: 10012d 
+    1 repaired sectors: 10013d 
+    1 repaired sectors: 10014d 
+    1 repaired sectors: 10015d 
+Repaired sectors: 81 (49 data, 0 crc, 31 ecc, 1 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  1.0; worst = 2.

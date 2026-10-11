@@ -777,3 +777,29 @@ READ_audio_adaptive_refused yes
 READ_cdextra_read yes
 READ_cdextra_cdda yes
 READ_cdextra_medium_info yes
+
+### RS04 reading workflows
+
+RS04r_ms_read yes
+RS04r_ms_medium_info yes
+RS04r_ms_verify yes
+RS04r_ms_read_damaged yes
+RS04r_ms_fix yes
+RS04r_ms_fix_partial yes
+RS04r_ms_fix_partial_verify yes
+RS04r_ms_crc_errors yes
+RS04r_ms_crc_fix yes
+RS04r_ms_read_tag0_lost yes
+RS04r_ms_adaptive yes
+RS04r_ms_adaptive_fix yes
+RS04r_ms_adaptive_run_out yes
+RS04r_ecc_file_adaptive yes
+RS04r_ecc_file_adaptive_fix yes
+RS04r_audio_read yes
+RS04r_audio_ecc_create yes
+RS04r_audio_read_offset yes
+RS04r_audio_fix_offset yes
+RS04r_audio_fix_offset_negative yes
+RS04r_cdextra_read yes
+RS04r_cdextra_verify yes
+RS04r_cdextra_fix yes
