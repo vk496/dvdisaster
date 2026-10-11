@@ -26,9 +26,15 @@
 
 #include "rs04-includes.h"
 
-#define EXIT_CODE_SIZE_MISMATCH 1
-#define EXIT_CODE_MISSING_SECTOR 11
-#define EXIT_CODE_CHECKSUM_ERROR 12
+/* Set when the current verify run found defects; decides about the
+   result shown in the GUI. The exit status is set like in the other codecs. */
+
+static int verify_defects;
+
+static void note_defects(int detailed_status)
+{  verify_defects = TRUE;
+   SetExitCode(EXIT_FAILURE, detailed_status);
+}
 
 #define CHUNK 1024     /* sectors per read */
 
@@ -385,7 +391,7 @@ static int print_sizes(Image *image, RS04Set *set, int idx, int n)
 	 PrintLog(_("* Warning          : %s\n"), msg);
 	 RS04VerifyField(idx, RS04_V_ECCRESULT, "<span %s>%s</span>", Closure->redMarkup, msg);
 	 g_free(msg);
-	 exitCode = EXIT_CODE_SIZE_MISMATCH;
+	 note_defects(EXIT_CODE_DEFECTS);
       }
 
       /* combined with other sets, the ecc file may protect a part of the image */
@@ -405,7 +411,7 @@ static int print_sizes(Image *image, RS04Set *set, int idx, int n)
 			 Closure->redMarkup, have, want);
 	 g_free(have);
 	 g_free(want);
-	 exitCode = EXIT_CODE_SIZE_MISMATCH;
+	 note_defects(EXIT_CODE_DEFECTS);
       }
    }
    else
@@ -428,7 +434,7 @@ static int print_sizes(Image *image, RS04Set *set, int idx, int n)
 	 g_free(have);
 	 g_free(want);
 	 if(sectors < end)
-	   exitCode = EXIT_CODE_SIZE_MISMATCH;
+	   note_defects(EXIT_CODE_DEFECTS);
       }
    }
 
@@ -637,8 +643,7 @@ static void verify_set(verify_closure *vc, int idx)
 
    total_missing = data_missing + st.crcMissing + st.eccMissing + st.tagsBad;
    total_crc_errors = data_crc_errors + st.crcErrors + st.eccErrors;
-   if(total_missing) exitCode = EXIT_CODE_MISSING_SECTOR;
-   else if(total_crc_errors) exitCode = EXIT_CODE_CHECKSUM_ERROR;
+   if(total_missing || total_crc_errors) note_defects(EXIT_CODE_DEFECTS);
 
    show_section(idx, RS04_V_DATA, data_missing, data_crc_errors);
    show_section(idx, RS04_V_CRC, st.crcMissing, st.crcErrors);
@@ -654,7 +659,7 @@ static void verify_set(verify_closure *vc, int idx)
 		 "- data md5sum      : %s\n"),digest);
       if(memcmp(sum, set->dataMD5, 16))
       {  PrintLog(_("* data md5sum      : BAD, does not match the ecc data\n"));
-	 exitCode = EXIT_CODE_CHECKSUM_ERROR;
+	 note_defects(EXIT_CODE_DEFECTS);
 	 RS04VerifyField(idx, RS04_V_IMGMD5, "<span %s>%s</span>", Closure->redMarkup, digest);
 	 RS04VerifyField(idx, RS04_V_RESULT, _("<span %s>Damaged image.</span>"), Closure->redMarkup);
       }
@@ -824,6 +829,10 @@ static void combined_prognosis(verify_closure *vc)
    PrintLog(_("\nCombined prognosis of all %d sets:\n"), vc->info->nSets);
    PrintLog(_("- prognosis        : %" PRId64 " of %" PRId64 " sectors estimated recoverable (%d.%d%%)\n"),
 	    expected - lost, expected, percentage/10, percentage%10);
+
+   /* The sets together decide whether data is lost, not each set alone */
+
+   if(lost) note_defects(EXIT_CODE_INCOMPLETE);
 }
 
 /***
@@ -852,7 +861,7 @@ static void cleanup(gpointer data)
 
 void RS04Verify(Image *image)
 {  verify_closure *vc = g_malloc0(sizeof(verify_closure));
-   int i, old_exit_code;
+   int i;
 
    RegisterCleanup(_("Check aborted"), cleanup, vc);
    vc->image = image;
@@ -882,10 +891,7 @@ void RS04Verify(Image *image)
 
    RS04VerifyInit(vc->info, image);
 
-   /* exitCode may be left over from a previous action in the GUI */
-
-   old_exit_code = exitCode;
-   exitCode = 0;
+   verify_defects = FALSE;
 
    for(i=0; i<vc->info->nSets && !Closure->stopActions; i++)
    {  RS04VerifyShowSet(i);
@@ -896,9 +902,7 @@ void RS04Verify(Image *image)
      combined_prognosis(vc);
 
    if(image->file && !Closure->stopActions)
-     RS04VerifyResult(exitCode == 0);
-   if(!exitCode)
-     exitCode = old_exit_code;
+     RS04VerifyResult(!verify_defects);
 
    cleanup((gpointer)vc);
 }
