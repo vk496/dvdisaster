@@ -85,6 +85,7 @@ oder Kratzer
 .IR n \|]
 .RB [\| \-\-spinup\-delay
 .IR n \|]
+.RB [\| \-\-test-and-copy \|]
 .RB [\| \-\-time-limit
 .IR d \|]
 .RB [\| \-\-version \|]
@@ -214,6 +215,16 @@ Anfang der .iso/.ecc - Dateien (Standard: medium.* ).
 .TP
 .B \-i, \-\-image imagefile
 Name der Abbild - Datei (Standard: medium.iso).
+Zum Erzeugen, Pr\[:u]fen und Reparieren von RS04-Fehlerkorrektur-Dateien (\-o file)
+kann stattdessen ein Cue-Sheet (.cue) oder eine Dreamcast-.gdi-Datei angegeben
+werden, z.B. ein mit redumper erstellter Abzug mit einer .bin-Datei pro Spur.
+Deren Dateien werden in der Reihenfolge des Sheets als ein Abbild mit
+2352-Byte-Sektoren verwendet; Pregaps, die nicht in den Dateien gespeichert sind,
+geh\[:o]ren nicht zum Abbild. Eine Reparatur schreibt in die .bin-Dateien zur\[:u]ck.
+Unterst\[:u]tzt werden nur BINARY-Dateien mit 2352-Byte-Sektoren (AUDIO, MODE1/2352,
+MODE2/2352, CDI/2352). Nur die Gr\[:o]\[ss]e der letzten Datei kann bei der Reparatur
+korrigiert werden; eine fehlende oder verk\[:u]rzte Datei dazwischen kann nicht
+wiederhergestellt werden.
 .TP
 .B \-e, \-\-ecc eccfile
 Name der Fehlerkorrektur-Datei (Standard: medium.ecc).
@@ -356,6 +367,10 @@ Nur RS04: Leseversatz eines CD-DA-Abbilds gegen\[:u]ber dem Abbild, aus dem
 die Fehlerkorrektur-Datei erzeugt wurde, in Samples (4 Bytes). Normalerweise
 wird der Versatz beim Reparieren automatisch erkannt; diese Option ist nur
 n\[:o]tig, wenn die Erkennung scheitert.
+Beim Lesen einer Audio-CD werden die AccurateRip- und CTDB-Pr\[:u]fsummen (siehe
+\-\-cdda) mit dieser Leseversatz-Korrektur berechnet; geben Sie den
+AccurateRip-Leseversatz des Laufwerks an, um sie mit den Datenbanken zu vergleichen.
+Das Abbild selbst wird so gespeichert, wie es gelesen wurde.
 .TP
 .B \-\-auto-suffix
 automatisches Anf\[:u]gen der .iso- und .ecc-Dateiendungen (nicht bei vorhandenen Verzeichnissen).
@@ -377,6 +392,24 @@ C2-Unterst\[:u]tzung interpolieren besch\[:a]digte Audio-Sektoren eventuell
 unbemerkt; dvdisaster gibt in diesem Fall eine Warnung aus. Das angepasste
 Lesen ist f\[:u]r CD-DA-Abbilder nicht verf\[:u]gbar, und RS01-, RS02- und
 RS03-Fehlerkorrekturdaten werden beim Lesen nicht verwendet.
+Datensektoren werden anhand ihres EDC gepr\[:u]ft (Mode 1, Mode 2 Form 1 und Form 2,
+sofern der Sektor einen tr\[:a]gt); ein Sektor, der die Pr\[:u]fung nicht besteht, gilt
+wie ein Sektor mit C2-Fehlern als unlesbar, so dass RS04 ihn reparieren kann.
+CDs mit Mode-2-Form-2-Sektoren (Video-CD, Super-Video-CD, PlayStation, CD-i) werden
+immer als CD-DA-Abbild gelesen, da diese Sektoren nicht in 2048 Bytes passen. Bei
+Mode-2-(XA)-Datentr\[:a]gern sucht dvdisaster sie in 64 \[:u]ber die Datenspuren
+verteilten Sektoren; verwenden Sie \-\-cdda, wenn sie auf dem Datentr\[:a]ger selten sind.
+Nach dem Lesen werden die AccurateRip-Pr\[:u]fsummen v1 und v2 und die CRC32
+jeder Audio-Spur, die AccurateRip-Disc-ID (die mit der FreeDB-Disc-ID endet) sowie
+die TOC-ID und CRC32 der CUETools-Datenbank (CTDB) ausgegeben und als REM-Zeilen
+in das Cue-Sheet geschrieben, um das Abbild mit anderen Programmen gegen diese
+Datenbanken pr\[:u]fen zu k\[:o]nnen; dvdisaster fragt sie nicht online ab. Sie
+stimmen nur dann mit der AccurateRip-Datenbank \[:u]berein, wenn der Leseversatz
+des Laufwerks mit \-\-audio-offset angegeben wird (Protokoll und Cue-Sheet nennen
+den verwendeten Versatz). CD-TEXT wird in das Cue-Sheet \[:u]bernommen (TITLE,
+PERFORMER, SONGWRITER, ...), sofern das Laufwerk ihn liefert; verwendet wird nur
+CD-TEXT in ISO 8859-1 oder ASCII, und Pakete mit CRC-Fehlern werden \[:u]bergangen.
+Siehe auch \-\-test-and-copy.
 .RS
 Datentr\[:a]ger mit mehreren Sitzungen (CD, DVD und BD) werden immer als ein
 Abbild gelesen, in dem die Sektoren an ihrer tats\[:a]chlichen Position liegen.
@@ -633,6 +666,14 @@ warnt bei Geschwindigkeits\[:a]nderung um mehr als n Prozent.
 .TP
 .B \-\-spinup-delay n
 gibt dem Laufwerk n Sekunden Zeit zum Hochlaufen.
+.TP
+.B \-\-test-and-copy
+f\[:u]r Audio-CDs (siehe \-\-cdda): liest die Audio-Spuren nach dem Lesen ein
+zweites Mal und vergleicht die CRC32 jeder Spur mit der des Abbilds, wie
+"Test & Kopie" in anderen CD-Rippern. Eine Spur mit abweichender CRC32 wurde
+nicht zuverl\[:a]ssig gelesen, z.B. weil das Laufwerk besch\[:a]digte Samples
+interpoliert hat, ohne C2-Fehler zu melden; dvdisaster endet dann mit einem
+Fehlercode.
 .TP
 .B \-\-time-limit d
 mit \-r oder \-s: bricht das Lesen oder Untersuchen ab, sobald die Dauer d

@@ -9,6 +9,7 @@
 MASTERISO=$ISODIR/reading-master.iso    # 3000 sectors of 2048 bytes
 AUDIOBIN=$ISODIR/reading-audio.bin      # 2560 sectors of 2352 bytes
 C2DSM=$ISODIR/reading-c2-dsm.iso        # sector 0: dead sector marker "c2 error"
+UNSTABLEDSM=$ISODIR/reading-unstable-dsm.iso  # sector 0: dead sector marker "unstable"
 TMPISO=$TMPDIR/reading-tmp.iso
 TMPECC=$TMPDIR/reading-tmp.ecc
 SIMISO=$TMPDIR/reading-sim.iso
@@ -41,6 +42,13 @@ fi
 if ! file_exists $C2DSM; then
     $NEWVER --regtest --debug -i$C2DSM --random-image 1 >>$LOGFILE 2>&1
     $NEWVER --debug -i$C2DSM --erase "0:c2 error" >>$LOGFILE 2>&1
+    echo -e "$FILE_MSG"
+    FILE_MSG=""
+fi
+
+if ! file_exists $UNSTABLEDSM; then
+    $NEWVER --regtest --debug -i$UNSTABLEDSM --random-image 1 >>$LOGFILE 2>&1
+    $NEWVER --debug -i$UNSTABLEDSM --erase "0:unstable" >>$LOGFILE 2>&1
     echo -e "$FILE_MSG"
     FILE_MSG=""
 fi
@@ -155,6 +163,40 @@ if try "completing audio CD image" audio_complete; then (
 if try "reading audio CD, adaptive" audio_adaptive_refused; then (
   extra_args="--debug --sim-cd=$AUDIOBIN $AUDIOCD --fixed-speed-values"
   run_regtest audio_adaptive_refused "--spinup-delay=0 -r --adaptive-read" $TEST_TMPDIR/audio.bin $ISODIR/no.ecc
+) & limit_jobs; fi
+
+# The checksums printed for audio CDs and written into the cue sheet
+# were cross-checked with the independent implementation in cdda-checksums.py:
+#   ./cdda-checksums.py $AUDIOBIN a0-1279,a1280-2559 [100]
+# With the drive's read offset given, the AccurateRip and CTDB checksums
+# are those of the drive without offset; only the CRC32 of the last track
+# differs (its last 100 samples are behind the end of the rip).
+
+if try "audio CD checksums with read offset correction" audio_checksums_offset; then (
+  extra_args="--debug --sim-cd=$AUDIOBIN $AUDIOCD:offset=100 --fixed-speed-values"
+  run_regtest audio_checksums_offset "--spinup-delay=0 -r --audio-offset=100" $TEST_TMPDIR/audio.bin $TEST_TMPDIR/audio.cue
+) & limit_jobs; fi
+
+# CD-TEXT goes into the cue sheet; one damaged pack is skipped
+
+if try "reading audio CD with CD-TEXT" audio_cdtext; then (
+  extra_args="--debug --sim-cd=$AUDIOBIN $AUDIOCD:cdtext --fixed-speed-values"
+  run_regtest audio_cdtext "--spinup-delay=0 -r" $TEST_TMPDIR/audio.bin $TEST_TMPDIR/audio.cue
+) & limit_jobs; fi
+
+if try "reading audio CD, test & copy" audio_test_and_copy; then (
+  extra_args="--debug --sim-cd=$AUDIOBIN $AUDIOCD --fixed-speed-values"
+  run_regtest audio_test_and_copy "--spinup-delay=0 -r --test-and-copy" $TEST_TMPDIR/audio.bin $TEST_TMPDIR/audio.cue
+) & limit_jobs; fi
+
+# Sector 1500 reads differently each time: track 2 differs in test & copy
+
+if try "reading audio CD with unstable sector, test & copy" audio_test_and_copy_unstable; then (
+  cp $AUDIOBIN $TEST_TMPDIR/sim.bin
+  put_dsm_2352 $UNSTABLEDSM $TEST_TMPDIR/sim.bin 1500
+
+  extra_args="--debug --sim-cd=$TEST_TMPDIR/sim.bin $AUDIOCD --fixed-speed-values"
+  run_regtest audio_test_and_copy_unstable "--spinup-delay=0 -r --test-and-copy" $TEST_TMPDIR/audio.bin $TEST_TMPDIR/audio.cue
 ) & limit_jobs; fi
 
 # CD Extra: audio session followed by a data session

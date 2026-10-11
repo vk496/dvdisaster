@@ -85,6 +85,7 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .IR n \|]
 .RB [\| \-\-spinup\-delay
 .IR n \|]
+.RB [\| \-\-test-and-copy \|]
 .RB [\| \-\-time-limit
 .IR d \|]
 .RB [\| \-\-version \|]
@@ -202,6 +203,15 @@ prefix of .iso/.ecc file (default: medium.* ).
 .TP
 .B \-i, \-\-image imagefile
 name of image file (default: medium.iso).
+For creating, verifying and repairing RS04 error correction files (\-o file),
+a cue sheet (.cue) or a Dreamcast .gdi file may be given instead, e.g. a disc
+dumped by redumper with one .bin file per track. Its files are used as one
+image with 2352 byte sectors, in the order of the sheet; pregaps which are not
+stored in the files are not part of the image. A repair writes back into the
+\&.bin files. Only BINARY files with 2352 byte sectors (AUDIO, MODE1/2352,
+MODE2/2352, CDI/2352) are supported. Only the size of the last file can be
+corrected by a repair; a missing or shortened file in between can not be
+recovered.
 .TP
 .B \-e, \-\-ecc eccfile
 name of parity file (default: medium.ecc).
@@ -385,6 +395,9 @@ use optimized strategy for reading damaged media.
 RS04 only: read offset of a CD-DA rip relative to the rip the error correction file
 was created from, in samples (4 bytes). By default the offset is detected
 automatically when repairing; use this option if detection fails.
+When reading an audio CD, the AccurateRip and CTDB checksums (see \-\-cdda) are
+computed with this read offset correction; give the drive's AccurateRip read
+offset for comparing them with the databases. The image itself is stored as read.
 .TP
 .B \-\-auto-suffix
 automatically add .iso and .ecc file suffixes (not to existing directories).
@@ -404,6 +417,22 @@ followed by 304 zero bytes. Drives without C2 support may interpolate damaged au
 sectors silently; dvdisaster prints a warning in that case. Adaptive reading is not
 available for CD-DA images, and RS01, RS02 and RS03 error correction data is not used
 while reading them.
+Data sectors are checked against their EDC (Mode 1, Mode 2 Form 1, and Form 2 if
+the sector carries one); a sector failing the check counts as unreadable like a sector
+with C2 errors, so that RS04 can repair it.
+CDs with Mode 2 Form 2 sectors (Video CD, Super Video CD, PlayStation, CD-i) are
+always read as CD-DA images since these sectors do not fit into 2048 bytes. For Mode 2
+(XA) discs, dvdisaster looks for them in 64 sectors spread over the data tracks; use
+\-\-cdda if Form 2 sectors are rare on the disc.
+After reading, the AccurateRip v1 and v2 checksums and the CRC32 of each audio track,
+the AccurateRip disc id (which ends with the FreeDB disc id) and the CUETools database
+(CTDB) TOC id and CRC32 are printed and written into the cue sheet as REM lines,
+for comparing the rip with these databases using other tools; dvdisaster does not
+look them up online. They match the AccurateRip database only if the drive's read offset
+is given with \-\-audio-offset (the log and the cue sheet tell which offset was used).
+CD-TEXT is written into the cue sheet (TITLE, PERFORMER, SONGWRITER, ...) if the drive
+reports it; only CD-TEXT in ISO 8859-1 or ASCII is used, and packs with CRC errors
+are skipped. See also \-\-test-and-copy.
 .RS
 Multi-session media (CD, DVD and BD) are always read as one image with the sectors
 at their real positions. The sectors between the sessions are not read; they are
@@ -638,6 +667,13 @@ print warning if speed changes by more than n percent.
 .TP
 .B \-\-spinup-delay n
 wait n seconds for drive to spin up.
+.TP
+.B \-\-test-and-copy
+for audio CDs (see \-\-cdda): after reading, read the audio tracks once more and
+compare the CRC32 of each track with the one of the image, like "test & copy" in
+other CD rippers. A track with a different CRC32 was not read reliably, e.g. because the
+drive interpolated damaged samples without reporting C2 errors; dvdisaster exits
+with an error code in that case.
 .TP
 .B \-\-time-limit d
 with \-r or \-s: stop reading or scanning (like the Stop button in the

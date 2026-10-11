@@ -78,6 +78,57 @@ head -c $((ECCSECTORS*2048 - $(wc -c <$AUDIOECC))) /dev/zero >>$MASTERDIR/data.i
     head -c 288 /dev/zero
  done) >$CDEXTRA
 
+# Mode 2 XA disc like a Video CD: track 1 holds Form 1 sectors, track 2
+# Form 2 sectors (every 7th without the optional EDC). Raw 2352 byte
+# sectors with sync, header, subheader and EDC (no P/Q parity).
+# XA1 has Form 1 sectors only. Needs python3.
+
+XA=$MASTERDIR/xa.bin
+XA1=$MASTERDIR/xa1.bin
+XATOC="--sim-toc=x0-299,x300-1199"
+
+function xa_image()
+{  python3 - "$@" <<'EOF'
+import sys, random
+T = []
+for i in range(256):
+    c = i
+    for _ in range(8):
+        c = (c >> 1) ^ (0xD8018001 if c & 1 else 0)
+    T.append(c)
+def edc(b):
+    c = 0
+    for x in b:
+        c = T[(c ^ x) & 0xff] ^ (c >> 8)
+    return c.to_bytes(4, 'little')
+bcd = lambda v: v // 10 * 16 + v % 10
+rnd = random.Random(1)
+data = lambda n: rnd.getrandbits(8*n).to_bytes(n, 'little')
+out = open(sys.argv[1], 'wb')
+form1, sectors = int(sys.argv[2]), int(sys.argv[3])
+for lba in range(sectors):
+    f = bytearray(2352)
+    f[0:12] = b'\x00' + b'\xff'*10 + b'\x00'
+    a = lba + 150
+    f[12:16] = bytes([bcd(a // 4500), bcd(a // 75 % 60), bcd(a % 75), 2])
+    form2 = lba >= form1
+    f[16:20] = f[20:24] = bytes([1, 1, 0x20 if form2 else 0x08, 0])
+    if form2:
+        f[24:2348] = data(2324)
+        if lba % 7:
+            f[2348:2352] = edc(f[16:2348])
+    else:
+        f[24:2072] = data(2048)
+        f[2072:2076] = edc(f[16:2072])
+    out.write(f)
+EOF
+}
+
+if command -v python3 >/dev/null 2>&1; then
+   xa_image $XA 300 1200
+   xa_image $XA1 600 600
+fi
+
 ### Helper functions
 
 # Preparatory steps of a workflow; their output goes to the log file
@@ -327,6 +378,59 @@ if try "fixing the audio part of the CD Extra rip" cdextra_fix; then (
   read_disc $TEST_TMPDIR/sim.bin $CDXTOC $TEST_TMPDIR/data.iso
   dd if=$TEST_TMPDIR/data.iso of=$TEST_TMPDIR/disc.ecc bs=2048 skip=$CDXDATA count=$ECCSECTORS >>$LOGFILE 2>&1
   run_regtest cdextra_fix "--truncate -f" $TEST_TMPDIR/rip.bin $TEST_TMPDIR/disc.ecc
+) & limit_jobs; fi
+
+### Mode 2 XA and CD-i discs
+
+REGTEST_SECTION="Mode 2 XA and CD-i discs"
+
+# Form 2 sectors are found and the disc is read as a CD-DA image
+# (the rip equals the simulated disc)
+
+if try "reading a disc with Form 2 sectors" xa_read; then (
+  command -v python3 >/dev/null 2>&1 || exit 0
+  extra_args="--debug --sim-cd=$XA $XATOC --fixed-speed-values"
+  run_regtest xa_read "--spinup-delay=0 -r" $TEST_TMPDIR/rip.bin $NO_FILE
+) & limit_jobs; fi
+
+# Without Form 2 sectors an XA disc is still read as a 2048 byte image
+
+if try "reading an XA disc with Form 1 sectors only" xa_form1_only; then (
+  command -v python3 >/dev/null 2>&1 || exit 0
+  extra_args="--debug --sim-cd=$XA1 --sim-toc=x0-599 --fixed-speed-values"
+  run_regtest xa_form1_only "--spinup-delay=0 -r" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+if try "reading a CD-i disc" cdi_read; then (
+  command -v python3 >/dev/null 2>&1 || exit 0
+  extra_args="--debug --sim-cd=$XA $XATOC:cdi --fixed-speed-values"
+  run_regtest cdi_read "--spinup-delay=0 -r" $TEST_TMPDIR/rip.bin $NO_FILE
+) & limit_jobs; fi
+
+# Corrupted user data in a Form 1 sector (100) and in Form 2 sectors
+# with (500) and without (504) EDC. The first two fail their EDC and
+# are unreadable; the last one can only be found by RS04.
+
+function xa_damaged()
+{  cp $XA $1
+   for s in 100 500 504; do
+      printf 'X' | dd of=$1 bs=1 seek=$((2352*s+1000)) conv=notrunc >>$LOGFILE 2>&1
+   done
+}
+
+if try "reading sectors with EDC errors" xa_edc_errors; then (
+  command -v python3 >/dev/null 2>&1 || exit 0
+  xa_damaged $TEST_TMPDIR/sim.bin
+  extra_args="--debug --sim-cd=$TEST_TMPDIR/sim.bin $XATOC --fixed-speed-values"
+  run_regtest xa_edc_errors "--spinup-delay=0 -r -j 0" $TEST_TMPDIR/rip.bin $NO_FILE
+) & limit_jobs; fi
+
+if try "fixing the rip of the damaged XA disc" xa_fix; then (
+  command -v python3 >/dev/null 2>&1 || exit 0
+  step -i$XA -e$TEST_TMPDIR/xa.ecc --debug --set-version $SETVERSION --sector-size 2352 -n 20% -mRS04 -o file -c
+  xa_damaged $TEST_TMPDIR/sim.bin
+  read_disc $TEST_TMPDIR/sim.bin $XATOC $TEST_TMPDIR/rip.bin -j 0
+  run_regtest xa_fix "-f" $TEST_TMPDIR/rip.bin $TEST_TMPDIR/xa.ecc
 ) & limit_jobs; fi
 
 collect_results

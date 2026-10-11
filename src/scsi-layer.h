@@ -226,6 +226,7 @@ typedef struct _DeviceHandle
    int nTracks;
    int zeroFill;              /* TRUE if sectors outside of tracks are not read */
    int sectorBytes;           /* 2048, or 2352 when reading a CD-DA (raw) image */
+   int form2;                 /* Mode 2 Form 2 sectors present: read as CD-DA image */
 
    /*
     * size alternatives from different sources 
@@ -330,5 +331,12 @@ gint64 SessionEnd(DeviceHandle*, gint64);
 void PrintTrackTable(DeviceHandle*, void (*)(char*, ...));
 int UseCDDAImage(Image*);
 void WriteCueSheet(DeviceHandle*, char*);
+
+/*
+ * cdda.c
+ */
+
+guint16 CDTextCrc(unsigned char*);
+GString **CDDACueLines(DeviceHandle*, char*);
 
 #endif /* SCSI_LAYER_H */

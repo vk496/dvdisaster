@@ -26,4 +26,10 @@ Sector 2000, try 1: Raw Reader: C2 error in audio sector.
 Sector 2000: Raw Reader: C2 error in audio sector.
 
 2 unreadable sectors.
+
+AccurateRip checksums (no read offset correction; see --audio-offset):
+  Track  1: unreadable sectors, no checksums
+  Track  2: unreadable sectors, no checksums
+AccurateRip disc id: 002-00001416-00003743-15003303
+CTDB TOC id: jMITwptWUXZfy4sfzMMsQhQp0YA-
 Cue sheet written to rip.cue.

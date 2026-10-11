@@ -1,5 +1,5 @@
 54bfd0992385bac7820e26c5bca337ec
-4f4afd3e115963bc8a11a468c0f5b943
+d115bd15f7823715873dfbc1fa5d974b
 This software comes with  ABSOLUTELY NO WARRANTY.  This
 is free software and you are welcome to redistribute it
 under the conditions of the GNU GENERAL PUBLIC LICENSE.
@@ -16,4 +16,10 @@ Reading CD-DA image: 2560 sectors of 2352 bytes, using C2 error pointers.
 Creating new audio.bin image.
 
 All sectors successfully read.
+
+AccurateRip checksums (no read offset correction; see --audio-offset):
+  Track  1: v1 41eaf87e, v2 354d4fe3, CRC32 3556b4e2
+  Track  2: v1 0fa9c7ce, v2 c553912f, CRC32 70e9c288
+AccurateRip disc id: 002-00000f00-00002801-0c002202
+CTDB TOC id: jMITwptWUXZfy4sfzMMsQhQp0YA-, CRC32 8058443e
 Cue sheet written to audio.cue.
