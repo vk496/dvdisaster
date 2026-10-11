@@ -31,6 +31,8 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .RB [\| \-\-auto-suffix \|]
 .RB [\| \-\-cache-size
 .IR n \|]
+.RB [\| \-\-audio-offset
+.IR n \|]
 .RB [\| \-\-cdda \|]
 .RB [\| \-\-dao \|]
 .RB [\| \-\-defective-dump
@@ -65,6 +67,10 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .RB [\| \-\-read-raw \|]
 .RB [\| \-\-regtest \|]
 .RB [\| \-\-resource-file
+.IR n \|]
+.RB [\| \-\-rs04-memory
+.IR n \|]
+.RB [\| \-\-sector-size
 .IR n \|]
 .RB [\| \-\-speed-warning
 .IR n \|]
@@ -284,20 +290,25 @@ specify this option on the command-line too.
 .B \-m, \-\-method n
 lists/selects error correction methods (default: RS01).
 .RS
-Possible values are RS01 and RS02.
+Possible values are RS01, RS02, RS03 and RS04.
 .RE
 .TP
 .B \-v, \-\-verbose n%
 more diagnostic messages
 .TP
 .B \-x, \-\-threads n
-Use n threads for encoding with the RS03 method. Use 2 or 4 threads for 2 or 4 core 
+Use n threads for encoding with the RS03 and RS04 methods. Use 2 or 4 threads for 2 or 4 core 
 processors respectively.
 On larger machines save one core for housekeeping; e.g. use 7 threads
 on an eight core machine.
 .TP
 .B \-\-adaptive-read
 use optimized strategy for reading damaged media.
+.TP
+.B \-\-audio-offset n
+RS04 only: read offset of a CD-DA rip relative to the rip the error correction file
+was created from, in samples (4 bytes). By default the offset is detected
+automatically when repairing; use this option if detection fails.
 .TP
 .B \-\-auto-suffix
 automatically add .iso and .ecc file suffixes.
@@ -460,6 +471,18 @@ modifies some outputs for better processing with the regression test scripts.
 .TP
 .B \-\-resource-file n
 Specifies the path to the configuration file (default: $HOME/.dvdisaster)
+.TP
+.B \-\-rs04-memory n
+RS04 only: memory budget in MiB for encoding and decoding (default: 4096).
+It decides the codeword length of newly created error correction data:
+longer codewords tolerate more scattered damage but need more memory or
+more passes over the image. Any codeword length can be repaired with any budget,
+a smaller budget only makes repairing slower.
+.TP
+.B \-\-sector-size n
+RS04 only: sector size of the data when creating an error correction file:
+2048 (default), 2324 (Mode 2 Form 2, e.g. VCD/SVCD video tracks) or 2352 (CD-DA audio
+rips, see \-\-cdda).
 .TP
 .B \-\-speed-warning n
 print warning if speed changes by more than n percent.
