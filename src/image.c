@@ -33,10 +33,128 @@
  * for convenience reasons.
  */
 
+/*
+ * Multi-file images: a .cue or .gdi sheet stands for the concatenation
+ * of its .bin files (2352 byte sectors), e.g. one file per track as
+ * written by redumper. Gaps which are not stored in the files are not
+ * part of the image. Only RS04 ecc files can be used with them.
+ */
+
+/* Next blank separated or quoted token; terminates it in place */
+
+static char *next_token(char **p)
+{  char *start, *end;
+
+   while(g_ascii_isspace(**p)) (*p)++;
+   if(!**p) return NULL;
+
+   if(**p == '"')
+   {  start = ++(*p);
+      end = strchr(start, '"');
+      if(!end) end = start + strlen(start);
+   }
+   else
+   {  for(start = end = *p; *end && !g_ascii_isspace(*end); end++)
+	 ;
+   }
+
+   *p = *end ? end+1 : end;
+   *end = 0;
+   return start;
+}
+
+static LargeFile *open_multi_file(char *name, int flags, int gdi)
+{  FILE *sheet = fopen(name, "rb");
+   GPtrArray *parts;
+   LargeFile *lf;
+   char line[4096];
+   int dir_len = 0;
+   int i;
+
+   if(!sheet)
+      return NULL;
+
+   for(i=0; name[i]; i++)   /* file names are relative to the sheet */
+     if(name[i] == '/' || name[i] == G_DIR_SEPARATOR)
+       dir_len = i+1;
+
+   parts = g_ptr_array_new();
+   lf = g_malloc0(sizeof(LargeFile));
+
+   while(fgets(line, sizeof(line), sheet))
+   {  char *p = line, *token[6], *file = NULL;
+
+      if(!strncmp(p, "\xef\xbb\xbf", 3))  /* UTF-8 byte order mark */
+	 p += 3;
+      for(i=0; i<6; i++)
+	 token[i] = next_token(&p);
+
+      if(!token[0]) ;
+      else if(gdi)  /* track lba type sector_size file offset */
+      {  if(token[4])
+	 {  if(atoi(token[3]) != 2352)
+	      Stop(_("%s: track %s (%s) is not supported; all tracks need 2352 byte sectors."),
+		   name, token[0], token[3]);
+	    file = token[4];
+	 }
+      }
+      else if(!g_ascii_strcasecmp(token[0], "FILE"))
+      {  if(!token[2] || g_ascii_strcasecmp(token[2], "BINARY"))
+	   Stop(_("%s: only BINARY files are supported."), name);
+	 file = token[1];
+      }
+      else if(!g_ascii_strcasecmp(token[0], "TRACK"))
+      {  if(   !token[2]
+	    || (   g_ascii_strcasecmp(token[2], "AUDIO")
+		&& g_ascii_strcasecmp(token[2], "MODE1/2352")
+		&& g_ascii_strcasecmp(token[2], "MODE2/2352")
+		&& g_ascii_strcasecmp(token[2], "CDI/2352")))
+	   Stop(_("%s: track %s (%s) is not supported; all tracks need 2352 byte sectors."),
+		name, token[1] ? token[1] : "?", token[2] ? token[2] : "?");
+      }
+
+      if(file)
+      {  char *path = g_path_is_absolute(file) ? g_strdup(file) : g_strdup_printf("%.*s%s", dir_len, name, file);
+	 LargeFile *part = LargeOpen(path, flags, IMG_PERMS);
+
+	 if(!part)
+	   Stop(_("Can't open %s:\n%s"), path, strerror(errno));
+	 Verbose("%s: %s, %" PRId64 " bytes\n", name, path, part->size);
+	 g_ptr_array_add(parts, part);
+	 lf->size += part->size;
+	 g_free(path);
+      }
+   }
+   fclose(sheet);
+
+   if(!parts->len)
+     Stop(_("%s: no image files found."), name);
+
+   lf->fileHandle = -1;
+   lf->path = g_strdup(name);
+   lf->flags = flags;
+   lf->parts = parts;
+   return lf;
+}
+
+/*
+ * Only RS04 ecc files can be used with multi-file images
+ */
+
+void RefuseMultiFileImage(Image *image)
+{  if(image && image->file && image->file->parts)
+     Stop(_("%s: .cue and .gdi images can only be protected by RS04 error correction files."),
+	  Closure->imageName);
+}
+
 Image *OpenImageFromFile(char *filename, int flags, mode_t mode)
 {  LargeFile *file;
+   size_t len = strlen(filename);
+   char *suffix = len > 4 ? filename+len-4 : "";
 
-   file = LargeOpen(filename, flags, mode);
+   if(!g_ascii_strcasecmp(suffix, ".cue") || !g_ascii_strcasecmp(suffix, ".gdi"))
+        file = open_multi_file(filename, flags, !g_ascii_strcasecmp(suffix, ".gdi"));
+   else file = LargeOpen(filename, flags, mode);
 
    if(file)
    {  Image *image = g_malloc0(sizeof(Image));
@@ -48,7 +166,8 @@ Image *OpenImageFromFile(char *filename, int flags, mode_t mode)
       CalcSectors(file->size, &image->sectorSize, &image->inLast);
 
       ExamineUDF(image);
-      ExamineECC(image);
+      if(!file->parts)   /* no augmented images */
+	 ExamineECC(image);
 
       GetImageFingerprint(image, NULL, FINGERPRINT_SECTOR);
 
@@ -121,7 +240,9 @@ Image* OpenEccFileForImage(Image *image, char *filename, int flags, mode_t mode)
       if(method->recognizeEccFile)
       {  image->eccFileState = method->recognizeEccFile(image->eccFile, &image->eccFileHeader);
 	 if(image->eccFileState == ECCFILE_PRESENT)
-	 {  image->eccFileMethod = method; 
+	 {  if(strncmp(method->name, "RS04", 4))
+	       RefuseMultiFileImage(image);
+	    image->eccFileMethod = method; 
 	    image->expectedSectors = method->expectedImageSize(image);
 	    GetImageFingerprint(image, NULL, image->eccFileHeader->fpSector);
 	    return image;
