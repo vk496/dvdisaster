@@ -37,6 +37,7 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .RB [\| \-\-dao \|]
 .RB [\| \-\-defective-dump
 .IR d \|]
+.RB [\| \-\-drive-test \|]
 .RB [\| \-\-driver
 .IR d \|]
 .RB [\| \-\-eject \|]
@@ -343,6 +344,18 @@ assume DAO disc; do not trim image end.
 .TP
 .B \-\-defective-dump d
 Specifies the sub directory for storing incomplete raw sectors.
+.TP
+.B \-\-drive-test
+Prints a report about what the drive selected with \-d can do for dvdisaster:
+vendor, model and firmware, the supported profiles and read features
+(CD, DVD, BD, HD DVD, C2 error pointers, CD-TEXT, streaming),
+the read error recovery mode page (whether the drive can deliver defective
+sectors in raw mode), and a summary of the reading modes it is suitable for.
+If a CD is inserted, user data, raw and CD-DA reading with and without
+C2 error pointers are tried on the first data and audio sector.
+Only read-only commands are sent; the drive settings are not changed.
+The drive's read offset is not measured.
+Please include this report when reporting drive related problems.
 .TP
 .B \-\-driver d (Linux only)
 Selects between the sg (SG_IO) driver (default setting) and the
