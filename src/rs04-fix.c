@@ -541,6 +541,7 @@ static int decode(fix_closure *fc)
 {  RS04Set *set = fc->set;
    int i;
 
+   RS04ChooseKernel();
    for(fc->i0=0; fc->i0<set->L; fc->i0+=fc->W)
    {  fc->pw = MIN(fc->W, set->L - fc->i0);
 

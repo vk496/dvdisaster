@@ -444,6 +444,11 @@ AVX2 uses 256bit wide operations. Explicit choices require processor support.
 With auto, dvdisaster prefers AVX2, then SSE2, then AltiVec, then NEON, and otherwise
 uses the 64bit algorithm. Automatic selection is the default.
 .RE
+.RS
+RS04 picks GFNI, AVX2, SSSE3 or NEON automatically; 32bit and 64bit select
+its portable code and SSE2 its SSSE3 code. All variants create
+identical error correction data.
+.RE
 .TP
 .B \-\-encoding-io-strategy [readwrite|mmap]
 This option controls how dvdisaster performs its disk I/O while creating error
