@@ -1012,7 +1012,7 @@ int main(int argc, char *argv[])
 	     "  -p, --prefix prefix         - prefix of .iso/.ecc file (default: medium.*  )\n"
 	     "  -i, --image imagefile       - name of image file       (default: medium.iso)\n"
 	     "  -e, --ecc eccfile           - name of parity file      (default: medium.ecc)\n"
-	     "  -o, --ecc-target imagefile  - where to put ecc data in RS03\n"),
+	     "  -o, --ecc-target file|image - where to put ecc data in RS03/RS04\n"),
 	       Closure->device);
 
       PrintCLI("\n");
