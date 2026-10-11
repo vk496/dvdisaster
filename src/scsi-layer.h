@@ -111,6 +111,20 @@ typedef struct _Sense {
 } Sense;
 
 /***
+ *** Tracks of the medium (see DeviceHandle)
+ ***/
+
+#define MAX_TRACKS 256
+
+typedef struct _TrackInfo
+{  gint64 start, end;         /* first sector, first sector behind the track */
+   int number;                /* track number */
+   int session;               /* session number */
+   int audio;                 /* TRUE for CD-DA tracks */
+   int xa;                    /* TRUE for mode 2 (XA) data tracks */
+} TrackInfo;
+
+/***
  ***  The DeviceHandle is pretty much our device abstraction layer. 
  ***
  * It contains info about the opened device and the inserted medium.
@@ -168,6 +182,7 @@ typedef struct _DeviceHandle
    unsigned char previousRetries; /* retries prior to switching */
    unsigned char currentReadMode; /* current raw read mode */
    RawBuffer *rawBuffer;      /* for performing raw read analysis */
+   int canC2Audio;            /* TRUE if READ CD delivers C2 pointers in CD-DA mode */
    int (*read)(struct _DeviceHandle*, unsigned char*, int, int);
    int (*readRaw)(struct _DeviceHandle*, unsigned char*, int, int);
 
@@ -195,6 +210,19 @@ typedef struct _DeviceHandle
    char *mediumDescr;         /* textual description of medium */
 
    /*
+    * Session/track layout (multi-session media, audio CDs).
+    * Only filled in when the drive reports it; nTracks == 0 means unknown.
+    * Sectors between sessions (and audio sectors in 2048 byte images)
+    * are not part of the image and are delivered as zero-filled sectors
+    * by ReadSectors() if zeroFill is set.
+    */
+
+   TrackInfo track[MAX_TRACKS];  /* sorted by start address */
+   int nTracks;
+   int zeroFill;              /* TRUE if sectors outside of tracks are not read */
+   int sectorBytes;           /* 2048, or 2352 when reading a CD-DA (raw) image */
+
+   /*
     * size alternatives from different sources 
     */
 
@@ -219,6 +247,7 @@ typedef struct _DeviceHandle
 #define CD             0x10
 #define DATA1          0x11
 #define XA21           0x12
+#define CDDA           0x13
 
 #define DVD            0x20
 #define DVD_RAM        0x21
@@ -289,5 +318,11 @@ int  TestUnitReady(DeviceHandle*);
 
 int ReadSectors(DeviceHandle*, unsigned char*, gint64, int);
 int ReadSectorsFast(DeviceHandle*, unsigned char*, gint64, int);
+
+int IsZeroFilledSector(DeviceHandle*, gint64);
+gint64 SessionEnd(DeviceHandle*, gint64);
+void PrintTrackTable(DeviceHandle*, void (*)(char*, ...));
+int UseCDDAImage(Image*);
+void WriteCueSheet(DeviceHandle*, char*);
 
 #endif /* SCSI_LAYER_H */

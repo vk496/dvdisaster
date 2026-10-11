@@ -1,0 +1,16 @@
+a82e05901e03bfa2c64ff21a0d08a96c
+c37e047609db0c6b6e7f5d7f0e45f1d0
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04f-tmp.iso: 7999 medium sectors.
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+    1 repaired sectors: 7999d 
+    1 repaired sectors: 8000c 
+    1 repaired sectors: 10d 
+Repaired sectors: 3 (3 data, 0 crc, 0 ecc, 0 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  1.0; worst = 1.

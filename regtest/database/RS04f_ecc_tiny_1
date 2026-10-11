@@ -1,0 +1,21 @@
+c99a74c555371a433d121f551d6c6398
+498ff36f50c066c28ab0f5c29e5c9dec
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+rs04f-tmp.iso present.
+rs04f-tmp.ecc present.
+
+Error correction properties:
+- type             : Error correction file
+- method           : RS04, 2+1 layers of 1 sectors, 50.0% redundancy.
+- sector size      : 2048 bytes
+- created by       : dvdisaster-0.80
+- data md5sum      : c99a74c555371a433d121f551d6c6398
+
+Data integrity:
+- sectors          : 1 in image; 4 in ecc file
+- good image/file  : all sectors present
+- data md5sum      : c99a74c555371a433d121f551d6c6398

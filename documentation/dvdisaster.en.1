@@ -31,6 +31,9 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .RB [\| \-\-auto-suffix \|]
 .RB [\| \-\-cache-size
 .IR n \|]
+.RB [\| \-\-audio-offset
+.IR n \|]
+.RB [\| \-\-cdda \|]
 .RB [\| \-\-dao \|]
 .RB [\| \-\-defective-dump
 .IR d \|]
@@ -65,6 +68,10 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .RB [\| \-\-regtest \|]
 .RB [\| \-\-resource-file
 .IR n \|]
+.RB [\| \-\-rs04-memory
+.IR n \|]
+.RB [\| \-\-sector-size
+.IR n \|]
 .RB [\| \-\-speed-warning
 .IR n \|]
 .RB [\| \-\-spinup\-delay
@@ -95,6 +102,10 @@ the \fB--read-raw\fP option is silently ignored.
 Creates an image as described above. Defective sectors are retried at least \fIn\fP
 times and at most \fIm\fP times. Recovery of defective CD media may improve when
 combined with \fB--read-raw\fP. 
+.TP
+\fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-i\fP \fIaudio.bin\fP \fB-r\fP
+Reads an audio CD into the file \fIaudio.bin\fP (2352 bytes per sector)
+and writes the cue sheet \fIaudio.cue\fP; see \fB--cdda\fP.
 .TP
 \fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-i\fP \fImedium.iso\fP \fB-e\fP \fIcorr.ecc\fP \fB-r\fP \fB--adaptive-read\fP
 Uses the adaptive reading strategy to read an image from 
@@ -161,7 +172,7 @@ name of image file (default: medium.iso).
 name of parity file (default: medium.ecc).
 .TP
 .B \-o, \-\-ecc-target file|image
-Specifies whether RS03 should create error correction files
+Specifies whether RS03 and RS04 should create error correction files
 or augmented images (default: image).
 .TP
 
@@ -279,14 +290,14 @@ specify this option on the command-line too.
 .B \-m, \-\-method n
 lists/selects error correction methods (default: RS01).
 .RS
-Possible values are RS01 and RS02.
+Possible values are RS01, RS02, RS03 and RS04.
 .RE
 .TP
 .B \-v, \-\-verbose n%
 more diagnostic messages
 .TP
 .B \-x, \-\-threads n
-Use n threads for encoding with the RS03 method. Use 2 or 4 threads for 2 or 4 core 
+Use n threads for encoding with the RS03 and RS04 methods. Use 2 or 4 threads for 2 or 4 core 
 processors respectively.
 On larger machines save one core for housekeeping; e.g. use 7 threads
 on an eight core machine.
@@ -294,11 +305,38 @@ on an eight core machine.
 .B \-\-adaptive-read
 use optimized strategy for reading damaged media.
 .TP
+.B \-\-audio-offset n
+RS04 only: read offset of a CD-DA rip relative to the rip the error correction file
+was created from, in samples (4 bytes). By default the offset is detected
+automatically when repairing; use this option if detection fails.
+.TP
 .B \-\-auto-suffix
 automatically add .iso and .ecc file suffixes.
 .TP
 .B \-\-cache-size n
 image cache size in MiB during \-c mode (default: 32MiB).
+.TP
+.B \-\-cdda
+read a CD as a CD-DA image: every sector is stored with 2352 bytes
+(audio samples, or the raw data sector including sync pattern, header and EDC/ECC)
+into a .bin image, and a cue sheet with the same name and the suffix .cue is written.
+This is done automatically for audio CDs; use \-\-cdda for mixed mode and CD Extra
+discs to read their audio tracks as well. Audio sectors are read with C2 error pointers
+if the drive supports them; a sector with C2 errors counts as unreadable (it is retried
+according to \-\-read-attempts) and is stored as a dead sector marker (2048 bytes)
+followed by 304 zero bytes. Drives without C2 support may interpolate damaged audio
+sectors silently; dvdisaster prints a warning in that case. Adaptive reading is not
+available for CD-DA images, and RS01, RS02 and RS03 error correction data is not used
+while reading them.
+.RS
+Multi-session media (CD, DVD and BD) are always read as one image with the sectors
+at their real positions. The sectors between the sessions are not read; they are
+stored as zero-filled sectors and are not counted as read errors. Unreadable sectors
+among the last two sectors of a session (the run-out of sessions written in TAO mode)
+are reported separately.
+Without \-\-cdda, audio tracks of a CD with data tracks are stored the same way.
+Media with RS02 or RS03 error correction data can not be read in multi-session mode.
+.RE
 .TP
 .B \-\-dao
 assume DAO disc; do not trim image end.
@@ -433,6 +471,18 @@ modifies some outputs for better processing with the regression test scripts.
 .TP
 .B \-\-resource-file n
 Specifies the path to the configuration file (default: $HOME/.dvdisaster)
+.TP
+.B \-\-rs04-memory n
+RS04 only: memory budget in MiB for encoding and decoding (default: 4096).
+It decides the codeword length of newly created error correction data:
+longer codewords tolerate more scattered damage but need more memory or
+more passes over the image. Any codeword length can be repaired with any budget,
+a smaller budget only makes repairing slower.
+.TP
+.B \-\-sector-size n
+RS04 only: sector size of the data when creating an error correction file:
+2048 (default), 2324 (Mode 2 Form 2, e.g. VCD/SVCD video tracks) or 2352 (CD-DA audio
+rips, see \-\-cdda).
 .TP
 .B \-\-speed-warning n
 print warning if speed changes by more than n percent.

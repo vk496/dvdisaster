@@ -1,0 +1,37 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ CD.
+Medium "Random Image": CD-R mode 1, 3000 sectors, created 16-07-2006.
+
+Physical medium info
+
+Medium type:    CD-R mode 1
+Book type:      -
+Manuf.-ID:      -
+Drive profile:  CD-R
+Disc status:    finalized (2 sessions; last session complete)
+Used sectors:   3000 sectors (5 MiB), from READ CAPACITY
+                0 sectors (0 MiB), from DVD structure
+Blank capacity: 359849 sectors (702 MiB)
+
+
+Sessions and tracks
+
+  Session 1, track  1: sectors 0 - 999, data
+  Sectors 1000 - 1599: not part of a session
+  Session 2, track  2: sectors 1600 - 2999, data
+600 sectors between sessions are not part of the image;
+they are stored as zero-filled sectors and are not read.
+
+
+Filesystem info
+
+Medium label:     Random Image
+File system size: 3000 sectors (5 MiB)
+Creation time:    16-07-2006

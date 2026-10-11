@@ -1,0 +1,56 @@
+\newpage
+\section{RS04 tag and CRC sector format}
+\label{rs04-tag}
+
+A tag sector holds the following 2048-byte structure; for $B > 2048$ the
+remaining bytes of the sector are zero. All integers are little-endian
+(section \ref{rs04-conventions}). Every field is at an offset which is a
+multiple of its size, so the C structure below has no padding on any
+common ABI.
+
+\medskip
+{\small
+\begin{tabular}{|r|r|l|l|p{7.4cm}|}
+\hline
+Offset & Size & Type & Field & Contents \\
+\hline
+0 & 12 & char & $cookie$ & {\tt *dvdisaster*} (no terminating zero) \\
+12 & 4 & char & $method$ & {\tt RS04} \\
+16 & 2 & u16 & $version$ & 1 (section \ref{rs04-versions}) \\
+18 & 1 & u8 & $layoutVariant$ & 0 \\
+19 & 1 & u8 & $flags$ & bit 0: created by a development release;
+  bit 1: created by a release candidate. The user is hinted that the data
+  comes from a non-stable dvdisaster version. Other bits are zero. \\
+20 & 2 & u16 & $sectorBytes$ & $B$: 2048, 2324 or 2352 \\
+22 & 2 & u16 & $tagInterval$ & $T$: 2, 4, \ldots, 256 \\
+24 & 4 & u32 & $creatorVersion$ & dvdisaster version which created the set;
+  the decimal value 102345 means version 10.23.45 \\
+28 & 4 & u32 & $selfCRC$ & Crc32 of bytes 0--2047 computed with this field
+  set to zero \\
+32 & 8 & bytes & $setID$ & random; identical in all tags of the set \\
+40 & 8 & u64 & $dataBytes$ & length of the protected data in bytes;
+  $S = \lceil dataBytes/B \rceil$ \\
+48 & 8 & u64 & $layerSectors$ & $L$ \\
+56 & 4 & u32 & $dataLayers$ & $k$ \\
+60 & 4 & u32 & $eccLayers$ & $m$ \\
+64 & 8 & u64 & $ownPosition$ & relative position of this tag, $S + gT$ for
+  tag $g$ \\
+72 & 16 & bytes & $dataMD5$ & MD5 of the $dataBytes$ bytes of data \\
+88 & 1020 & u32[255] & $crc$ & Crc32 of the following payload sectors
+  (section \ref{rs04-tags}); entries $T-1 \ldots 254$ and entries beyond the
+  last payload sector are zero \\
+1108 & 940 & & & zero \\
+\hline
+\end{tabular}
+}
+\medskip
+
+A CRC sector holds 512 little-endian Crc32 values (2048 bytes, section
+\ref{rs04-crc}), followed by $B - 2048$ zero bytes.
+
+\medskip
+
+C definitions (from {\tt src/rs04-includes.h}; integers must be converted on
+big-endian hosts):
+
+\lstinputlisting[language=C,basicstyle=\scriptsize\ttfamily,firstline=26,lastline=72]{../../src/rs04-includes.h}

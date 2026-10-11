@@ -263,6 +263,7 @@ typedef struct _GlobalClosure
    char *redundancy;    /* Error correction code redundancy */
    int eccTarget;       /* 0=file; 1=augmented image */
    int readRaw;         /* Read CD sectors raw + verify them */
+   int cdda;            /* Read CDs as CD-DA images (2352 bytes per sector) */
    int rawMode;         /* mode for mode page */
    int minReadAttempts; /* minimum reading attempts */
    int maxReadAttempts; /* maximal reading attempts */
@@ -288,12 +289,18 @@ typedef struct _GlobalClosure
    int ignoreIsoSize;   /* get size per READ CAPACITY; ignore all ISO/UDF meta data */
    int examineRS02;     /* perform deep search for RS02 structures */
    int examineRS03;     /* perform deep search for RS03 structures */
+   int examineRS04;     /* scan whole images for RS04 tags */
+   int sectorBytes;     /* RS04: sector size of the protected data */
+   int audioOffset;     /* RS04: read offset of a CD-DA rip in samples */
+   int audioOffsetGiven;/* RS04: TRUE if audioOffset was specified */
+   int rs04MemoryMiB;   /* RS04: memory budget for de-/encoding */
    int readAndCreate;   /* automatically create .ecc file after reading an image */
    int enableCurveSwitch; /* TRUE in readAndCreateMode after reading is complete */
    int welcomeMessage;  /* just print dvdisaster logo if FALSE */
    int dotFileVersion;  /* version of dotfile */
    int simulateDefects; /* if >0, this is the percentage of simulated media defects */
    char *simulateCD;    /* Simulate CD from given image */
+   char *simulateTOC;   /* Session/track layout of the simulated CD */
    int defectiveDump;   /* dump non-recoverable sectors into given path */
    char *dDumpDir;      /* directory for above */
    char *dDumpPrefix;   /* file name prefix for above */
@@ -607,6 +614,7 @@ typedef struct _CrcBuf
    guint32 *crcbuf;
    guint64 crcSize;
    Bitmap *valid;
+   Bitmap *covered;             /* if not NULL: sectors which have a CRC at all */
    gint32 crcCached;            /* CRC has been retrieved from ECC or previous run */
   
    /* MD5 sum of image sectors */

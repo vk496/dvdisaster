@@ -636,6 +636,7 @@ RS03: try number = 491, reading sector 20418
 RS03: try number = 492, reading sector 20501
 ** All layers tested -> no RS03 data found
 RS03RecognizeImage: no RS03 data found
+...trying RS04
 ...no augmented image detected.
 GetImageFingerprint(16): read & cached
 

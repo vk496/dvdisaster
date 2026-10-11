@@ -669,3 +669,141 @@ RS03f_read_multipass_ecc_partial_success yes
 # Reading tests (adaptive)
 
 RS03f_adaptive_good yes
+
+### RS04f tests
+
+RS04f_ecc_create yes
+RS04f_ecc_create_threads yes
+RS04f_ecc_create_percent yes
+RS04f_ecc_create_roots yes
+RS04f_ecc_create_size yes
+RS04f_ecc_create_low_memory yes
+RS04f_ecc_bad_redundancy yes
+RS04f_ecc_invalid_redundancy yes
+RS04f_ecc_invalid_sector_size yes
+RS04f_ecc_missing_image yes
+RS04f_ecc_tiny_1 yes
+RS04f_ecc_tiny_10 yes
+RS04f_reference_2048 yes
+RS04f_reference_2352 yes
+RS04f_reference_2324 yes
+RS04f_good yes
+RS04f_good_quick yes
+RS04f_no_image yes
+RS04f_missing_data_sectors yes
+RS04f_crc_errors yes
+RS04f_ecc_damaged yes
+RS04f_tag0_lost yes
+RS04f_tag0_invalid yes
+RS04f_tag_newer_version yes
+RS04f_image_truncated yes
+RS04f_image_plus56 yes
+RS04f_ecc_truncated yes
+RS04f_ecc_plus1 yes
+RS04f_wrong_image yes
+RS04f_fix_good yes
+RS04f_fix_correctable yes
+RS04f_fix_correctable_threads yes
+RS04f_fix_low_memory yes
+RS04f_fix_crc_sectors yes
+RS04f_fix_ecc_damaged yes
+RS04f_fix_uncorrectable yes
+RS04f_fix_truncated_image yes
+RS04f_fix_truncated_ecc yes
+RS04f_fix_image_plus56 yes
+RS04f_fix_image_plus56_truncate yes
+RS04f_fix_partial_last_sector yes
+RS04f_audio_create yes
+RS04f_audio_good yes
+RS04f_audio_offset_verify yes
+RS04f_audio_offset_fix yes
+RS04f_audio_offset_fix_negative yes
+RS04f_audio_offset_fix_damaged yes
+RS04f_audio_offset_given yes
+RS04f_audio_offset_wrong yes
+
+### RS04i tests
+
+RS04i_ecc_create yes
+RS04i_ecc_create_threads yes
+RS04i_ecc_create_fill yes
+RS04i_ecc_create_medium_size yes
+RS04i_ecc_create_medium_too_small yes
+RS04i_ecc_recreate yes
+RS04i_ecc_from_rs03 yes
+RS04i_ecc_non_multiple yes
+RS04i_ecc_tiny_1 yes
+RS04i_ecc_tiny_150 yes
+RS04i_reference_check yes
+RS04i_good yes
+RS04i_good_quick yes
+RS04i_missing_data_sectors yes
+RS04i_crc_errors yes
+RS04i_zone_damaged yes
+RS04i_truncated yes
+RS04i_truncated_into_data yes
+RS04i_trailing_garbage yes
+RS04i_tag0_lost yes
+RS04i_tag0_lost_garbage yes
+RS04i_tag0_lost_garbage_assume yes
+RS04i_tags_disagree yes
+RS04i_crc_sectors_lost yes
+RS04i_embedded_ecc_file yes
+RS04i_multisession yes
+RS04i_multisession_gap_scan yes
+RS04i_fix_good yes
+RS04i_fix_correctable yes
+RS04i_fix_crc_sectors yes
+RS04i_fix_zone_damaged yes
+RS04i_fix_uncorrectable yes
+RS04i_fix_truncated yes
+RS04i_fix_truncated_threads yes
+RS04i_fix_trailing_garbage yes
+RS04i_fix_tiny_1 yes
+RS04i_fix_multisession yes
+RS04i_strip_ecc yes
+RS04i_read_good yes
+### Reading tests (codec independent): multi-session media and audio CDs
+
+READ_multisession_read yes
+READ_multisession_scan yes
+READ_multisession_defective yes
+READ_multisession_defective_adaptive yes
+READ_multisession_adaptive yes
+READ_multisession_rs02_refused yes
+READ_multisession_medium_info yes
+READ_audio_read yes
+READ_audio_c2_error yes
+READ_audio_no_c2 yes
+READ_audio_complete yes
+READ_audio_adaptive_refused yes
+READ_cdextra_read yes
+READ_cdextra_cdda yes
+READ_cdextra_medium_info yes
+
+### RS04 reading workflows
+
+RS04r_ms_read yes
+RS04r_ms_read_create_rs01 yes
+RS04r_ms_medium_info yes
+RS04r_ms_verify yes
+RS04r_ms_read_damaged yes
+RS04r_ms_fix yes
+RS04r_ms_fix_partial yes
+RS04r_ms_fix_partial_verify yes
+RS04r_ms_crc_errors yes
+RS04r_ms_crc_fix yes
+RS04r_ms_read_tag0_lost yes
+RS04r_ms_adaptive yes
+RS04r_ms_adaptive_fix yes
+RS04r_ms_adaptive_run_out yes
+RS04r_ecc_file_adaptive yes
+RS04r_ecc_file_adaptive_fix yes
+RS04r_audio_read yes
+RS04r_audio_ecc_create yes
+RS04r_audio_read_offset yes
+RS04r_audio_fix_offset yes
+RS04r_audio_fix_offset_negative yes
+RS04r_cdextra_read yes
+RS04r_cdextra_verify yes
+RS04r_cdextra_fix yes

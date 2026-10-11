@@ -74,10 +74,12 @@ typedef enum
    /* don't use the ascii range 32-127 so that we
       avoid collision with the single-char options */
    MODIFIER_ADAPTIVE_READ = 128,
+   MODIFIER_AUDIO_OFFSET,
    MODIFIER_AUTO_SUFFIX,
    MODIFIER_CACHE_SIZE, 
    MODIFIER_CLV_SPEED,    /* unused */ 
    MODIFIER_CAV_SPEED,    /* unused */
+   MODIFIER_CDDA,
    MODIFIER_CDUMP, 
    MODIFIER_DAO, 
    MODIFIER_DEBUG,
@@ -108,10 +110,13 @@ typedef enum
    MODIFIER_READ_RAW,
    MODIFIER_REGTEST,
    MODIFIER_RESOURCE_FILE,
+   MODIFIER_RS04_MEMORY,
    MODIFIER_SCREEN_SHOT,
+   MODIFIER_SECTOR_SIZE,
    MODIFIER_SET_VERSION,
    MODIFIER_SIMULATE_CD,
    MODIFIER_SIMULATE_DEFECTS,
+   MODIFIER_SIMULATE_TOC,
    MODIFIER_SPEED_WARNING, 
    MODIFIER_SPINUP_DELAY, 
    MODIFIER_TRUNCATE,
@@ -221,12 +226,14 @@ int main(int argc, char *argv[])
       { {"adaptive-read", 0, 0, MODIFIER_ADAPTIVE_READ},
 	{"auto-suffix", 0, 0,  MODIFIER_AUTO_SUFFIX},
 	{"assume", 1, 0, 'a'},
+	{"audio-offset", 1, 0, MODIFIER_AUDIO_OFFSET},
 	{"byteset", 1, 0, MODE_BYTESET },
 	{"copy-sector", 1, 0, MODE_COPY_SECTOR },
 	{"compare-images", 1, 0, MODE_CMP_IMAGES },
 	{"bruteforce-rs03-search", 0, 0, MODIFIER_BRUTEFORCE_RS03_SEARCH },
 	{"cache-size", 1, 0, MODIFIER_CACHE_SIZE },
 	{"cav", 1, 0, MODIFIER_CAV_SPEED },
+	{"cdda", 0, 0, MODIFIER_CDDA },
 	{"cdump", 0, 0, MODIFIER_CDUMP },
 	{"clv", 1, 0, MODIFIER_CLV_SPEED },
 	{"create", 0, 0, 'c'},
@@ -278,14 +285,17 @@ int main(int argc, char *argv[])
 	{"regtest", 0, 0, MODIFIER_REGTEST},
 	{"redundancy", 1, 0, 'n'},
 	{"resource-file", 1, 0, MODIFIER_RESOURCE_FILE},
+	{"rs04-memory", 1, 0, MODIFIER_RS04_MEMORY},
 	{"scan", 2, 0,'s'},
 	{"screen-shot", 0, 0, MODIFIER_SCREEN_SHOT },
+	{"sector-size", 1, 0, MODIFIER_SECTOR_SIZE },
 	{"set-version", 1, 0, MODIFIER_SET_VERSION},
 	{"send-cdb", 1, 0, MODE_SEND_CDB},
 	{"show-header", 1, 0, MODE_SHOW_HEADER},
 	{"show-sector", 1, 0, MODE_SHOW_SECTOR},
 	{"sim-cd", 2, 0, MODIFIER_SIMULATE_CD},
 	{"sim-defects", 1, 0, MODIFIER_SIMULATE_DEFECTS},
+	{"sim-toc", 1, 0, MODIFIER_SIMULATE_TOC},
 	{"speed-warning", 2, 0, MODIFIER_SPEED_WARNING},
 	{"spinup-delay", 1, 0, MODIFIER_SPINUP_DELAY},
 	{"strip", 0, 0, 'z'},
@@ -311,6 +321,8 @@ int main(int argc, char *argv[])
 		      Closure->examineRS02 = TRUE; 
 	           if(strstr(optarg, "rs03") || strstr(optarg, "RS03"))
 		      Closure->examineRS03 = TRUE; 
+	           if(strstr(optarg, "rs04") || strstr(optarg, "RS04"))
+		      Closure->examineRS04 = TRUE; 
 		   break;	       
          case 'c': mode = MODE_SEQUENCE; sequence |= 1<<MODE_CREATE; break;
          case 'd': if(optarg) 
@@ -415,6 +427,10 @@ int main(int argc, char *argv[])
 
          case MODIFIER_ADAPTIVE_READ:
 	   Closure->adaptiveRead = TRUE;
+	   break;
+         case MODIFIER_AUDIO_OFFSET:
+	   Closure->audioOffset = atoi(optarg);
+	   Closure->audioOffsetGiven = TRUE;
 	   break;
          case MODIFIER_AUTO_SUFFIX:
 	   Closure->autoSuffix = TRUE;
@@ -604,8 +620,16 @@ int main(int argc, char *argv[])
          case MODIFIER_READ_RAW:
 	   Closure->readRaw = TRUE;
 	   break;
+         case MODIFIER_CDDA:
+	   Closure->cdda = TRUE;
+	   break;
          case MODIFIER_REGTEST:
 	   Closure->regtestMode = TRUE;
+	   break;
+         case MODIFIER_RS04_MEMORY:
+	   Closure->rs04MemoryMiB = atoi(optarg);
+	   if(Closure->rs04MemoryMiB < 1 || Closure->rs04MemoryMiB > 1024*1024)
+	     Stop(_("--rs04-memory must be in range 1...%d"), 1024*1024);
 	   break;
          case MODIFIER_RESOURCE_FILE:
 	   if(Closure->dotFile)
@@ -627,8 +651,18 @@ int main(int argc, char *argv[])
  	    debug_mode_required = TRUE;
 	 } 
 	    break;
+         case MODIFIER_SECTOR_SIZE:
+	   Closure->sectorBytes = atoi(optarg);
+	   if(Closure->sectorBytes != 2048 && Closure->sectorBytes != 2324 && Closure->sectorBytes != 2352)
+	     Stop(_("--sector-size must be 2048, 2324 or 2352"));
+	   break;
         case MODIFIER_SIMULATE_CD:
 	   if(optarg) Closure->simulateCD = g_strdup(optarg);
+	   debug_mode_required = TRUE;
+	   break;
+        case MODIFIER_SIMULATE_TOC:
+	   g_free(Closure->simulateTOC);
+	   Closure->simulateTOC = g_strdup(optarg);
 	   debug_mode_required = TRUE;
 	   break;
         case MODIFIER_SIMULATE_DEFECTS:
@@ -978,26 +1012,28 @@ int main(int argc, char *argv[])
 	     "  -p, --prefix prefix         - prefix of .iso/.ecc file (default: medium.*  )\n"
 	     "  -i, --image imagefile       - name of image file       (default: medium.iso)\n"
 	     "  -e, --ecc eccfile           - name of parity file      (default: medium.ecc)\n"
-	     "  -o, --ecc-target imagefile  - where to put ecc data in RS03\n"),
+	     "  -o, --ecc-target file|image - where to put ecc data in RS03/RS04\n"),
 	       Closure->device);
 
       PrintCLI("\n");
 
       PrintCLI(_("Tweaking options (see manual before using!)\n"));
-      PrintCLI(_("  -a, --assume x             - assume image is augmented with given codec (RS02 or RS03)\n"));
+      PrintCLI(_("  -a, --assume x             - assume image is augmented with given codec (RS02, RS03 or RS04)\n"));
       PrintCLI(_("  -j, --jump n               - jump n sectors forward after a read error (default: 16)\n"));
       PrintCLI(_("  -m, --method x             - list/select error correction methods (default: RS01)\n"));
       PrintCLI(_("  -n, --redundancy x         - error correction data redundancy\n"
 		 "                               e.g. 20%%, 32r (roots), 200m (MiB), normal, high\n"
-		 "                               for RS02/RS03 augmented images, also accepts a medium size:\n"
+		 "                               for RS02/RS03/RS04 augmented images, also accepts a medium size:\n"
 		 "                               CD, DVD, DVD9, BD, BD2, BDXL3, BDXL4,\n"
 		 "                               BDNODM, BD2NODM, BDXL3NODM, BDXL4NODM,\n"
 		 "                               or a raw sector count\n"));
       PrintCLI(_("  -v, --verbose              - more logs, set env VERBOSE=1 for pre-options parsing logs\n"));
       PrintCLI(_("  -x, --threads n            - use n threads for en-/decoding (if supported by codec)\n"));
       PrintCLI(_("  --adaptive-read            - use optimized strategy for reading damaged media\n"));
+      PrintCLI(_("  --audio-offset n           - RS04: read offset of a CD-DA rip in samples (default: detect)\n"));
       PrintCLI(_("  --auto-suffix              - automatically add .iso and .ecc file suffixes\n"));
       PrintCLI(_("  --cache-size n             - image cache size in MiB during -c mode (default: 32MiB)\n"));
+      PrintCLI(_("  --cdda                     - read CD as 2352 byte sectors (.bin + .cue; automatic for audio CDs)\n"));
       PrintCLI(_("  --dao                      - assume DAO disc; do not trim image end\n"));
       PrintCLI(_("  --defective-dump d         - directory for saving incomplete raw sectors\n"));
 #ifdef SYS_LINUX
@@ -1023,6 +1059,8 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --read-raw                 - performs read in raw mode if possible\n"));
       PrintCLI(_("  --regtest                  - tweaks output for compatibility with regtests\n"));
       PrintCLI(_("  --resource-file p          - get resource file from given path\n"));
+      PrintCLI(_("  --rs04-memory n            - RS04: memory budget in MiB for en-/decoding (default: 4096)\n"));
+      PrintCLI(_("  --sector-size n            - RS04: sector size of the data, 2048, 2324 or 2352 (ecc files)\n"));
       PrintCLI(_("  --speed-warning n          - print warning if speed changes by more than n percent\n"));
       PrintCLI(_("  --spinup-delay n           - wait n seconds for drive to spin up\n"));
       PrintCLI(_("  --version                  - print version and some configuration info\n"));

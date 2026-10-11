@@ -15,7 +15,7 @@ export REGTEST_RUNNER=1
 # Run all codec test scripts in parallel
 pids=()
 scripts=()
-for i in rs*.bash; do
+for i in rs*.bash reading.bash; do
    ( DVDISASTER_SCSI_SIMULATED_NODELAY=1 ./$i ) &
    pids+=($!)
    scripts+=($i)

@@ -1,0 +1,1005 @@
+\section{The RS04 codec}
+\label{rs04}
+\sloppy
+
+This section describes the data format of the dvdisaster RS04 codec.
+{\bf Status: draft.} dvdisaster implements RS04 as an experimental codec
+(command line only); the format may still change until this section is
+declared final (see the changelog).
+
+\medskip
+
+RS04 keeps the basic idea of RS03 -- the medium is divided into layers and
+error correction block (``codeword'') $i$ consists of sector $i$ of every
+layer -- but changes almost everything else:
+
+\begin{itemize}
+\item The Reed-Solomon code works over GF($2^{16}$) instead of GF($2^8$).
+  A codeword has up to 65535 symbols instead of 255, so the number of layers
+  $n$ can be much larger and each codeword is spread over many more places on
+  the medium. Against scattered damage this brings the tolerated loss close
+  to the theoretical limit, while damage at the outer edge is handled as well
+  as by RS03 (section \ref{rs04-rationale}).
+\item The layout is {\em self-describing}. Small {\em tag sectors} are
+  replicated throughout the error correction data. Each of them describes the
+  complete layout, so a single readable tag is enough. No table of medium
+  sizes and no brute-force search are needed, and the augmented image may
+  have any size.
+\item Several RS04 sets may exist on one medium (one per session of a
+  multi-session disc). All positions are relative to the start of the set.
+\item Besides 2048-byte sectors, Mode 2 Form 2 sectors (2324 bytes) and
+  CD-DA audio sectors (2352 bytes) can be protected. Audio extraction with
+  a different drive read offset is handled by an offset search.
+\item The error correction file (``ecc file'') is byte-for-byte the same
+  data that is appended to the image in the augmented case.
+\end{itemize}
+
+Everything in this section is normative unless it is marked as
+{\em recommended} or {\em informative}. Recommended procedures describe
+what dvdisaster does; other encoders may choose differently, and decoders
+must accept every set which satisfies the validity rules.
+
+\subsection{Conventions}
+\label{rs04-conventions}
+
+\begin{itemize}
+\item A {\em sector} is a block of $B$ bytes, where $B$ is the sector size of
+  the set (section \ref{rs04-formats}). Positions and counts are given in
+  sectors and start at 0.
+\item All integers on disc are stored {\em little-endian}, independent of the
+  host. Big-endian hosts must convert them after reading and before writing
+  (as dvdisaster does for RS03 with {\tt SwapEccHeaderBytes()}).
+\item $\lceil x \rceil$ and $\lfloor x \rfloor$ round up and down.
+  ${\rm NextPow2}(x)$ is the smallest power of two $\ge x$
+  (${\rm NextPow2}(1)=1$), ${\rm Pow2Floor}(x)$ the largest power of two
+  $\le x$ for $x \ge 1$, and ${\rm Pow2Floor}(0)=1$.
+\item {\em Crc32} is the function {\tt Crc32()} of dvdisaster which is also
+  used by RS01--RS03: reflected polynomial {\tt 0xEDB88320}, initial value
+  {\tt 0xFFFFFFFF}, {\em no} final inversion. It equals the zlib
+  {\tt crc32()} value XOR {\tt 0xFFFFFFFF}. Check values:
+  Crc32(``123456789'') = {\tt 0x340BC6D9}; 2048 zero bytes give
+  {\tt 0x0E174561}, 2324 zero bytes {\tt 0x2F6ED567} and 2352 zero bytes
+  {\tt 0x416831C0}. Crc32 values are stored as little-endian 32-bit integers.
+\item {\em MD5} is the message digest of RFC 1321.
+\end{itemize}
+
+\subsection{Terminology}
+\label{rs04-terms}
+
+An {\em RS04 set} consists of the protected {\em data sectors} and the
+{\em added zone} which RS04 creates. The added zone holds tag sectors, CRC
+sectors and parity sectors. The following symbols are used throughout this
+section:
+
+\medskip
+\begin{tabular}{|l|p{12.5cm}|}
+\hline
+$B$ & sector size: 2048, 2324 or 2352 bytes \\
+$B_s$ & shard size $64 \lceil B/64 \rceil$: 2048 or 2368 bytes \\
+$S$ & number of data sectors, $S = \lceil dataBytes / B \rceil \ge 1$ \\
+$c$ & number of CRC sectors, $c = \lceil S / 512 \rceil$ \\
+$D$ & number of protected sectors, $D = S + c$ \\
+$L$ & layer size (sectors per layer) $\ge 1$ \\
+$k$ & number of data layers = original symbols per codeword; $kL \ge D$ \\
+$m$ & number of ecc layers = parity symbols per codeword; $1 \le m \le k$ \\
+$n$ & codeword length $n = k + m$ \\
+$M$ & ${\rm NextPow2}(m)$; the code requires $M + k \le 65536$ \\
+$T$ & tag interval: one tag sector every $T$ sectors of the added zone \\
+$Q$ & number of CRC and parity sectors, $Q = c + mL$ \\
+$A$ & size of the added zone, $A = Q + \lceil Q / (T-1) \rceil$ \\
+\hline
+\end{tabular}
+\medskip
+
+The stored parameters are $B$, $dataBytes$, $L$, $k$, $m$ and $T$; all other
+values are derived from them.
+
+{\footnotesize
+\begin{verbatim}
+relative position 0                  S                           S+A
+|<--------- data sectors -------->|<------- added zone ------->|
+| D_0 D_1 ...               D_S-1 | t C..C P..P t P..P t P..P  |
+   t = tag (every T sectors), C = CRC sector, P = parity sector
+
+logical view       column 0    column 1   ...  column L-1
+  data layer 0     X_0         X_1             X_L-1
+  data layer 1     X_L         X_L+1           X_2L-1
+  ...
+  data layer k-1   X_(k-1)L    ...             X_kL-1
+  ecc layer 0      P_0         P_1             P_L-1
+  ...
+  ecc layer m-1    P_(m-1)L    ...             P_mL-1
+
+X_t = D_t (t < S), C_(t-S) (S <= t < D), zero sector (D <= t < kL)
+codeword i = column i
+\end{verbatim}
+}
+
+\subsection{Sector formats}
+\label{rs04-formats}
+
+\begin{tabular}{|r|p{7.6cm}|r|r|}
+\hline
+$B$ & Contents of a data sector & $B_s$ & tail $r$\\
+\hline
+2048 & user data of Mode 1 and Mode 2 Form 1 CD sectors, DVD and BD
+       sectors (ISO and UDF images) & 2048 & 0 \\
+2324 & user data of Mode 2 Form 2 CD sectors (e.g. VCD/SVCD video) & 2368 & 20\\
+2352 & CD-DA audio: 588 stereo samples of 4 bytes each (16-bit signed
+       little-endian left channel, then right channel), as returned by
+       READ CD and stored in {\tt .bin} rips & 2368 & 48 \\
+\hline
+\end{tabular}
+\medskip
+
+All sectors of a set -- data, tag, CRC and parity sectors -- have exactly
+$B$ bytes. Augmented images and ecc files store them back-to-back without
+any per-sector framing (no sync pattern, header, subheader or EDC/ECC of
+the physical CD sector). The sector size is stored in every tag.
+
+\paragraph{Last data sector.} The data is $dataBytes$ bytes long. If
+$dataBytes$ is not a multiple of $B$, the last data sector is padded with
+zero bytes to $B$ bytes for encoding and for its Crc32. The padding is not
+part of the data; it is not covered by the MD5 sum. Augmented images
+require $dataBytes = S \cdot B$, otherwise the added zone would not start on
+a sector boundary. Ecc files may protect data of any length, e.g. arbitrary
+files.
+
+\paragraph{Missing sectors in image files.}
+\label{rs04-missing}
+dvdisaster stores a sector which could not be read as its {\em dead sector
+marker}: 2048 bytes starting with the text {\tt dvdisaster dead sector
+marker} (the marker used for RS01--RS03 images), or 2048 copies of a fill
+byte if the user requested one (e.g.\ zero for images made by other
+tools). For $B > 2048$ a missing sector is this 2048-byte marker followed by
+$B - 2048$ zero bytes (fill bytes if a fill byte is used). Readers recognise
+a missing sector by its first 2048 bytes only. A missing sector is an
+erasure; its Crc32 is meaningless.
+
+\paragraph{Whole-disc images (informative).} dvdisaster reads a
+multi-session medium as one image in which every sector is at its absolute
+position. The sectors between the sessions (lead-out, lead-in and pregap) can
+not be read; they are stored as zero-filled $B$-byte sectors. They belong to
+no set (section \ref{rs04-sessions}) and are not erasures.
+
+\subsubsection{Sector to shard mapping}
+\label{rs04-shard}
+
+The Reed-Solomon code (section \ref{rs04-code}) works on {\em shards} of
+$B_s$ bytes in the buffer format of Leopard-RS: the shard is a sequence of
+64-byte blocks, and byte $u$ ($0 \le u < 32$) of block $b$ is the low byte,
+byte $u+32$ the high byte of the 16-bit symbol $32b+u$. A sector is turned
+into a shard as follows, with $F = 64 \lfloor B/64 \rfloor$ and $r = B - F$:
+
+\begin{itemize}
+\item shard bytes $0 \ldots F-1$ = sector bytes $0 \ldots F-1$;
+\item shard bytes $F \ldots F + r/2 - 1$ = sector bytes $F \ldots F + r/2 - 1$
+  (low bytes of the first $r/2$ symbols of the last block);
+\item shard bytes $F+32 \ldots F + 32 + r/2 - 1$ = sector bytes
+  $F + r/2 \ldots B-1$ (high bytes of the same symbols);
+\item all other shard bytes are zero.
+\end{itemize}
+
+For $B = 2048$ the shard is the sector itself. For a parity shard the bytes
+which are zero in this mapping are always zero: the symbols they belong to
+are zero in every original shard and the code is linear. Therefore a parity
+shard is turned back into a $B$-byte parity sector by the inverse mapping,
+and no padding is ever stored. Decoders may check that the unused shard
+bytes of decoded shards are zero.
+
+{\em Note:} simply appending zero bytes to the sector would not work for
+$B \ne 2048$, since the parity would then have non-zero high bytes for the
+partially used symbols of the last block (20 resp.\ 24 extra bytes) which do
+not fit into a $B$-byte parity sector.
+
+\subsection{The Reed-Solomon code}
+\label{rs04-code}
+
+\subsubsection{Field and symbols}
+
+RS04 computes in GF($2^{16}$) = GF(2)$[z] / (p(z))$ with
+$p(z) = z^{16} + z^5 + z^3 + z^2 + 1$ ({\tt 0x1002D}). Writing a field
+element as a 16-bit integer whose bit $b$ is the coefficient of $z^b$ gives
+its {\em polynomial representation}. The symbols stored on disc use a
+different representation, based on the following {\em Cantor basis}
+$\beta_0, \ldots, \beta_{15}$ (given in polynomial representation):
+
+\medskip
+\begin{center}
+\begin{tabular}{|c|c|c|c|c|c|c|c|}
+\hline
+$\beta_0$ & $\beta_1$ & $\beta_2$ & $\beta_3$ & $\beta_4$ & $\beta_5$ & $\beta_6$ & $\beta_7$ \\
+\tt 0001 & \tt ACCA & \tt 3C0E & \tt 163E & \tt C582 & \tt ED2E & \tt 914C & \tt 4012 \\
+\hline
+$\beta_8$ & $\beta_9$ & $\beta_{10}$ & $\beta_{11}$ & $\beta_{12}$ & $\beta_{13}$ & $\beta_{14}$ & $\beta_{15}$ \\
+\tt 6C98 & \tt 10D8 & \tt 6A72 & \tt B900 & \tt FDB8 & \tt FB34 & \tt FF38 & \tt 991E \\
+\hline
+\end{tabular}
+\end{center}
+\medskip
+
+The basis satisfies $\beta_0 = 1$ and $\beta_i^2 + \beta_i = \beta_{i-1}$ for
+$1 \le i \le 15$, which is a useful check for an implementation.
+A stored 16-bit symbol value $x = \sum_b x_b 2^b$ denotes the field element
+
+\[ \langle x \rangle = \sum_{b=0}^{15} x_b\,\beta_b . \]
+
+Addition of symbols is therefore a bitwise XOR of their values, while
+multiplication has to be carried out on $\langle\cdot\rangle$. Leopard-RS
+does this with logarithm tables taken with respect to the generator $z$
+({\tt 0x0002} in polynomial representation), indexed directly by the
+stored symbol value. Examples (right hand sides in polynomial
+representation): $\langle 1 \rangle = {\tt 0001}$,
+$\langle 2 \rangle = {\tt ACCA}$, $\langle 3 \rangle = {\tt ACCB}$,
+$\langle 4 \rangle = {\tt 3C0E}$, and
+$\langle 2 \rangle \cdot \langle 3 \rangle = \langle 1 \rangle$.
+
+\subsubsection{Codewords}
+\label{rs04-codeword}
+
+Let $k \ge 1$, $1 \le m \le k$, $M = {\rm NextPow2}(m)$ and $M + k \le 65536$.
+The evaluation points are $\omega_j = \langle j \rangle$ for
+$0 \le j < M + k$; they are pairwise different. An RS04 codeword with the
+original symbols $d_0, \ldots, d_{k-1}$ is the unique vector
+$(c_0, \ldots, c_{M+k-1})$ of symbols with
+
+\[ c_{M+i} = d_i \quad (0 \le i < k) \qquad \mbox{and} \qquad
+   \sum_{j=0}^{M+k-1} \langle c_j \rangle \, \omega_j^{\,t} = 0
+   \quad (0 \le t < M). \qquad (1)\]
+
+For given $d_i$, (1) is a linear system for $c_0, \ldots, c_{M-1}$ whose
+matrix $(\omega_j^{\,t})$ is a Vandermonde matrix of distinct points, so
+the solution exists and is unique. The {\em parity symbols} are
+$c_0, \ldots, c_{m-1}$; $c_j$ is stored in ecc layer $j$. The symbols
+$c_m, \ldots, c_{M-1}$ are never stored.
+
+\medskip
+
+The equations (1) define a generalized Reed-Solomon code of length $M+k$ and
+dimension $k$ (the dual of the code of polynomials of degree $< M$ evaluated
+at $\omega_j$). It is MDS, and so is the stored code of length $n = k + m$
+obtained by omitting $c_m, \ldots, c_{M-1}$: {\bf any $k$ of the $n$ stored
+symbols determine the codeword}, i.e. up to $m$ erasures per codeword can
+be corrected.
+
+\paragraph{Special cases.} For $m = 1$ ($M = 1$), (1) reduces to
+$c_0 = d_0 \oplus d_1 \oplus \cdots \oplus d_{k-1}$ (XOR parity). For
+$k = 1$, $m$ must be 1 and the parity is a copy of the original. Both
+cases need no special treatment; they follow from (1).
+
+\paragraph{Limits.} The limit is $M + k \le 65536$ and {\em not}
+$n \le 65536$: $k = 49152, m = 16384$ is valid, but
+$k = 49153, m = 16383$ is not. $k \le 65535$ follows.
+
+\paragraph{Shards.} The code is applied to shards symbol by symbol: for
+every symbol index $s$ ($0 \le s < B_s/2$), symbol $s$ of the $k$ original
+shards and of the $m$ parity shards of a codeword satisfy (1).
+
+\subsubsection{Computing the code (informative)}
+
+The code (1) is exactly the GF($2^{16}$) code of Leopard-RS by Christopher
+A.\ Taylor (\url{https://github.com/catid/leopard}, file
+{\tt LeopardFF16.cpp} of the commit of 2024-03-23
+
+\centerline{\tt 6e5725ebdf9da4370b0bcc4f70fa8eb66f4e6198}
+
+which is the reference for bit-exactness). Leopard computes it with the
+additive FFT over the novel polynomial basis of Lin, Chung and Han:
+
+\begin{itemize}
+\item S.-J. Lin, W.-H. Chung, Y. S. Han: {\em Novel polynomial basis and its
+  application to Reed-Solomon erasure codes}, FOCS 2014.
+\item S.-J. Lin, T. Y. Al-Naffouri, Y. S. Han, W.-H. Chung: {\em Novel
+  polynomial basis with fast Fourier transform and its application to
+  Reed-Solomon erasure codes}, IEEE Trans. Inf. Theory 62(11), 2016.
+\end{itemize}
+
+The encoder takes the originals in chunks of $M$, computes the inverse FFT
+of each chunk with skew offset $M(i+1)$ for chunk $i$ (zero-padding the last
+chunk), XORs the results and applies a forward FFT of size $M$; output $j$
+is $c_j$. The decoder evaluates an error locator with a Walsh-Hadamard
+transform modulo 65535 and needs work space for
+$N = {\rm NextPow2}(M + k)$ shards (the {\em FFT size}). A skew factor
+logarithm of 65535 means ``multiply by zero'' (skip). The log/exp tables,
+skew factors and Walsh-Hadamard table are built exactly as in
+{\tt LeopardFF16.cpp}.
+
+\medskip
+
+Usable implementations are {\tt src/rs04-ff16.c} (a C port of the FF16 code
+path), Leopard-RS built with GF($2^{16}$) only, and the high-rate engine of
+the Rust crate {\tt reed-solomon-simd}. {\bf Caution:} the stock
+{\tt leo\_encode()} switches to GF($2^8$) when
+${\rm NextPow2}(M+k) \le 256$ and then produces different parity (except for
+$m = 1$ and $k = 1$); RS04 always uses GF($2^{16}$). Any other method, e.g.
+solving (1) directly, gives the same result. {\tt contrib/rs04-reference.py}
+is a slow reference which does exactly that.
+
+\paragraph{Example.} For a single symbol column with $k = 3$, $m = 2$ and
+originals {\tt 0001 0002 0003}, the parity symbols are {\tt 000C 000C}.
+With $k = 5$, $m = 3$ ($M = 4$) and originals {\tt 0001}\ldots{\tt 0005}
+they are {\tt 000E 0001 000C}. With $m = 1$ the parity of
+{\tt 0001 0002 0003} is {\tt 0000}.
+
+\subsection{Layout of an RS04 set}
+\label{rs04-layout}
+
+\subsubsection{Codewords}
+
+The {\em original sectors} $X_0, \ldots, X_{kL-1}$ are the data sectors,
+followed by the CRC sectors, followed by zero sectors:
+
+\[ X_t = \left\{ \begin{array}{ll}
+  D_t & 0 \le t < S \\
+  C_{t-S} & S \le t < D \\
+  \mbox{all-zero sector} & D \le t < kL
+  \end{array} \right. \]
+
+The zero sectors are virtual: they are never stored and never read, and
+decoders treat them as known (not as erasures). $kL - D$ may exceed $L-1$,
+i.e. complete {\em padding layers} are allowed; they make redundancies above
+100\% possible in spite of $m \le k$.
+
+\medskip
+
+{\bf Codeword $i$} ($0 \le i < L$) has the originals
+$d_j = X_{jL+i}$ ($0 \le j < k$) and the parity sectors
+$\Pi_{jL+i} = c_j$ ($0 \le j < m$), computed from the shards of these
+sectors as described in sections \ref{rs04-shard} and \ref{rs04-code}.
+Thus data layer $j$ consists of the sectors $jL \ldots jL+L-1$ of the data,
+and ecc layer $j$ of the parity sectors $\Pi_{jL} \ldots \Pi_{jL+L-1}$.
+This is the RS03 rule with a larger number of layers; there is no
+permutation inside layers.
+
+\subsubsection{The added zone}
+\label{rs04-zone}
+
+The added zone stores the $Q = c + mL$ {\em payload sectors}
+$C_0, \ldots, C_{c-1}, \Pi_0, \ldots, \Pi_{mL-1}$ (in this order, payload
+index $q = 0 \ldots Q-1$) and the tag sectors. Sector $a$ of the added zone
+($0 \le a < A$) is
+
+\begin{itemize}
+\item tag sector number $g = a / T$ if $a \bmod T = 0$;
+\item otherwise payload sector $q = a - \lfloor a/T \rfloor - 1$.
+\end{itemize}
+
+Conversely, payload sector $q$ is stored at
+$a = q + \lfloor q/(T-1) \rfloor + 1$. There are $\lceil Q/(T-1) \rceil$
+tags and $A = Q + \lceil Q/(T-1) \rceil$; the last group may be shorter
+than $T$ sectors, but every tag is followed by at least one payload sector.
+Sector $a$ of the added zone has the {\em relative position} $S + a$.
+
+\medskip
+
+Consequences: the first sector of the added zone, directly behind the data,
+is a tag; any $T$ consecutive sectors of the added zone contain a tag; the
+last $T$ sectors of the added zone contain a tag.
+
+\subsubsection{Augmented images and ecc files}
+
+An {\bf augmented image} consists of the $S$ data sectors followed by the
+$A$ sectors of the added zone; it is $S + A$ sectors long. The data sectors
+are unchanged, so the image remains usable (e.g. mountable).
+
+\medskip
+
+An {\bf ecc file} is the added zone alone: $A \cdot B$ bytes, sector $a$ at
+byte offset $a \cdot B$. Its contents are identical to the added zone of the
+augmented image, so concatenating the data and the ecc file yields the
+augmented image and vice versa. There is no separate ecc header; the first
+sector of the file is a tag. A tag begins with the same 16 bytes
+{\tt *dvdisaster*RS04} that an {\tt EccHeader} with method ``RS04'' would
+have, so programs which look for the ecc header cookie at the start of a
+file recognise the method. All positions stored in tags are relative to the
+set start and therefore the same in both cases.
+
+\subsubsection{Example}
+
+The format test vector F1 (section \ref{rs04-vectors}) has $B = 2048$,
+$dataBytes = 81820$ (so $S = 40$, the last sector holds 1948 bytes), $c = 1$,
+$D = 41$, $L = 7$, $k = 6$, $m = 3$ and $T = 8$. The originals are
+$X_0 \ldots X_{39} = D_0 \ldots D_{39}$, $X_{40} = C_0$ and the zero sector
+$X_{41}$. $Q = 22$, there are 4 tags and $A = 26$:
+
+\begin{center}
+\begin{tabular}{|l|l|}
+\hline
+added zone sector $a$ (relative position $40+a$) & contents \\
+\hline
+0 & tag 0 (covers $C_0, \Pi_0 \ldots \Pi_5$) \\
+1 & $C_0$ \\
+2 \ldots 7 & $\Pi_0 \ldots \Pi_5$ \\
+8 & tag 1 (covers $\Pi_6 \ldots \Pi_{12}$) \\
+9 \ldots 15 & $\Pi_6 \ldots \Pi_{12}$ \\
+16 & tag 2 (covers $\Pi_{13} \ldots \Pi_{19}$) \\
+17 \ldots 23 & $\Pi_{13} \ldots \Pi_{19}$ \\
+24 & tag 3 (covers $\Pi_{20}$) \\
+25 & $\Pi_{20}$ \\
+\hline
+\end{tabular}
+\end{center}
+
+Codeword 3 consists of the data sectors 3, 10, 17, 24, 31, 38 and the parity
+sectors $\Pi_3, \Pi_{10}, \Pi_{17}$ at the relative positions 45, 53 and 61.
+Codeword 5 contains $X_{40} = C_0$, and codeword 6 contains the zero sector
+$X_{41}$ as its last original.
+
+\subsection{CRC sectors}
+\label{rs04-crc}
+
+CRC sector $C_j$ ($0 \le j < c$) holds 512 little-endian 32-bit values;
+value $u$ (bytes $4u \ldots 4u+3$) is the Crc32 of data sector
+$D_{512j+u}$ if $512j + u < S$ and zero otherwise. The Crc32 is taken over
+the $B$ bytes of the sector as it is encoded, i.e.\ including the zero
+padding of the last data sector. Bytes $2048 \ldots B-1$ of a CRC sector are
+zero.
+
+\medskip
+
+CRC sectors are originals of the code, so lost CRC sectors are recovered by
+the error correction like data sectors (as with the RS03 CRC layer). They
+have no header because every tag describes the layout, and their integrity
+is protected by the Crc32 values in the tags.
+
+\subsection{Tag sectors}
+\label{rs04-tags}
+
+The byte layout of a tag is given in appendix \ref{rs04-tag}. A tag holds
+the complete layout of the set and the Crc32 of the payload sectors that
+follow it: tag $g$ covers the payload sectors
+$g(T-1) \le q < \min(Q, (g+1)(T-1))$ and stores the Crc32 of payload sector
+$q$ in $crc[q - g(T-1)]$; unused entries are zero. Tags are not part of
+the code. They are protected by replication instead: all tags of a set are
+identical except for $ownPosition$, $selfCRC$ and $crc[\,]$.
+
+\medskip
+
+A sector is a {\bf valid tag} if all of the following holds; otherwise it
+is not a tag (it may be a data or parity sector which looks similar by
+chance):
+
+\begin{enumerate}
+\item bytes 0--15 are {\tt *dvdisaster*RS04};
+\item $selfCRC$ equals the Crc32 of bytes 0--2047 of the sector with bytes
+  28--31 set to zero;
+\item $sectorBytes \in \{2048, 2324, 2352\}$ and $tagInterval$ is a power
+  of two with $2 \le T \le 256$;
+\item $dataBytes \ge 1$, $L \ge 1$, $1 \le m \le k$,
+  ${\rm NextPow2}(m) + k \le 65536$ and $kL \ge D$;
+\item $ownPosition \ge S$, $(ownPosition - S) \bmod T = 0$ and
+  $ownPosition - S < A$.
+\end{enumerate}
+
+If 1 and 2 hold but $version$ or $layoutVariant$ is not supported, the tag
+belongs to a set of a newer format; see section \ref{rs04-versions}.
+Readers should use the values held by the majority of the valid tags of a
+set if tags disagree.
+
+\subsection{Checksums}
+\label{rs04-checksums}
+
+\begin{tabular}{|p{2.8cm}|p{2.2cm}|p{4.5cm}|p{4.5cm}|}
+\hline
+Checksum & Stored in & Covers & Purpose \\
+\hline
+Crc32 per data sector & CRC sectors & the $B$ bytes of $D_t$ (last sector
+zero-padded) & detect damaged data sectors (erasures); audio read offset
+detection \\
+\hline
+Crc32 per payload sector & tags & the $B$ bytes of each CRC and parity
+sector & detect damaged CRC and parity sectors (erasures) \\
+\hline
+$selfCRC$ & each tag & bytes 0--2047 of the tag with $selfCRC = 0$ &
+recognise valid tags \\
+\hline
+$dataMD5$ & each tag & exactly the $dataBytes$ bytes of data, without
+padding & end-to-end check after repair; matching image and ecc file \\
+\hline
+\end{tabular}
+\medskip
+
+Zero sectors and the parity symbols $c_m \ldots c_{M-1}$ are not stored and
+have no checksum. Unlike RS01/RS02 there is no MD5 sum over the
+error correction data: the per-sector Crc32 values in the tags check every
+CRC and parity sector individually and also tell {\em which} sector is
+damaged, which a single MD5 sum cannot.
+
+\subsection{Choosing the encoding parameters (recommended)}
+\label{rs04-params}
+
+Any parameters which satisfy the validity rules of section \ref{rs04-tags}
+can be decoded. dvdisaster chooses them as follows.
+
+\paragraph{1. Parity budget $E$.}
+\begin{itemize}
+\item {\em Ecc files} and explicitly requested redundancy:
+  $E = \lfloor \rho D + 1/2 \rfloor$ (rounded half up) for the requested
+  redundancy $\rho$ (parity sectors per protected sector). The size of the
+  set is $C_{tot} = D + E$. dvdisaster takes $\rho$ from the option
+  {\tt -n}: $p${\tt \%} gives $\rho = p/100$, $r${\tt r} (``roots'' as for
+  RS03; also without the suffix) $\rho = r/(255-r)$, {\tt normal} (the
+  default) $32/223$ and {\tt high} $64/191$. $x${\tt m} chooses the
+  largest $\rho$ for which the ecc file has at most $x$ MiB.
+\item {\em Augmented images (default): fill the medium.} Let $C$ be the
+  number of sectors available for the whole set: the capacity of the target
+  medium (as reported by the drive, from the medium size table also used by
+  RS02/RS03, or given by the user), or for a further session of a
+  multi-session disc the free space of that session. With $Z = C - S$ and
+  $T_0 = {\rm TagInterval}(Z)$ the largest number of payload sectors that
+  fits is $Q_{max} = Z - \lceil Z / T_0 \rceil$, and
+  $E = Q_{max} - c$. $C_{tot} = C$.
+\item In both cases $E$ is capped at $2D$ (200\% redundancy, as RS03).
+  Encoding is refused if $E < 1$ or $E/(D+E) < 8/255$ (less than the 8
+  roots RS03 requires as a minimum); a warning is given if $E < D/5$
+  (less than 20\% redundancy).
+\end{itemize}
+
+\paragraph{2. FFT size limit $N$.}
+\[ N = \min\left(65536,\ {\rm Pow2Floor}\left(\left\lfloor
+    \frac{C_{tot}}{32} \right\rfloor\right),\ {\rm Pow2Floor}\left(
+    \left\lfloor\frac{R}{128 \cdot B_s}\right\rfloor\right)\right) \]
+where $R$ is the memory budget of the repair (default 4 GiB, dvdisaster
+option {\tt --rs04-memory}). A repair pass
+holds 128 consecutive codewords of up to $N$ shards each in memory (with
+fewer codewords per pass a hard disk seeks too much); with 4 GiB this gives
+$N = 16384$ for DVD and BD. The $C_{tot}/32$ term keeps $L \ge 32$ on small media
+($N = 8192$ for CD). The user may override $N$. If no geometry satisfies
+step 3 with this $N$ (only for very small sets), $N = 65536$ is used.
+
+\paragraph{3. Geometry.} $L$ is the smallest integer
+$L \ge \min(32, D, E)$ for which
+\[ m = \lfloor E / L \rfloor \ge 1, \quad
+   k = \max(\lceil D/L \rceil, m) \quad \mbox{and} \quad
+   {\rm NextPow2}(m) + k \le N . \]
+The left side of the last condition does not increase with $L$, so $L$ can
+be found by bisection. If no $L \le E$ qualifies, encoding is refused.
+$k > \lceil D/L \rceil$ (padding layers) only happens for redundancies above
+100\%. The smallest $L$ gives the longest codewords for the memory budget,
+and at most $L-1$ sectors of the budget remain unused.
+
+\paragraph{4. Tag interval.} $T = {\rm TagInterval}(Q)$ with $Q = c + mL$,
+where
+\[ {\rm TagInterval}(x) = \left\{ \begin{array}{ll} 256 & x \ge 4080 \\
+   \max(2, {\rm Pow2Floor}(\lfloor x/16 \rfloor)) & \mbox{otherwise}
+   \end{array}\right. \]
+This gives every set at least 16 tags (or $Q$ tags if $Q < 32$); large sets
+spend $1/256$ of the added zone on tags. When filling a medium, $T = T_0$ is
+used instead if the set would not fit with $T$.
+
+\paragraph{5. Set ID.} 8 random bytes, newly chosen for every encoding run.
+
+\medskip
+
+{\bf Rationale for $L \ge 32$:} DVD drives lose data in units of 16 sectors
+(one ECC block) and BD drives in units of 32 sectors (one cluster). With
+$L \ge 32$ such a unit costs each codeword at most one symbol.
+
+\medskip
+
+{\bf Examples} (produced by {\tt contrib/rs04-reference.py}; ``fill'' uses
+the medium sizes of table \ref{layout-size-table}):
+
+\medskip
+{\footnotesize
+\begin{tabular}{|l|r|r|r|r|r|r|r|r|}
+\hline
+Case & $S$ & $L$ & $k$ & $m$ & $T$ & FFT size & set size & parity/$D$ \\
+\hline
+CD, fill & 300000 & 49 & 6135 & 1196 & 256 & 8192 & 359423 & 19.5\% \\
+DVD, fill & 2000000 & 142 & 14113 & 2042 & 256 & 16384 & 2295024 & 14.5\% \\
+DVD-9, fill & 3500000 & 286 & 12262 & 2315 & 256 & 16384 & 4171550 & 18.9\% \\
+BD-25, fill & 10000000 & 816 & 12279 & 2205 & 256 & 16384 & 11825945 & 18.0\% \\
+CD, fill, tiny image & 100 & 32 & 6 & 6 & 8 & 16 & 321 & 190\% \\
+ecc file, $\rho = 32/223$ & 2000000 & 141 & 14213 & 2039 & 256 & 16384 & 2292549 & 14.3\% \\
+CD-DA ecc file, 20\% & 330000 & 54 & 6124 & 1224 & 256 & 8192 & 397003 & 20.0\% \\
+ecc file, 50\%, 10 sectors & 10 & 6 & 2 & 1 & 2 & 4 & 24 & 54.5\% \\
+\hline
+\end{tabular}
+}
+
+\subsection{Multi-session discs}
+\label{rs04-sessions}
+
+Each session of a multi-session disc may carry its own RS04 set, which
+protects the sectors of that session only. The set is created from the
+session image (as written by the burning software, e.g. the image created
+for {\tt growisofs -M}) without knowing its absolute position on the disc:
+all positions in the set are relative to its first data sector. When the
+whole disc is read, the absolute start of a set is
+
+\[ start = (\mbox{absolute LBA of a tag}) - ownPosition , \]
+
+and the set occupies the absolute sectors $start \ldots start + S + A - 1$.
+Gaps between sessions (lead-out, lead-in) belong to no set. An ISO 9660
+file system in a later session may refer to files of earlier sessions;
+those sectors are protected by the set of the session they are stored in.
+
+\medskip
+
+{\em CD Extra} (an audio session followed by a data session) is covered by
+the same rules: the audio session is protected by an ecc file with
+$B = 2352$ (section \ref{rs04-audio}), which may be stored as a file in the
+data session, and the data session may carry its own augmented set.
+
+\subsection{Recognising RS04 data}
+\label{rs04-recognize}
+
+\paragraph{Augmented images and media.} A reader looks for valid tags in
+the following order and stops as soon as it has found what it needs:
+
+\begin{enumerate}
+\item If the image (or, on a multi-session medium, a session) starts with an
+  ISO 9660 file system of $V$ sectors, the sectors $V$ and $V+150$ relative
+  to its start (behind the file system, and behind the 150 sectors of
+  padding added by some mastering programs). For an image which was not
+  padded after the file system, sector $V$ is tag 0.
+\item The last 256 sectors of the image or session. They contain a tag if
+  the image ends with the complete added zone (since $T \le 256$).
+\item All sectors, from the end towards the start (the added zone is at the
+  end of a set).
+\end{enumerate}
+
+Every valid tag yields a {\em candidate set} $(setID, start)$ with
+$start = position - ownPosition$; candidates with $start < 0$ are
+discarded. Tags with equal $setID$ and $start$ belong to the same set. A
+set may extend beyond the end of the image (a truncated image is repaired by
+recovering the missing sectors). The size of the complete image is
+$start + S + A$; dvdisaster uses it as the expected image size when reading
+a medium.
+
+\medskip
+
+To enumerate all sets of a multi-session disc, the reader applies steps 1
+and 2 to every session in the table of contents, or step 3 to a disc image
+without table of contents, and reports every candidate set.
+
+\medskip
+
+\paragraph{Stale and embedded sets.} Candidates may also come from tags of
+an earlier recording on rewritable media, or from an ecc file or augmented
+image which is stored as a {\em file} inside the protected data. A reader
+confirms a candidate by comparing up to 16 readable data sectors with their
+Crc32 values from readable CRC sectors. A candidate whose compared sectors
+all mismatch is rejected. If confirmed candidates overlap, the one with more
+matching sectors wins, then the one with more valid tags. A candidate
+without readable data or CRC sectors is kept but reported as unconfirmed.
+
+{\em Informative:} dvdisaster applies steps 1 and 2 to every image it
+opens. Step 3 is applied to the parts of an image file which are not covered
+by the sets found so far (gaps between and before sessions), and to a whole
+image without any set found only on request (option {\tt -a RS04}), since
+reading every sector of every opened image would be too slow. A set whose
+tag 0 is lost and whose image has more than 256 sectors appended is
+therefore only found with {\tt -a RS04}. On a medium, steps 1 and 2 are used,
+step 2 also for the end of every session in the table of contents.
+To confirm a candidate, dvdisaster tries up to 16 CRC sectors spread over
+the set and the first 16 data sectors covered by each of them.
+
+\paragraph{Ecc files.} Sector 0 of an ecc file is tag 0. If it is
+unreadable or invalid, the reader searches the file for the 16-byte
+signature at byte offsets which are multiples of 4 (all three sector sizes
+are multiples of 4) and accepts a valid tag at offset $o$ only if
+$o = (ownPosition - S) \cdot sectorBytes$. The ecc file must be
+$A \cdot B$ bytes long; shorter files are treated as truncated (the missing
+sectors are erasures).
+
+\medskip
+
+Recognition never depends on the medium size, the medium type or a table of
+known sizes.
+
+\subsection{Audio CDs and read offsets}
+\label{rs04-audio}
+
+Audio CDs are protected by ecc files made from a rip which covers a fixed
+range of the disc (normally all tracks as one {\tt .bin} file, $B = 2352$).
+CD drives differ in their {\em read offset}: two rips of the same disc made
+with different drives (or different offset corrections) are shifted by a
+whole number of samples (4 bytes) against each other. RS04 finds the shift
+with the data sector Crc32 values.
+
+\medskip
+
+Let $R$ be the new rip (a byte string) and $crc_t$ the stored Crc32 of data
+sector $t$. For an offset $\delta$ (in samples, may be negative) the
+{\em aligned sector} $t$ is the 2352 bytes of $R$ starting at byte
+$2352\,t + 4\delta$. The recommended procedure is:
+
+\begin{enumerate}
+\item {\bf Probe sectors.} Take every data sector $t$ with
+  $10 \le t < S - 10$ whose $crc_t$ is known from a readable CRC sector
+  (a lost CRC sector can only be recovered after the rip has been aligned,
+  since its codeword contains data sectors) and differs from {\tt 0x416831C0}, the Crc32 of digital
+  silence (silence matches at every offset). Choose up to 64 of them, evenly
+  spread over this range.
+\item {\bf Fast path.} If all probe sectors match for $\delta = 0$, the rip
+  is aligned.
+\item {\bf Search.} For every $\delta$ with $|\delta| \le 5880$ samples
+  (10 sectors; drive read offsets are usually below 2000 samples in
+  magnitude, and two rips differ by the difference of their offsets), the score is the
+  number of probe sectors whose aligned sector has the Crc32 $crc_t$. Probe
+  sectors whose aligned sector is not completely inside $R$ or touches a
+  sector which was unreadable in the new rip do not count.
+\item {\bf Decision.} The offset with the highest score is accepted if the
+  score is at least 2 and at least twice the second highest score. Otherwise
+  (e.g. too much damage, or the audio repeats exactly with a period of whole
+  samples) the user has to specify the offset (dvdisaster option
+  {\tt --audio-offset}); manual offsets are not limited to the search window.
+\end{enumerate}
+
+With the accepted $\delta$, aligned sectors which are not completely inside
+$R$ or overlap unreadable parts of the rip are erasures. With $\delta \ne 0$
+this concerns the first or the last $\lceil 4|\delta| / 2352 \rceil$ sectors,
+because drives normally cannot read into the lead-in or lead-out; they are
+recovered like any other erasure, and the repaired rip is identical to the
+original one ($dataMD5$ matches). dvdisaster repairs such a rip by first
+rewriting the file shifted by $4\delta$ bytes (missing bytes at the edges
+become zero) and then decoding it with $\delta = 0$. Rips which differ in more than a constant
+shift (other track splitting, pregaps or hidden track audio removed) are out
+of scope; the user has to provide a rip of the same range. Reading audio
+sectors from a drive (READ CD with C2 error pointers) does not affect the
+format.
+
+\subsection{Decoding (informative)}
+\label{rs04-decode}
+
+\begin{enumerate}
+\item Recognise the set and read its tags (ignoring tags with another
+  $setID$), CRC sectors and parity sectors.
+  An added zone sector is an erasure if it is unreadable or its Crc32 does not
+  match the value in its tag. If its tag is lost, a readable sector is
+  assumed to be correct.
+\item If CRC sectors are missing, decode the codewords which contain them
+  first ($C_j$ is in codeword $(S+j) \bmod L$). Data sectors whose Crc32 is
+  not known yet are assumed to be correct if they are readable.
+\item For every codeword: a data sector is an erasure if it is unreadable
+  (in image files: contains the dead sector marker of dvdisaster, section
+  \ref{rs04-missing}) or its
+  Crc32 does not match. Zero sectors are known. With at most $m$
+  erasures the codeword is decoded, otherwise its erased sectors stay
+  unrecoverable. The data sector Crc32 values are checked after decoding.
+\item After a complete repair, the MD5 sum of the data must equal
+  $dataMD5$.
+\end{enumerate}
+
+The decoder only needs one $B_s$-byte shard per layer and codeword at a
+time; an implementation processes $W$ consecutive codewords per pass to read
+the image in larger pieces.
+
+\subsection{Reading media (informative)}
+\label{rs04-reading}
+
+While reading a medium, dvdisaster checks the data sectors of every set
+with $B = 2048$ (the augmented sets on the medium, or an ecc file given for
+it) against their Crc32 values, and the CRC sectors of augmented sets
+against their tags. Only the beginning of each added zone, up to the last
+CRC sector, is read in advance; parity sectors are checked when the image
+is verified or repaired.
+
+\medskip
+
+Adaptive reading stops as soon as every codeword of every set has at most
+$m$ erasures (sectors which could not be read, or whose Crc32 does not
+match). Tags are not part of the code and are recreated by the repair, but
+the image must remain recognizable (section \ref{rs04-recognize}): one
+valid tag among the last 256 sectors of every augmented set must have been
+read. Sectors between sessions are not read, and the last 2 sectors of a
+session (TAO run-out) are not needed if they belong to no set.
+
+\subsection{Versioning and compatibility}
+\label{rs04-versions}
+
+\begin{itemize}
+\item $version$ identifies the format of tags, CRC sectors and the code.
+  This specification defines version 1. A reader must refuse to process a
+  set whose tags carry a different version and should tell the user that a
+  newer dvdisaster is required. Incompatible changes increase the version.
+\item $layoutVariant$ identifies the mapping of codewords to sectors.
+  0 is the layout of this specification (contiguous layers, no
+  permutation). Readers must refuse sets with an unknown layout variant.
+\item $sectorBytes$ values other than 2048, 2324 and 2352 must be refused.
+\item Unknown bits in $flags$ are ignored; flags never change how data
+  is decoded.
+\item Reserved bytes (the unused tail of the tag and of CRC sectors) are
+  written as zero and ignored when read.
+\item $creatorVersion$ is informational (diagnostics and workarounds for
+  bugs of a particular dvdisaster version).
+\end{itemize}
+
+\subsection{Limits and edge cases}
+\label{rs04-limits}
+
+\begin{tabular}{|p{4.2cm}|p{10.3cm}|}
+\hline
+Data size & $1 \le dataBytes < 2^{64}$. An empty image cannot be protected.
+Augmented images need $dataBytes = S \cdot B$. \\
+\hline
+Codeword & $1 \le m \le k$ and ${\rm NextPow2}(m) + k \le 65536$, hence
+$k \le 65535$ and $n \le 65536$; the FFT size is at most 65536. \\
+\hline
+Layer size & $L \ge 1$ and $kL \ge D$. There is no upper limit; with
+$k = 1$ a layer holds all protected sectors. \\
+\hline
+Small sets & No special cases. $L < 32$ is allowed (dvdisaster only uses it
+when $D < 32$ or $E < 32$); then one 32-sector unit may hit a codeword
+twice. A minimal set: $S = 1$, $L = 1$, $k = 2$, $m = 1$, $T = 2$,
+$Q = 2$, $A = 4$. \\
+\hline
+$k = 1$ & $m = 1$; each parity sector is a copy of the original sector. \\
+\hline
+$m = 1$ & XOR parity over the $k$ originals. \\
+\hline
+Zero sectors & Up to $kL - D$ sectors (possibly whole layers) are virtual
+zeros; they are never stored. \\
+\hline
+Tags & At least one ($Q \ge 2$). The last group of the added zone may
+have fewer than $T-1$ payload sectors. \\
+\hline
+Implementation & {\em Informative:} dvdisaster handles sets with
+$S$, $kL$ and $A$ below $2^{31}$ sectors (4 TiB of 2048-byte sectors) and
+treats tags describing larger sets as invalid. \\
+\hline
+\end{tabular}
+
+\subsection{Design rationale}
+\label{rs04-rationale}
+
+\paragraph{Damage simulation.} The layout was chosen with the damage
+simulator {\tt contrib/rs04-layout-sim.py} (Python 3 and numpy):
+
+{\small
+\begin{verbatim}
+python3 contrib/rs04-layout-sim.py --trials 200 > results.md
+\end{verbatim}
+}
+
+({\tt --quick} gives a short smoke run). It maps damage models onto sectors using the
+CLV geometry of CD-R, DVD and BD (outer edge bands on single and dual layer
+discs, scattered loss of 16/32-sector ECC units, band with decaying fringe,
+radial scratches, contiguous runs of 4096 sectors and 1~cm$^2$ spots) and
+counts the erasures per codeword for RS03 and for RS04 layouts with
+$n \approx 255 \ldots 65535$, with and without permutations inside layers.
+The following table shows the loss (in percent of all sectors) at which the
+probability of a complete recovery drops below 99\%, for a parity share of
+$m/n = 32/255$ (MDS limit 12.5\%):
+
+\medskip
+{\small
+\begin{tabular}{|l|r|r|r|r|r|}
+\hline
+Damage model, medium & RS03 & $n=1023$ & $n=4095$ & $n=16383$ & $n=65535$ \\
+\hline
+outer band, BD-25 & 12.55 & 12.51 & 12.55 & 12.55 & 12.59 \\
+band, DVD-9 (opposite track path) & 12.55 & 12.51 & 12.56 & 12.57 & 12.62 \\
+scattered units, CD-R 80 min & 5.46 & 8.50 & 10.69 & -- & -- \\
+scattered units, DVD-5 & 5.27 & 8.61 & 10.59 & 11.78 & -- \\
+scattered units, BD-25 & 4.72 & 8.48 & 10.49 & 11.59 & 12.14 \\
+band with fringe, BD-25 & 8.16 & 10.29 & 11.42 & 12.10 & 12.40 \\
+radial scratches, BD-25 & 5.76 & 8.80 & 10.85 & 11.62 & 12.25 \\
+runs of 4096 sectors, BD-25 & 5.87 & 9.82 & 11.84 & 12.34 & 12.56 \\
+spots, BD-25 & 6.11 & 9.21 & 10.96 & 11.77 & 12.26 \\
+\hline
+\end{tabular}
+}
+\medskip
+
+Findings: (1) long codewords more than double the tolerable scattered loss
+and stay at the limit for edge damage; (2) permuting 32-sector blocks inside
+the layers is within the noise for $n \ge 4095$, worse for small $n$ and
+for contiguous runs, and costs about $C/32$ seeks per repair, so RS04 uses
+no permutation and only reserves the $layoutVariant$ field; (3) repair time
+on a hard disk grows with $n$ for a given memory budget (BD-25 with 4 GiB:
+about 4 minutes for $n \approx 1023$, 19 minutes for $n \approx 16323$ and
+1.1 hours for $n \approx 65283$; about 1--2 minutes on an SSD), therefore
+$n$ is chosen per image and stored in the tags; (4) dvdisaster issue \#43
+is not explained by aliasing between the RS03 stride and the disc
+revolution.
+
+\paragraph{Other decisions.}
+\begin{itemize}
+\item {\em Tags in the added zone at a fixed interval} instead of a header
+  at one place: any surviving part of the added zone describes the layout,
+  also on dual layer discs whose outer edge is in the middle of the LBA
+  range. Tag 0 is where RS03 has its ecc header, directly behind the data.
+\item {\em Payload Crc32 values in the tags}: they cannot be in the CRC
+  sectors, which are protected by the parity they would describe. The tags
+  have room for them anyway.
+\item {\em CRC sectors as originals} (like the RS03 CRC layer): lost
+  checksums are recovered by the code. They have no header since the tags
+  carry the layout.
+\item {\em Virtual zero sectors and shard padding}: nothing is stored that
+  can be computed, which makes the ecc file identical to the added zone.
+\item {\em Relative positions and a random set ID}: sessions can be
+  augmented without knowing where they will be written, and tags of other
+  or older sets are never mixed in.
+\item {\em One field for the data length} ($dataBytes$) instead of a sector
+  count and the bytes in the last sector: both follow from it.
+\item {\em No medium fingerprint}: the Crc32 values of the data sectors in
+  the CRC sectors identify the data more reliably than the MD5 sum of one
+  sector.
+\end{itemize}
+
+\subsection{Test vectors}
+\label{rs04-vectors}
+
+\paragraph{Code.} The originals of each vector are filled with the output
+of the generator splitmix64 started with $state = seed$ (each step:
+$state \leftarrow state + {\tt 0x9E3779B97F4A7C15}$, $z \leftarrow state$,
+$z \leftarrow (z \oplus (z \gg 30)) \cdot {\tt 0xBF58476D1CE4E5B9}$,
+$z \leftarrow (z \oplus (z \gg 27)) \cdot {\tt 0x94D049BB133111EB}$,
+output $z \oplus (z \gg 31)$, all modulo $2^{64}$), each 64-bit output
+stored little-endian, filling original shards $0 \ldots k-1$ consecutively.
+The table gives the MD5 sum of the parity shards $0 \ldots m-1$
+concatenated (shards in Leopard buffer format, section \ref{rs04-shard}).
+
+\medskip
+{\footnotesize
+\begin{tabular}{|r|r|r|r|l|l|}
+\hline
+seed & $k$ & $m$ & bytes & MD5 of parity & case \\
+\hline
+1 & 2 & 1 & 64 & {\tt 9b1fe76ef28bf3823a5e3cf97adf0901} & XOR \\
+2 & 5 & 3 & 64 & {\tt 74130cbd984417137639d2a582b9b4a1} & small$^*$ \\
+3 & 100 & 31 & 128 & {\tt 8c5370f6adebf2d28b46125fdd201dc8} & no powers of 2 \\
+4 & 1000 & 1000 & 64 & {\tt 82c42efe91c5110bb60f9235e7bd3991} & $m = k$ \\
+5 & 3584 & 512 & 2048 & {\tt 047ba4c7183fabee56efa1053807edae} & typical \\
+6 & 49152 & 16384 & 64 & {\tt 055b961a368a2f12c3b5526636eeaf31} & $M + k = 65536$ \\
+\hline
+\end{tabular}
+}
+\medskip
+
+$^*$ stock {\tt leo\_encode()} would use GF($2^8$) for this size.
+``bytes'' is the shard size. These values were produced by {\tt src/rs04-ff16.c}, whose output was
+compared with Leopard-RS (built with GF($2^{16}$) only) and the high-rate
+encoder of {\tt reed-solomon-simd}. Vectors 1--3 are also reproduced by
+{\tt contrib/rs04-reference.py} directly from equation (1).
+
+\paragraph{Format.} The data of a format vector is the splitmix64 stream
+started with $seed$, truncated to $dataBytes$ bytes. All tags use
+$setID = {\tt 01\ 02\ 03\ 04\ 05\ 06\ 07\ 08}$, $creatorVersion = 0$ and
+$flags = 0$. The table gives the MD5 sums of the data and of the complete
+added zone (= the ecc file).
+
+\medskip
+{\footnotesize
+\begin{tabular}{|l|r|r|r|r|r|r|r|r|r|r|r|}
+\hline
+ & seed & $B$ & $dataBytes$ & $S$ & $c$ & $L$ & $k$ & $m$ & $T$ & $Q$ & $A$ \\
+\hline
+F1 & 7 & 2048 & 81820 & 40 & 1 & 7 & 6 & 3 & 8 & 22 & 26 \\
+F2 & 8 & 2352 & 23520 & 10 & 1 & 4 & 3 & 2 & 4 & 9 & 12 \\
+F3 & 9 & 2324 & 11620 & 5 & 1 & 6 & 1 & 1 & 2 & 7 & 14 \\
+\hline
+\end{tabular}
+
+\medskip
+\begin{tabular}{|l|l|l|}
+\hline
+ & MD5 of the data & MD5 of the added zone \\
+\hline
+F1 & \tt ac8364a7c7b4fcac9126f9d120a2b243 & \tt ce7142e2d9767ac6642ea567df200f90 \\
+F2 & \tt b5175b33aa5f95bec590eec94cb8392d & \tt 84d948d015532a395e1ccdea5e19b62f \\
+F3 & \tt 225073ed5626b7225ec38cc288d1a6d2 & \tt 28a4b07832bda689aaa9b4e1278333ca \\
+\hline
+\end{tabular}
+}
+\medskip
+
+F1 has a partial last data sector and a padding sector, F2 exercises the
+sector to shard mapping, F3 the case $k = m = 1$ with $T = 2$. The first 96
+bytes of tag 0 of F1 are:
+
+{\footnotesize
+\begin{verbatim}
+0000: 2a 64 76 64 69 73 61 73 74 65 72 2a 52 53 30 34  *dvdisaster*RS04
+0010: 01 00 00 00 00 08 08 00 00 00 00 00 ce bb 08 3b  ................
+0020: 01 02 03 04 05 06 07 08 9c 3f 01 00 00 00 00 00  .........?......
+0030: 07 00 00 00 00 00 00 00 06 00 00 00 03 00 00 00  ................
+0040: 28 00 00 00 00 00 00 00 ac 83 64 a7 c7 b4 fc ac  (.........d.....
+0050: 91 26 f9 d1 20 a2 b2 43 f1 75 b2 b2 c8 97 c7 92  .&.. ..C.u......
+\end{verbatim}
+}
+
+\fussy

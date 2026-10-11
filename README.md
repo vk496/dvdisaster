@@ -18,6 +18,8 @@ This version is built on top of the latest upstream version, with the following 
 - Added an option to use more space for ECC on BD-R when using RS03 (`--no-bdr-defect-management`)
 - Re-enabled adaptive reading for RS01 and RS02, and optionally for RS03 on user request (more on that below)
 - Ability to strip an augmented image from its additional ECC-data
+- New experimental RS04 codec with long codewords and self-describing layout (more on that below)
+- Reading of multi-session discs (all sessions in one image) and of audio CDs (2352-byte `.bin` + `.cue`, with C2 error pointers)
 - Optional pause after a given number of read errors, to let drives that overheat on damaged media cool down (`--pause-after-errors`)
 - A new CLI-only version, not depending on gtk (`./configure --with-gui=no && make clean && make -j4`)
 - GUI codebase ported from gtk2 to gtk3 to ensure future-proofness
@@ -66,26 +68,50 @@ There are, however, a few cons that must be noted for RS03:
   correction data has slighly less (around -3%) error correction capacity than RS02 on images with equal size. This is
   usually considered a cheap price to pay for the added robustness against corruption.
 
+## RS04 (experimental)
+
+RS04 is a newer codec, only available in this fork for now. It keeps the RS03 layout idea (the image is split into layers, each
+codeword takes one sector of every layer) but uses Reed-Solomon over GF(2^16), so a codeword can span thousands of layers
+instead of 255. This makes a big difference when the damage is scattered over the disc (worn dye, many small scratches):
+with ~14% redundancy on a BD-25, RS03 reliably survives about 5% of such losses, RS04 about 11.6% (the theoretical
+maximum being 12.5%). Against one contiguous damaged area, e.g. the outer edge going bad, both are equally good.
+
+RS04 also stores small self-describing tags all over its error correction data, so it never needs to know the medium size,
+and augmented images can have any size. This also allows:
+
+- multi-session discs: each session is augmented on its own, and reading the disc then verifies/repairs all sessions at once,
+- error correction files for other sector formats: CD-DA audio rips (2352 bytes, drive read offsets are detected automatically)
+  and Mode 2 Form 2 tracks (VCD/SVCD, 2324 bytes).
+
+The format is described in the [codecs specification PDF](documentation/codecs.pdf), and the layout choices are justified by
+the damage simulator in [contrib/rs04-layout-sim.py](contrib/rs04-layout-sim.py). As it's new, keep using RS02/RS03 for
+anything important until RS04 had more real-world testing.
+
 # :mag: Comparison table
 
 This attempts to summarize the differences, pros and cons of each codec:
 
-| Codecs                               | RS01 (separate file, obsolete) | RS02 (augmented image)         | RS03 (in separate file mode)   | RS03 (in augmented image mode) |
-|--------------------------------------|--------------------------------|--------------------------------|--------------------------------|--------------------------------|
-| Robustness :one:                     | :star:                         | :star::star::star:             | :star::star::star::star::star: | :star::star::star::star::star: |
-| Space efficiency                     | :star::star:                   | :star::star::star::star::star: | :star::star::star::star:       | :star::star::star::star:       |
-| Computational generation speed :two: | :star::star::star:             | :star::star::star:             | :star::star::star::star::star: | :star::star::star::star::star: |
-| Computational repair speed :two:     | :star::star::star::star:       | :star::star::star::star:       | :star::star::star::star:       | :star::star::star::star:       |
-| Damaged media recovery speed :three: | :star:                         | :star::star::star:             | :star:                         | :star:                         |
-| Supports customizing redundancy size | :heavy_check_mark:             | :heavy_check_mark:             | :heavy_check_mark:             | :x: :four:                     |
+| Codecs                               | RS01 (separate file, obsolete) | RS02 (augmented image)         | RS03 (in separate file mode)   | RS03 (in augmented image mode) | RS04 (file or augmented image) |
+|--------------------------------------|--------------------------------|--------------------------------|--------------------------------|--------------------------------|--------------------------------|
+| Robustness :one:                     | :star:                         | :star::star::star:             | :star::star::star::star::star: | :star::star::star::star::star: | :star::star::star::star::star: |
+| Space efficiency                     | :star::star:                   | :star::star::star::star::star: | :star::star::star::star:       | :star::star::star::star:       | :star::star::star::star:       |
+| Computational generation speed :two: | :star::star::star:             | :star::star::star:             | :star::star::star::star::star: | :star::star::star::star::star: | :star::star::star:             |
+| Computational repair speed :two:     | :star::star::star::star:       | :star::star::star::star:       | :star::star::star::star:       | :star::star::star::star:       | :star::star::star::star:       |
+| Damaged media recovery speed :three: | :star:                         | :star::star::star:             | :star:                         | :star:                         | :star::star::star:             |
+| Supports customizing redundancy size | :heavy_check_mark:             | :heavy_check_mark:             | :heavy_check_mark:             | :x: :four:                     | :heavy_check_mark:             |
+| Tolerance to scattered damage :five: | :star::star:                   | :star::star:                   | :star::star:                   | :star::star:                   | :star::star::star::star::star: |
+| Multi-session discs                  | :x:                            | :x:                            | :x:                            | :x:                            | :heavy_check_mark:             |
+| Audio CD / VCD rips                  | :x:                            | :x:                            | :x:                            | :x:                            | :heavy_check_mark:             |
 
 :one: Here we're talking about the robustness against corruption of the dvdisaster-added ECC parts _themselves_. The higher the ranking, the less it is likely than a few badly located damaged sectors render the whole correction impossible because they affect dvdisaster metadata on-disc. For example, corruption of the first dozens of sectors of an image can make RS02 entirely unusable regardless of the redundancy data originally stored on it.
 
 :two: When algorithm is CPU-bound, i.e. generating or repairing an image stored on a SSD/NVMe drive where the storage i/o speed is not an issue.
 
-:three: Using adaptive reading when supported (RS02), limiting the number of damaged sectors that need to be read to what is strictly necessary for repair. Using linear reading otherwise (RS03 and separate file codecs), assuming a badly damaged media, taking into account the time the drive takes to try to read damaged sectors.
+:three: Using adaptive reading when supported (RS02, RS04), limiting the number of damaged sectors that need to be read to what is strictly necessary for repair. Using linear reading otherwise (RS03 and separate file codecs), assuming a badly damaged media, taking into account the time the drive takes to try to read damaged sectors.
 
 :four: The robustness of RS03 comes at the cost of having to augment images strictly to well-known media sizes, as explained in the previous section above. This usually doesn't make much difference as long as you intend to burn the augmented image to a classic medium (CD-R, DVD-R, BD-R, ...).
+
+:five: Sectors lost at random places all over the disc (e.g. worn dye or many small scratches), as opposed to one contiguous damaged area. With ~14% redundancy on a BD-25, RS01-RS03 reliably survive about 5% of such losses and RS04 about 11.6%; see the RS04 section above.
 
 # :bulb: Rationale
 

@@ -1,0 +1,12 @@
+85a24eb529119e79c540b623f47fc2a3
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+*
+* dvdisaster - can not continue:
+*
+--sector-size must be 2048, 2324 or 2352
+

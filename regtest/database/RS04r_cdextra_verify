@@ -1,0 +1,29 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+rip.bin present.
+disc.ecc present.
+
+Error correction properties:
+- type             : Error correction file
+- method           : RS04, 48+9 layers of 54 sectors, 18.9% redundancy.
+- sector size      : 2352 bytes
+- created by       : dvdisaster-0.80
+- data md5sum      : 54bfd0992385bac7820e26c5bca337ec
+
+Data integrity:
+* sectors          : 9083424 bytes (6021120 bytes expected); 524 sectors in ecc file
+- read offset      : +0 samples (64 of 64 probe sectors match)
+* missing sector   : 700 
+* missing sector   : 2000 
+* BAD image/file   : 2 sectors missing
+  ... data section   : 2 sectors missing; 0 CRC errors
+  ... crc section    : 0 sectors missing; 0 CRC errors
+  ... ecc section    : 0 sectors missing; 0 CRC errors
+  ... tags           : 0 of 33 missing
+- erasure counts   :  avg =  1.0; worst = 1 per ecc block.
+- prognosis        : 3084 of 3084 sectors recoverable (100.0%)

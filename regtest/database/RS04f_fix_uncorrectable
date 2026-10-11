@@ -1,0 +1,48 @@
+a5e34a3cfb1dca4d333312b75909b438
+210c7a5b81e68f8dbc978010cfb9eceb
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04f-tmp.iso: 8000 medium sectors.
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+* ecc block 0: 32 erasures, but only 31 can be corrected
+* ecc block 1: 32 erasures, but only 31 can be corrected
+* ecc block 2: 32 erasures, but only 31 can be corrected
+* ecc block 3: 32 erasures, but only 31 can be corrected
+* ecc block 4: 32 erasures, but only 31 can be corrected
+* ecc block 5: 32 erasures, but only 31 can be corrected
+* ecc block 6: 32 erasures, but only 31 can be corrected
+* ecc block 7: 32 erasures, but only 31 can be corrected
+* ecc block 8: 32 erasures, but only 31 can be corrected
+* ecc block 9: 32 erasures, but only 31 can be corrected
+* ecc block 10: 32 erasures, but only 31 can be corrected
+* ecc block 11: 32 erasures, but only 31 can be corrected
+* ecc block 12: 32 erasures, but only 31 can be corrected
+* ecc block 13: 32 erasures, but only 31 can be corrected
+* ecc block 14: 32 erasures, but only 31 can be corrected
+* ecc block 15: 32 erasures, but only 31 can be corrected
+* ecc block 16: 32 erasures, but only 31 can be corrected
+* ecc block 17: 32 erasures, but only 31 can be corrected
+* ecc block 18: 32 erasures, but only 31 can be corrected
+* ecc block 19: 32 erasures, but only 31 can be corrected
+* ecc block 20: 32 erasures, but only 31 can be corrected
+* ecc block 21: 32 erasures, but only 31 can be corrected
+* ecc block 22: 32 erasures, but only 31 can be corrected
+* ecc block 23: 32 erasures, but only 31 can be corrected
+* ecc block 24: 32 erasures, but only 31 can be corrected
+* ecc block 25: 32 erasures, but only 31 can be corrected
+* ecc block 26: 32 erasures, but only 31 can be corrected
+* ecc block 27: 32 erasures, but only 31 can be corrected
+* ecc block 28: 32 erasures, but only 31 can be corrected
+* ecc block 29: 32 erasures, but only 31 can be corrected
+* ecc block 30: 32 erasures, but only 31 can be corrected
+* ecc block 31: 32 erasures, but only 31 can be corrected
+* ecc block 32: 32 erasures, but only 31 can be corrected
+* ecc block 33: 32 erasures, but only 31 can be corrected
+* ecc block 34: 32 erasures, but only 31 can be corrected
+* ecc block 35: 32 erasures, but only 31 can be corrected
+Unrepaired sectors: 1152
+Erasure counts per ecc block:  avg =  32.0; worst = 32.

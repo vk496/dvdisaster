@@ -25,6 +25,7 @@
 #include "dvdisaster.h"
 
 #include "scsi-layer.h"
+#include "rs04-includes.h"
 #include "udf.h"
 
 /*
@@ -168,6 +169,15 @@ void PrintMediumInfo(void *mi_ptr)
    PrintCLIorLabel(mi->blankCapacity, _("%" PRId64 " sectors (%" PRId64 " MiB)\n"),
 		dh->blankCapacity, (dh->blankCapacity)>>9);
 
+   /* Sessions and tracks (only shown for multi-session and audio media) */
+
+   if(dh->zeroFill)
+   {  PrintCLI("\n\n");
+      PrintCLI(_("Sessions and tracks"));
+      PrintCLI("\n\n");
+      PrintTrackTable(dh, PrintCLI);
+   }
+
    /* Filesystem properties */
 
    if(image->isoInfo)
@@ -210,6 +220,22 @@ void PrintMediumInfo(void *mi_ptr)
       memcpy(method, eh->method, 4);
       method[4] = 0;
       print_tab("Error correction data:",tab_width);
+      if(!strcmp(method, "RS04"))
+      {  RS04Info *info = RS04GetSets(image);
+	 int i;
+
+	 PrintCLIorLabel(mi->eccState, _("%s, %d set(s).\n"), method, info->nSets);
+	 for(i=0; i<info->nSets; i++)
+	 {  RS04Set *set = &info->set[i];
+
+	    print_tab(" ",tab_width);
+	    PrintCLI(_("sectors %" PRId64 " - %" PRId64 ": %u+%u layers, %4.1f%% redundancy\n"),
+		     set->start, set->start + (gint64)(set->S + set->A) - 1,
+		     set->k, set->m, (100.0*set->m*set->L)/set->D);
+	 }
+	 g_free(info);
+      }
+      else
       PrintCLIorLabel(mi->eccState, _("%s, %d roots, %4.1f%% redundancy.\n"), 
 		      method, eh->eccBytes,
 		      ((double)eh->eccBytes*100.0)/(double)eh->dataBytes);
