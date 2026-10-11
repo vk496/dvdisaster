@@ -121,6 +121,32 @@ jobs:
           ./dvdisaster.exe --version | grep NOGUI
     - name: try to prepare dist
       run: ./.github/workflows/make-dist.sh ${{ github.ref }}
+    - name: probe CLI usage of the GUI build (temporary)
+      if: matrix.ui == 'gui' && matrix.printf == 'normal'
+      run: |
+          file dvdisaster.exe dist/dvdisaster.exe
+          objdump -p dist/dvdisaster.exe | grep -i subsystem || true
+    - name: probe from cmd.exe (temporary)
+      if: matrix.ui == 'gui' && matrix.printf == 'normal'
+      shell: cmd
+      run: |
+          cd dist
+          dvdisaster.exe --debug -i t.iso --random-image 100
+          echo exit=%ERRORLEVEL%
+          dvdisaster.exe -i t.iso -mRS01 -c -e t.ecc
+          echo exit=%ERRORLEVEL%
+          dvdisaster.exe -i t.iso -e t.ecc -t
+          echo exit=%ERRORLEVEL%
+          dir t.*
+    - name: probe from powershell (temporary)
+      if: matrix.ui == 'gui' && matrix.printf == 'normal'
+      shell: pwsh
+      run: |
+          cd dist
+          ./dvdisaster.exe -i t.iso -e t.ecc -t
+          echo "exit=$LASTEXITCODE"
+          $p = Start-Process -FilePath .\dvdisaster.exe -ArgumentList '-i','t.iso','-e','t.ecc','-t' -Wait -PassThru -NoNewWindow
+          echo "start-process exit=$($p.ExitCode)"
     - name: run regression tests
       if: matrix.printf == 'normal'
       env:
