@@ -53,7 +53,7 @@ void register_rs04(void)
    method->widgetList = g_malloc0(sizeof(RS04Widgets));
 
 #ifdef WITH_GUI_YES
-   /*** Linkage to rs04-window.c */
+   /*** Linkage to rs04-window.c and rs04-preferences.c */
 
    method->createCreateWindow = CreateRS04EncWindow;
    method->createFixWindow    = CreateRS04FixWindow;
@@ -61,6 +61,9 @@ void register_rs04(void)
    method->resetCreateWindow  = ResetRS04EncWindow;
    method->resetFixWindow     = ResetRS04FixWindow;
    method->resetVerifyWindow  = ResetRS04VerifyWindow;
+
+   method->createPrefsPage    = CreateRS04PrefsPage;
+   method->resetPrefsPage     = ResetRS04PrefsPage;
 #endif
 
    method->destroy = destroy;

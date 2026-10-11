@@ -194,6 +194,13 @@ void RS04VerifySpiral(gint64, gint64, int);
 #define RS04VerifySpiral(f, n, s)
 #endif
 
+/* rs04-preferences.c */
+
+#ifdef WITH_GUI_YES
+void CreateRS04PrefsPage(Method*, GtkWidget*);
+void ResetRS04PrefsPage(Method*);
+#endif
+
 /* rs04-common.c */
 
 enum { RS04_TAG_INVALID, RS04_TAG_VALID, RS04_TAG_UNSUPPORTED };
