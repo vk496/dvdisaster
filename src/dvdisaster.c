@@ -74,10 +74,9 @@ typedef enum
 
    /* don't use the ascii range 32-127 so that we
       avoid collision with the single-char options */
-   MODIFIER_ADAPTIVE_READ = 128,
-   MODIFIER_AUDIO_OFFSET,
    MODIFIER_ABORT_FILE = 128,
    MODIFIER_ADAPTIVE_READ,
+   MODIFIER_AUDIO_OFFSET,
    MODIFIER_AUTO_SUFFIX,
    MODIFIER_CACHE_SIZE, 
    MODIFIER_CATALOG,

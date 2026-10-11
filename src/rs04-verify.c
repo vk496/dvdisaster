@@ -826,6 +826,11 @@ static void combined_prognosis(verify_closure *vc)
    PrintLog(_("\nCombined prognosis of all %d sets:\n"), vc->info->nSets);
    PrintLog(_("- prognosis        : %" PRId64 " of %" PRId64 " sectors recoverable (%d.%d%%)\n"),
 	    expected - lost, expected, percentage/10, percentage%10);
+
+   /* The sets together decide whether data is lost, not each set alone */
+
+   if(lost) SetExitCode(EXIT_CODE_DATA_LOSS);
+   else if(exitCode == EXIT_CODE_DATA_LOSS) exitCode = EXIT_CODE_DEFECTS;
 }
 
 /***
