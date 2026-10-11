@@ -661,8 +661,11 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
       }
 
       if(damaged_cw)
-	PrintLog(_("- erasure counts   :  avg =  %.1f; worst = %d per ecc block.\n"),
-		 (double)damaged/(double)damaged_cw, worst);
+      {  PrintLog(_("- erasure counts   :  avg =  %.1f; worst = %d per ecc block.\n"),
+		  (double)damaged/(double)damaged_cw, worst);
+	 PrintLog(_("- ecc margin       : worst block uses %d of %d roots (%d%%)\n"),
+		  worst, set->m, (100*worst)/set->m);
+      }
 
       {  guint64 expected = set->S + set->A;
 	 guint64 recoverable = expected - lost;
@@ -676,6 +679,10 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
 	    RS04VerifyField(idx, RS04_V_ERASURE, _("<span %s>avg =  %.1f; worst = %d per ecc block.</span>"),
 			    worst <= set->m ? Closure->greenMarkup : Closure->redMarkup,
 			    (double)damaged/(double)damaged_cw, worst);
+	    RS04VerifyField(idx, RS04_V_MARGIN_KEY, "%s", _("Ecc margin:"));
+	    RS04VerifyField(idx, RS04_V_MARGIN, _("<span %s>worst block uses %d of %d roots (%d%%)</span>"),
+			    worst <= set->m ? Closure->greenMarkup : Closure->redMarkup,
+			    worst, set->m, (100*worst)/set->m);
 	 }
 	 RS04VerifyField(idx, RS04_V_PROGNOSIS_KEY, "%s", _("Prognosis:"));
 	 RS04VerifyField(idx, RS04_V_PROGNOSIS, _("<span %s>%" PRId64 " of %" PRId64 " sectors recoverable (%d.%d%%)</span>"),
