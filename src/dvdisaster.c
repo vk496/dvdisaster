@@ -621,8 +621,8 @@ int main(int argc, char *argv[])
 	   break;
          case MODIFIER_RS04_MEMORY:
 	   Closure->rs04MemoryMiB = atoi(optarg);
-	   if(Closure->rs04MemoryMiB < 64 || Closure->rs04MemoryMiB > 1024*1024)
-	     Stop(_("--rs04-memory must be in range 64...%d"), 1024*1024);
+	   if(Closure->rs04MemoryMiB < 1 || Closure->rs04MemoryMiB > 1024*1024)
+	     Stop(_("--rs04-memory must be in range 1...%d"), 1024*1024);
 	   break;
          case MODIFIER_RESOURCE_FILE:
 	   if(Closure->dotFile)
