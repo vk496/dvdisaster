@@ -20,7 +20,7 @@
  *  along with dvdisaster. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*** src type: no GUI code ***/
+/*** src type: some GUI code ***/
 
 #include "dvdisaster.h"
 
@@ -307,9 +307,12 @@ static void print_properties(Image *image, RS04Set *set, int idx, int n)
    PrintLog(_("\nError correction properties:\n"));
 
    if(set->target == ECC_FILE)
-     PrintLog(_("- type             : Error correction file\n"));
+   {  PrintLog(_("- type             : Error correction file\n"));
+      RS04VerifyField(idx, RS04_V_TYPE, "%s", _("Error correction file"));
+   }
    else
    {  PrintLog(_("- type             : Augmented image\n"));
+      RS04VerifyField(idx, RS04_V_TYPE, "%s", _("Augmented image"));
       if(n > 1)
 	PrintLog(_("- set              : %d of %d, image sectors %" PRId64 " - %" PRId64 "\n"),
 		 idx+1, n, set->start, set->start + (gint64)(set->S + set->A) - 1);
@@ -317,23 +320,37 @@ static void print_properties(Image *image, RS04Set *set, int idx, int n)
 	PrintLog(_("* set              : unconfirmed (no readable CRC and data sectors)\n"));
    }
 
+   if(set->target == ECC_IMAGE && set->matches < 0)
+        RS04VerifyField(idx, RS04_V_ECCRESULT, _("<span %s>Unconfirmed set (no readable CRC and data sectors).</span>"),
+			Closure->redMarkup);
+   else RS04VerifyField(idx, RS04_V_ECCRESULT, _("<span %s>Good error correction data.</span>"),
+			Closure->greenMarkup);
+
    PrintLog(_("- method           : RS04, %u+%u layers of %" PRIu64 " sectors, %4.1f%% redundancy.\n"),
 	    set->k, set->m, set->L, (100.0*set->m*set->L)/set->D);
    PrintLog(_("- sector size      : %d bytes\n"), set->B);
+   RS04VerifyField(idx, RS04_V_METHOD, _("RS04, %u+%u layers of %" PRIu64 " sectors (%d bytes), %4.1f%% redundancy"),
+		   set->k, set->m, set->L, set->B, (100.0*set->m*set->L)/set->D);
 
    if((set->flags & RS04_FLAG_DEVEL) && !Closure->regtestMode)
      unstable = " (unstable)";
    if(micro)
-        PrintLog("%s-%d.%d.%d%s\n", _("- created by       : dvdisaster"), major, minor, micro, unstable);
-   else PrintLog("%s-%d.%d%s\n", _("- created by       : dvdisaster"), major, minor, unstable);
+   {  PrintLog("%s-%d.%d.%d%s\n", _("- created by       : dvdisaster"), major, minor, micro, unstable);
+      RS04VerifyField(idx, RS04_V_CREATOR, "dvdisaster-%d.%d.%d%s", major, minor, micro, unstable);
+   }
+   else
+   {  PrintLog("%s-%d.%d%s\n", _("- created by       : dvdisaster"), major, minor, unstable);
+      RS04VerifyField(idx, RS04_V_CREATOR, "dvdisaster-%d.%d%s", major, minor, unstable);
+   }
 
    AsciiDigest(digest, set->dataMD5);
    PrintLog(_("- data md5sum      : %s\n"), digest);
+   RS04VerifyField(idx, RS04_V_ECCMD5, "%s", digest);
 }
 
 /* Print sizes; returns FALSE if the data part is missing */
 
-static int print_sizes(Image *image, RS04Set *set, int last)
+static int print_sizes(Image *image, RS04Set *set, int idx, int last)
 {  PrintLog(_("\nData integrity:\n"));
 
    if(set->target == ECC_FILE)
@@ -347,6 +364,7 @@ static int print_sizes(Image *image, RS04Set *set, int last)
 	      msg = g_strdup_printf(_("Ecc file is %" PRId64 " sectors shorter than expected."), set->A - ecc_sectors);
 	 else msg = g_strdup_printf(_("Ecc file is %" PRId64 " sectors longer than expected."), ecc_sectors - set->A);
 	 PrintLog(_("* Warning          : %s\n"), msg);
+	 RS04VerifyField(idx, RS04_V_ECCRESULT, "<span %s>%s</span>", Closure->redMarkup, msg);
 	 g_free(msg);
 	 exitCode = EXIT_CODE_SIZE_MISMATCH;
       }
@@ -354,6 +372,7 @@ static int print_sizes(Image *image, RS04Set *set, int last)
       if(img_bytes == set->dataBytes)
       {  PrintLog(_("- sectors          : %" PRId64 " in image; "), set->S);
 	 PrintLog(_("%" PRId64 " in ecc file\n"), set->A);
+	 RS04VerifyField(idx, RS04_V_SECTORS, _("%" PRId64 " in image; %" PRId64 " in ecc file"), set->S, set->A);
       }
       else
       {  char *have = g_strdup_printf(_("%" PRId64 " bytes"), img_bytes);
@@ -361,6 +380,8 @@ static int print_sizes(Image *image, RS04Set *set, int last)
 
 	 PrintLog(_("* sectors          : %s (%s expected); %" PRId64 " sectors in ecc file\n"),
 		  have, want, set->A);
+	 RS04VerifyField(idx, RS04_V_SECTORS, _("<span %s>%s (%s expected)</span>"),
+			 Closure->redMarkup, have, want);
 	 g_free(have);
 	 g_free(want);
 	 exitCode = EXIT_CODE_SIZE_MISMATCH;
@@ -371,13 +392,18 @@ static int print_sizes(Image *image, RS04Set *set, int last)
       guint64 end = set->start + set->S + set->A;
 
       if(sectors >= end && (sectors == end || !last))
-	PrintLog(_("- medium sectors   : %" PRId64 " total / %" PRId64 " data\n"),
-		 set->S + set->A, set->S);
+      {  PrintLog(_("- medium sectors   : %" PRId64 " total / %" PRId64 " data\n"),
+		  set->S + set->A, set->S);
+	 RS04VerifyField(idx, RS04_V_SECTORS, _("%" PRId64 " total / %" PRId64 " data"),
+			 set->S + set->A, set->S);
+      }
       else
       {  char *have = g_strdup_printf("%" PRId64, sectors);
 	 char *want = g_strdup_printf("%" PRId64, end);
 
 	 PrintLog(_("* medium sectors   : %s (%s expected)\n"), have, want);
+	 RS04VerifyField(idx, RS04_V_SECTORS, _("<span %s>%s (%s expected)</span>"),
+			 Closure->redMarkup, have, want);
 	 g_free(have);
 	 g_free(want);
 	 if(sectors < end)
@@ -386,6 +412,49 @@ static int print_sizes(Image *image, RS04Set *set, int last)
    }
 
    return TRUE;
+}
+
+/* GUI output of a section and the added zone in the spiral */
+
+static void show_section(int idx, int field, guint64 missing, guint64 crc_errors)
+{  if(missing || crc_errors)
+        RS04VerifyField(idx, field, _("<span %s>%" PRId64 " sectors missing; %" PRId64 " CRC errors</span>"),
+			Closure->redMarkup, missing, crc_errors);
+   else RS04VerifyField(idx, field, "%s", _("complete"));
+}
+
+/* Runs of sectors with the same state for the spiral */
+
+typedef struct
+{  gint64 start, n;
+   int state;
+} spiral_run;
+
+static void spiral_add(spiral_run *r, gint64 s, int state)
+{  if(r->n && state == r->state && s == r->start + r->n)
+   {  r->n++;
+      return;
+   }
+   if(r->n) RS04VerifySpiral(r->start, r->n, r->state);
+   r->start = s;
+   r->n = state ? 1 : 0;   /* state 0 flushes */
+   r->state = state;
+}
+
+static void mark_zone(RS04State *st, gint64 base)
+{  RS04Set *set = st->set;
+   spiral_run run = {0};
+   guint64 a;
+
+   if(!Closure->guiMode)
+     return;
+
+   for(a=0; a<set->A; a++)
+   {  int bad = a % set->T ? GetBit(st->payloadBad, a - a/set->T - 1) : GetBit(st->tagBad, a/set->T);
+
+      spiral_add(&run, base+a, bad ? 3 : 1);
+   }
+   spiral_add(&run, 0, 0);
 }
 
 static void verify_set(Image *image, RS04Set *set, int idx, int n)
@@ -404,6 +473,7 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
    guint64 damaged = 0, damaged_cw = 0, lost = 0;
    guint32 worst = 0;
    gint64 base = set->target == ECC_FILE ? 0 : set->start;
+   spiral_run run = {0};
    int last_percent = -1;
 
    print_properties(image, set, idx, n);
@@ -411,7 +481,7 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
    if(!image->file)
      goto done;
 
-   print_sizes(image, set, idx == n-1);
+   print_sizes(image, set, idx, idx == n-1);
 
    if(Closure->quickVerify)
    {  PrintLog(_("* quick mode        : image NOT scanned\n"));
@@ -428,18 +498,24 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
    if(set->target == ECC_FILE && set->B == 2352)
    {  int delta, score, probes;
 
+      RS04VerifyField(idx, RS04_V_OFFSET_KEY, "%s", _("Read offset:"));
       if(Closure->audioOffsetGiven)
       {  delta = Closure->audioOffset;
 	 PrintLog(_("- read offset      : %+d samples (given)\n"), delta);
+	 RS04VerifyField(idx, RS04_V_OFFSET, _("%+d samples"), delta);
       }
       else if(RS04DetectAudioOffset(&st, &delta, &score, &probes))
-	PrintLog(_("- read offset      : %+d samples (%d of %d probe sectors match)\n"),
-		 delta, score, probes);
+      {	 PrintLog(_("- read offset      : %+d samples (%d of %d probe sectors match)\n"),
+		  delta, score, probes);
+	 RS04VerifyField(idx, RS04_V_OFFSET, _("%+d samples"), delta);
+      }
       else
       {  if(probes)
 	   PrintLog(_("* read offset      : unknown; use --audio-offset (best match: %d of %d probe sectors)\n"),
 		    score, probes);
 	 else PrintLog(_("- read offset      : not checked (no probe sectors)\n"));
+	 RS04VerifyField(idx, RS04_V_OFFSET, "<span %s>%s</span>",
+			 probes ? Closure->redMarkup : "", _("unknown"));
 	 delta = 0;
       }
       st.io.dataOffset = 4*delta;
@@ -454,10 +530,13 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
 
    for(t0=0; t0<set->S; t0+=CHUNK)
    {  int k, cnt = MIN(CHUNK, set->S - t0);
+      guint64 old_missing = data_missing, old_crc_errors = data_crc_errors;
       int percent;
 
       if(Closure->stopActions)
-      {  g_string_free(r.out, TRUE);
+      {  RS04VerifyField(idx, RS04_V_RESULT, _("<span %s>Aborted by user request!</span>"),
+			 Closure->redMarkup);
+	 g_string_free(r.out, TRUE);
 	 RS04FreeState(&st);
 	 goto done;
       }
@@ -469,19 +548,28 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
 
       for(k=0; k<cnt; k++)
       {  guint64 t = t0+k;
+	 int state = 1;
 
 	 if(!present[k])
 	 {  range_add(&r, base+t);
 	    data_missing++;
 	    erasures[t % set->L]++;
+	    state = 3;
 	 }
 	 else if(GetBit(st.dataKnown, t) && Crc32(buf+(size_t)k*set->B, set->B) != st.dataCrc[t])
 	 {  range_flush(&r);
 	    g_string_append_printf(r.out, _("* CRC error, sector: %" PRId64 "\n"), base+t);
 	    data_crc_errors++;
 	    erasures[t % set->L]++;
+	    state = 2;
 	 }
+	 spiral_add(&run, base+t, state);
       }
+
+      spiral_add(&run, 0, 0);
+      if(data_missing > old_missing || data_crc_errors > old_crc_errors)
+	RS04VerifyField(idx, RS04_V_DATA, _("<span %s>%" PRId64 " sectors missing; %" PRId64 " CRC errors</span>"),
+			Closure->redMarkup, data_missing, data_crc_errors);
 
       percent = (100*(t0+cnt))/set->S;
       if(percent != last_percent)
@@ -489,6 +577,9 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
 	 last_percent = percent;
       }
    }
+
+   if(set->target == ECC_IMAGE)
+     mark_zone(&st, base + set->S);
    range_flush(&r);
    ClearProgress();
    MD5Final(sum, &md5);
@@ -510,13 +601,25 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
    if(total_missing) exitCode = EXIT_CODE_MISSING_SECTOR;
    else if(total_crc_errors) exitCode = EXIT_CODE_CHECKSUM_ERROR;
 
+   show_section(idx, RS04_V_DATA, data_missing, data_crc_errors);
+   show_section(idx, RS04_V_CRC, st.crcMissing, st.crcErrors);
+   show_section(idx, RS04_V_ECC, st.eccMissing, st.eccErrors);
+   if(st.tagsBad)
+        RS04VerifyField(idx, RS04_V_TAGS, _("<span %s>%" PRId64 " of %" PRId64 " missing</span>"),
+			Closure->redMarkup, st.tagsBad, st.nTags);
+   else RS04VerifyField(idx, RS04_V_TAGS, "%s", _("complete"));
+   RS04VerifyField(idx, RS04_V_IMGMD5, "%s", data_missing ? "-" : digest);
+
    if(!total_missing && !total_crc_errors)
    {  PrintLog(_("- good image/file  : all sectors present\n"
 		 "- data md5sum      : %s\n"),digest);
       if(memcmp(sum, set->dataMD5, 16))
       {  PrintLog(_("* data md5sum      : BAD, does not match the ecc data\n"));
 	 exitCode = EXIT_CODE_CHECKSUM_ERROR;
+	 RS04VerifyField(idx, RS04_V_IMGMD5, "<span %s>%s</span>", Closure->redMarkup, digest);
+	 RS04VerifyField(idx, RS04_V_RESULT, _("<span %s>Damaged image.</span>"), Closure->redMarkup);
       }
+      else RS04VerifyField(idx, RS04_V_RESULT, _("<span %s>Good image.</span>"), Closure->greenMarkup);
    }
    else
    {  if(!total_crc_errors)
@@ -559,6 +662,22 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
 
 	 PrintLog(_("- prognosis        : %" PRId64 " of %" PRId64 " sectors recoverable (%d.%d%%)\n"),
 		  recoverable, expected, percentage/10, percentage%10);
+
+	 if(damaged_cw)
+	 {  RS04VerifyField(idx, RS04_V_ERASURE_KEY, "%s", _("Erasure counts:"));
+	    RS04VerifyField(idx, RS04_V_ERASURE, _("<span %s>avg =  %.1f; worst = %d per ecc block.</span>"),
+			    worst <= set->m ? Closure->greenMarkup : Closure->redMarkup,
+			    (double)damaged/(double)damaged_cw, worst);
+	 }
+	 RS04VerifyField(idx, RS04_V_PROGNOSIS_KEY, "%s", _("Prognosis:"));
+	 RS04VerifyField(idx, RS04_V_PROGNOSIS, _("<span %s>%" PRId64 " of %" PRId64 " sectors recoverable (%d.%d%%)</span>"),
+			 recoverable < expected ? Closure->redMarkup : Closure->greenMarkup,
+			 recoverable, expected, percentage/10, percentage%10);
+	 if(recoverable < expected)
+	      RS04VerifyField(idx, RS04_V_RESULT, _("<span %s>Full data recovery is NOT possible.</span>"),
+			      Closure->redMarkup);
+	 else RS04VerifyField(idx, RS04_V_RESULT, _("<span %s>Full data recovery is likely.</span>"),
+			      Closure->greenMarkup);
       }
    }
 
@@ -594,7 +713,7 @@ static void cleanup(gpointer data)
 
 void RS04Verify(Image *image)
 {  verify_closure *vc = g_malloc0(sizeof(verify_closure));
-   int i;
+   int i, old_exit_code;
 
    RegisterCleanup(_("Check aborted"), cleanup, vc);
    vc->image = image;
@@ -609,10 +728,22 @@ void RS04Verify(Image *image)
    if(vc->info->set[0].target == ECC_FILE)
      PrintLog(_("%s present.\n"), Closure->eccName);
 
-   for(i=0; i<vc->info->nSets; i++)
-     verify_set(image, &vc->info->set[i], i, vc->info->nSets);
+   RS04VerifyInit(vc->info, image);
 
-   GuiSetLabelText(RS04_LABEL(verifyLabel), "%s", exitCode ? _("Damaged image.") : _("Good image."));
+   /* exitCode may be left over from a previous action in the GUI */
+
+   old_exit_code = exitCode;
+   exitCode = 0;
+
+   for(i=0; i<vc->info->nSets && !Closure->stopActions; i++)
+   {  RS04VerifyShowSet(i);
+      verify_set(image, &vc->info->set[i], i, vc->info->nSets);
+   }
+
+   if(image->file && !Closure->stopActions)
+     RS04VerifyResult(exitCode == 0);
+   if(!exitCode)
+     exitCode = old_exit_code;
 
    cleanup((gpointer)vc);
 }

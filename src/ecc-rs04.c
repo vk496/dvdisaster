@@ -53,7 +53,7 @@ void register_rs04(void)
    method->widgetList = g_malloc0(sizeof(RS04Widgets));
 
 #ifdef WITH_GUI_YES
-   /*** Minimal windows; the results go to the log window */
+   /*** Linkage to rs04-window.c */
 
    method->createCreateWindow = CreateRS04EncWindow;
    method->createFixWindow    = CreateRS04FixWindow;
@@ -69,53 +69,9 @@ void register_rs04(void)
 }
 
 static void destroy(Method *method)
-{  g_free(method->widgetList);
-}
-
+{
 #ifdef WITH_GUI_YES
-
-/***
- *** Minimal GUI windows
- ***/
-
-static GtkWidget* create_label(GtkWidget *parent)
-{  GtkWidget *label = gtk_label_new(NULL);
-
-   gtk_box_pack_start(GTK_BOX(parent), label, FALSE, FALSE, 3);
-   gtk_widget_show(label);
-   return label;
+   FreeRS04Widgets(method->widgetList);
+#endif
+   g_free(method->widgetList);
 }
-
-void CreateRS04EncWindow(Method *self, GtkWidget *parent)
-{  ((RS04Widgets*)self->widgetList)->createLabel = create_label(parent);
-}
-
-void CreateRS04FixWindow(Method *self, GtkWidget *parent)
-{  ((RS04Widgets*)self->widgetList)->fixLabel = create_label(parent);
-}
-
-void CreateRS04VerifyWindow(Method *self, GtkWidget *parent)
-{  ((RS04Widgets*)self->widgetList)->verifyLabel = create_label(parent);
-}
-
-static void reset_label(GtkWidget *label, char *text)
-{  char *markup = g_markup_printf_escaped("<big>%s</big>\n<i>%s</i>",
-					  text, _("See the log window for details."));
-
-   gtk_label_set_markup(GTK_LABEL(label), markup);
-   g_free(markup);
-}
-
-void ResetRS04EncWindow(Method *self)
-{  reset_label(((RS04Widgets*)self->widgetList)->createLabel, _("Creating RS04 error correction data."));
-}
-
-void ResetRS04FixWindow(Method *self)
-{  reset_label(((RS04Widgets*)self->widgetList)->fixLabel, _("Repairing the image."));
-}
-
-void ResetRS04VerifyWindow(Method *self)
-{  reset_label(((RS04Widgets*)self->widgetList)->verifyLabel, _("Checking the image."));
-}
-
-#endif /* WITH_GUI_YES */
