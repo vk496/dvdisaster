@@ -3370,6 +3370,268 @@ Image* OpenImageFromDevice(char *device, int query_only)
 }
 
 /***
+ *** Drive capability report (--drive-test).
+ ***
+ * Only read-only commands are sent; drive settings are never changed.
+ * The report is not translated as it is meant for bug reports.
+ */
+
+static struct { int profile; char *name; } profile_names[] =
+{  {0x08, "CD-ROM"}, {0x09, "CD-R"}, {0x0a, "CD-RW"},
+   {0x10, "DVD-ROM"}, {0x11, "DVD-R"}, {0x12, "DVD-RAM"},
+   {0x13, "DVD-RW restricted overwrite"}, {0x14, "DVD-RW sequential"},
+   {0x15, "DVD-R DL sequential"}, {0x16, "DVD-R DL layer jump"}, {0x17, "DVD-RW DL"},
+   {0x18, "DVD-Download"}, {0x1a, "DVD+RW"}, {0x1b, "DVD+R"},
+   {0x2a, "DVD+RW DL"}, {0x2b, "DVD+R DL"},
+   {0x40, "BD-ROM"}, {0x41, "BD-R SRM"}, {0x42, "BD-R RRM"}, {0x43, "BD-RE"},
+   {0x50, "HD DVD-ROM"}, {0x51, "HD DVD-R"}, {0x52, "HD DVD-RAM"}, {0x53, "HD DVD-RW"},
+   {0x58, "HD DVD-R DL"}, {0x5a, "HD DVD-RW DL"},
+   {0, ""}
+};
+
+/* GET CONFIGURATION for a single feature.
+   Returns the feature descriptor, or NULL if the drive does not have it. */
+
+static unsigned char* get_feature(DeviceHandle *dh, AlignedBuffer *ab, int feature)
+{  unsigned char cmd[MAX_CDB_SIZE];
+   unsigned char *buf = ab->buf;
+
+   memset(cmd, 0, MAX_CDB_SIZE);
+   memset(buf, 0, 2048);
+   cmd[0] = 0x46;           /* GET CONFIGURATION */
+   cmd[1] = 2;              /* only the given feature */
+   cmd[2] = feature>>8;
+   cmd[3] = feature&0xff;
+   cmd[7] = 2048>>8;        /* allocation length */
+   cmd[8] = 2048&0xff;
+
+   if(SendPacket(dh, cmd, 10, buf, 2048, &dh->sense, DATA_READ)<0)
+      return NULL;
+
+   if(be32(buf) < 8 || (buf[8]<<8 | buf[9]) != feature)
+      return NULL;
+
+   return buf+8;
+}
+
+/* MODE SENSE for the current or changeable values of mode page 01h.
+   Like read_mode_page(), assumes no block descriptors. */
+
+static int mode_sense_01(DeviceHandle *dh, AlignedBuffer *ab, int changeable)
+{  unsigned char cmd[MAX_CDB_SIZE];
+
+   memset(cmd, 0, MAX_CDB_SIZE);
+   memset(ab->buf, 0, 252);
+   cmd[0] = 0x5a;                          /* MODE SENSE(10) */
+   cmd[2] = (changeable ? 0x40 : 0) | 1;   /* page control, page code */
+   cmd[8] = 252;                           /* allocation length */
+
+   return SendPacket(dh, cmd, 10, ab->buf, 252, &dh->sense, DATA_READ) >= 0;
+}
+
+/* Read one sector with READ CD; returns 1 if it works,
+   0 if the drive refuses the request and -1 for other errors. */
+
+#define UNTESTED -2
+
+static int try_read_cd(DeviceHandle *dh, AlignedBuffer *ab, gint64 lba, int audio, int flags)
+{  unsigned char cmd[MAX_CDB_SIZE];
+   int size = (audio || (flags & 0x80)) ? CD_RAW_SECTOR_SIZE : 2048;
+
+   if(flags & 0x02) size += 294;   /* C2 error pointers */
+
+   memset(cmd, 0, MAX_CDB_SIZE);
+   cmd[0] = 0xbe;                  /* READ CD */
+   cmd[1] = audio ? 1<<2 : 0;      /* CD-DA, or any sector type */
+   cmd[2] = (lba >> 24) & 0xff;
+   cmd[3] = (lba >> 16) & 0xff;
+   cmd[4] = (lba >>  8) & 0xff;
+   cmd[5] = lba & 0xff;
+   cmd[8] = 1;
+   cmd[9] = flags;
+
+   if(SendPacket(dh, cmd, 12, ab->buf, size, &dh->sense, DATA_READ) >= 0)
+      return 1;
+
+   return dh->sense.sense_key == 5 ? 0 : -1;  /* illegal request: not supported */
+}
+
+static void print_test(DeviceHandle *dh, char *what, int result)
+{  if(result > 0)
+      PrintLog("  %-42s yes\n", what);
+   else PrintLog("  %-42s %s (%s)\n", what, result ? "read error" : "no",
+		 GetSenseString(dh->sense.sense_key, dh->sense.asc, dh->sense.ascq, FALSE));
+}
+
+/* Test result if available, else what the drive claims */
+
+static int works(int test, int claimed)
+{  return test == UNTESTED || test < 0 ? claimed : test;
+}
+
+static char* untested(int test1, int test2)
+{  return test1 > 0 && test2 >= 0 ? "" : " (not tested)";
+}
+
+void DriveTest(char *device)
+{  DeviceHandle *dh = OpenDevice(device);
+   AlignedBuffer *ab;
+   unsigned char cmd[MAX_CDB_SIZE];
+   unsigned char *f;
+   char *firmware;
+   int cd_read, c2_flag = FALSE, dvd_read, bd_read, hddvd_read;
+   int defective = FALSE, medium = UNSUPPORTED;
+   int data = UNTESTED, raw = UNTESTED, raw_c2 = UNTESTED, cdda = UNTESTED, cdda_c2 = UNTESTED;
+   gint64 data_lba = -1, audio_lba = -1;
+   int i;
+
+   if(!dh) return;
+   InquireDevice(dh, 0);
+   ab = CreateAlignedBuffer(4096);
+
+   firmware = dh->devinfo + strlen(dh->vendor);
+   while(*firmware == ' ') firmware++;
+
+   PrintLog("\nDrive capability report for %s\n\n", device);
+   PrintLog("Drive:    %s\n", dh->vendor);
+   PrintLog("Firmware: %s\n", firmware);
+
+   /*** Profiles and features (GET CONFIGURATION) */
+
+   PrintLog("\nProfiles (GET CONFIGURATION):\n");
+   if((f = get_feature(dh, ab, 0x0000)))
+   {  int current = ab->buf[6]<<8 | ab->buf[7];
+
+      for(i=0; i<f[3]/4; i++)
+      {  int p = f[4+4*i]<<8 | f[5+4*i];
+	 int j;
+
+	 for(j=0; profile_names[j].profile && profile_names[j].profile != p; j++)
+	   ;
+	 PrintLog("  %04xh %s%s\n", p, profile_names[j].name, p == current ? " (current)" : "");
+      }
+   }
+   else PrintLog("  none reported\n");
+
+   PrintLog("\nFeatures:\n");
+   f = get_feature(dh, ab, 0x001e);
+   cd_read = f != NULL;
+   PrintLog("  CD read (001Eh):               %s\n", cd_read ? "yes" : "no");
+   if(cd_read)
+   {  c2_flag = f[4] & 0x02;
+      PrintLog("    C2 error pointers:           %s\n", c2_flag ? "yes" : "no");
+      PrintLog("    CD-TEXT:                     %s\n", f[4] & 0x01 ? "yes" : "no");
+   }
+   dvd_read = get_feature(dh, ab, 0x001f) != NULL;
+   PrintLog("  DVD read (001Fh):              %s\n", dvd_read ? "yes" : "no");
+   bd_read = get_feature(dh, ab, 0x0040) != NULL;
+   PrintLog("  BD read (0040h):               %s\n", bd_read ? "yes" : "no");
+   hddvd_read = get_feature(dh, ab, 0x0050) != NULL;
+   PrintLog("  HD DVD read (0050h):           %s\n", hddvd_read ? "yes" : "no");
+   f = get_feature(dh, ab, 0x0107);
+   PrintLog("  Real time streaming (0107h):   %s\n",
+	    !f ? "no" : (f[4] & 0x08 ? "yes (SET STREAMING, SET CD SPEED)" : "yes (SET STREAMING)"));
+
+   /*** Read error recovery mode page. dvdisaster sets the TB (and DCR)
+	bits for raw reading so that defective sectors are delivered. */
+
+   PrintLog("\nRead error recovery (mode page 01h):\n");
+   if(mode_sense_01(dh, ab, FALSE))
+   {  PrintLog("  Current parameters:            %02xh, %d read retries\n", ab->buf[10], ab->buf[11]);
+      if(mode_sense_01(dh, ab, TRUE))
+      {  defective = ab->buf[10] & 0x20;
+	 PrintLog("  Changeable parameters:         %02xh\n", ab->buf[10]);
+	 PrintLog("  Delivers defective sectors:    %s\n",
+		  defective ? "probably (TB bit changeable)" : "no (TB bit not changeable)");
+      }
+   }
+   else PrintLog("  not available (%s)\n",
+		 GetSenseString(dh->sense.sense_key, dh->sense.asc, dh->sense.ascq, FALSE));
+
+   /*** Inserted medium */
+
+   PrintLog("\nMedium:\n");
+   memset(cmd, 0, MAX_CDB_SIZE);
+   cmd[0] = 0x00;     /* TEST UNIT READY; twice for a pending unit attention */
+   if(   SendPacket(dh, cmd, 6, NULL, 0, &dh->sense, DATA_NONE) < 0
+      && SendPacket(dh, cmd, 6, NULL, 0, &dh->sense, DATA_NONE) < 0)
+      PrintLog("  none (%s)\n", GetSenseString(dh->sense.sense_key, dh->sense.asc, dh->sense.ascq, FALSE));
+   else if(!query_type(dh, 2))
+      PrintLog("  not recognized (profile %04xh)\n", dh->profile);
+   else
+   {  int audio_tracks = 0;
+
+      medium = dh->mainType;
+      PrintLog("  %s\n", dh->typeDescr ? dh->typeDescr : dh->profileDescr);
+      for(i=0; i<dh->nTracks; i++)
+      {  if(dh->track[i].audio)
+	 {  audio_tracks++;
+	    if(audio_lba < 0) audio_lba = dh->track[i].start;
+	 }
+	 else if(data_lba < 0) data_lba = dh->track[i].start;
+      }
+      if(dh->nTracks)
+	 PrintLog("  %d session(s), %d track(s), %d audio\n", dh->sessions, dh->nTracks, audio_tracks);
+      else if(medium != CD || dh->subType != UNSUPPORTED)
+	 data_lba = 0;
+   }
+
+   /*** Read tests */
+
+   if(data_lba >= 0)
+   {  PrintLog("\nRead tests (data sector %" PRId64 "):\n", data_lba);
+      data = dh->read(dh, ab->buf, data_lba, 1) >= 0 ? 1 : -1;
+      print_test(dh, "Reading user data", data);
+      if(medium == CD)
+      {  raw = try_read_cd(dh, ab, data_lba, FALSE, 0xf8);
+	 print_test(dh, "READ CD raw (sync, headers, EDC/ECC)", raw);
+	 raw_c2 = try_read_cd(dh, ab, data_lba, FALSE, 0xfa);
+	 print_test(dh, "READ CD raw with C2 error pointers", raw_c2);
+      }
+   }
+
+   if(audio_lba >= 0)
+   {  PrintLog("\nRead tests (audio sector %" PRId64 "):\n", audio_lba);
+      cdda = try_read_cd(dh, ab, audio_lba, TRUE, 0x10);
+      print_test(dh, "READ CD CD-DA", cdda);
+      cdda_c2 = try_read_cd(dh, ab, audio_lba, TRUE, 0x12);
+      print_test(dh, "READ CD CD-DA with C2 error pointers", cdda_c2);
+   }
+
+   if(cd_read)
+     PrintLog("\nRead offset: unknown; dvdisaster does not measure it.\n"
+	      "  Look up the drive in the AccurateRip drive offset list if needed;\n"
+	      "  RS04 detects offset differences between CD-DA rips (see --audio-offset).\n");
+
+   /*** Summary */
+
+   PrintLog("\nSuitable for:\n");
+   if(cd_read || (medium == CD && data > 0))
+   {  if(works(raw, cd_read))
+	   PrintLog("  data CDs, raw reading (--read-raw) %s C2 scanning%s%s\n",
+		    works(raw_c2, c2_flag) ? "with" : "without",
+		    defective ? ", delivers defective sectors" : "", untested(raw, raw_c2));
+      else PrintLog("  data CDs, no raw reading\n");
+
+      if(works(cdda, cd_read))
+      {  if(works(cdda_c2, c2_flag))
+	      PrintLog("  audio CDs (--cdda) with C2 error detection%s\n", untested(cdda, cdda_c2));
+	 else PrintLog("  audio CDs (--cdda) without C2 error detection%s;\n"
+		       "  damaged audio sectors may be interpolated silently\n", untested(cdda, cdda_c2));
+      }
+   }
+   if(dvd_read || (medium == DVD && data > 0))
+      PrintLog("  DVD\n");
+   if(bd_read || (medium == BD && data > 0))
+      PrintLog("  BD\n");
+   if(hddvd_read || (medium == HD_DVD && data > 0))
+      PrintLog("  HD DVD\n");
+
+   FreeAlignedBuffer(ab);
+   CloseDevice(dh);
+}
+
+/***
  *** Debugging function for sending a cdb to the drive
  ***/
 
