@@ -83,7 +83,6 @@ int RS04RecognizeFile(LargeFile *ecc_file, EccHeader **eh)
    gint64 pos;
    int found = FALSE;
 
-   Verbose("RS04RecognizeFile(): examining %s\n", ecc_file->path);
    memset(&fs, 0, sizeof(fs));
    *eh = NULL;
 
@@ -92,14 +91,26 @@ int RS04RecognizeFile(LargeFile *ecc_file, EccHeader **eh)
    LargeSeek(ecc_file, 0);
    if(!RS04ReadAll(ecc_file, buf, 2048))
    {  g_free(buf);
-      Verbose("RS04RecognizeFile(): short read\n");
       return ECCFILE_INVALID;
    }
 
-   if(!memcmp(buf, "*dvdisaster*", 12) && memcmp(buf+12, "RS04", 4))
-   {  g_free(buf);
-      Verbose("RS04RecognizeFile(): wrong codec\n");
-      return ECCFILE_WRONG_CODEC;
+   /* Another codec's header with a valid checksum: report it like RS03 does.
+      Otherwise keep looking for RS04 tags. */
+
+   if(!memcmp(buf, "*dvdisaster*", 12) && memcmp(buf+12, "RS04", 4)
+      && RS04ReadAll(ecc_file, buf+2048, 2048))
+   {  EccHeader *eh = (EccHeader*)buf;
+      guint32 recorded = eh->selfCRC;
+
+#ifdef HAVE_BIG_ENDIAN
+      eh->selfCRC = 0x47504c00;
+#else
+      eh->selfCRC = 0x4c5047;
+#endif
+      if(Crc32(buf, sizeof(EccHeader)) == recorded)
+      {  g_free(buf);
+	 return ECCFILE_WRONG_CODEC;
+      }
    }
 
    found = file_tag_found(buf, 0, &fs);
@@ -119,7 +130,6 @@ int RS04RecognizeFile(LargeFile *ecc_file, EccHeader **eh)
    if(!found)
    {  if(fs.unsupported)
 	unsupported(ecc_file->path);
-      Verbose("RS04RecognizeFile(): no valid tag found\n");
       return ECCFILE_INVALID;
    }
 
@@ -208,8 +218,6 @@ static void scan_region(image_scan *is, gint64 lo, gint64 hi)
    lo = lo & ~2047;
    hi = MIN((hi + 2047) & ~2047, image_bytes(is->image));
    limit = hi;
-
-   Verbose("RS04: scanning bytes %" PRId64 " - %" PRId64 "\n", lo, hi);
 
    while(hi > lo)
    {  gint64 start = MAX(lo, hi - SCAN_CHUNK);
@@ -344,9 +352,6 @@ int RS04RecognizeImage(Image *image)
    if(image->type != IMAGE_FILE && image->type != IMAGE_MEDIUM)
      return FALSE;
 
-   Verbose("RS04RecognizeImage(): examining %s\n",
-	   image->type == IMAGE_FILE ? image->file->path : image->dh->device);
-
    memset(&is, 0, sizeof(is));
    is.image = image;
    is.cands = g_array_new(FALSE, FALSE, sizeof(RS04Set));
@@ -395,7 +400,6 @@ int RS04RecognizeImage(Image *image)
 
    if(!n)
    {  g_array_free(is.cands, TRUE);
-      Verbose("RS04RecognizeImage(): no sets found\n");
       return FALSE;
    }
 
