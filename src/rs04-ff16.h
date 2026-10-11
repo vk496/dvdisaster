@@ -71,7 +71,8 @@ void RS04InitGF16(void);
 
 /* Data kernels; all variants give identical results.
    RS04_KERNEL_AUTO (the default) picks the fastest one supported by the CPU:
-   AVX2 or SSSE3 (x86, runtime detection), NEON (aarch64), else scalar.
+   GFNI (AVX2 + GF2P8AFFINEQB), AVX2 or SSSE3 (x86, runtime detection),
+   NEON (aarch64), else scalar.
    RS04SelectKernel() returns FALSE if the variant is not available here;
    call it before starting encoder/decoder threads. */
 #define RS04_KERNEL_AUTO     0
@@ -79,6 +80,7 @@ void RS04InitGF16(void);
 #define RS04_KERNEL_SSSE3    2
 #define RS04_KERNEL_AVX2     3
 #define RS04_KERNEL_NEON     4
+#define RS04_KERNEL_GFNI     5
 
 int RS04SelectKernel(int kernel);
 const char *RS04KernelName(void);

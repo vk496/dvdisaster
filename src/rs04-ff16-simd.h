@@ -28,9 +28,11 @@
 
 /*
  * Template for the RS04 SIMD data kernels; included by rs04-ff16.c once per
- * instruction set after defining:
+ * kernel variant after defining (SIMD, SIMD_NAME, TARGET and V_AFFINE are
+ * undefined again at the end, the vector macros are left to the includer):
  *
  *   SIMD(name)       function name suffix, e.g. name##_avx2
+ *   SIMD_NAME        variant name for RS04KernelName()
  *   TARGET           function attribute selecting the instruction set
  *   V, VW            vector type and its width in bytes (16 or 32)
  *   V_LOAD(p)        unaligned load,  V_STORE(p, v) unaligned store
@@ -40,18 +42,44 @@
  *   V_SHUF(t, i)     t[i] per byte for indices 0..15 (pshufb / tbl)
  *   V_LONIB(v, m)    low nibbles of v,  V_HINIB(v, m) high nibbles of v
  *
+ * or, for GF2P8AFFINEQB based multiplication (GFNI):
+ *
+ *   V_AFFINE(v, m)   bytes of v times the 8x8 bit matrix m (in all qwords)
+ *   V_SPLAT64(x)     x in all qwords
+ *
  * The 64 byte blocks hold the low symbol bytes in [0..31] and the high bytes
  * in [32..63], so a VW wide slice at offset h (< 32) pairs with offset h+32.
- * Multiplication splits each symbol into four nibbles and looks up the
+ * The shuffle variants split each symbol into four nibbles and look up the
  * partial products of the low and high result bytes (Leopard's
- * LEO_MUL_128 / LEO_MUL_256).
+ * LEO_MUL_128 / LEO_MUL_256); the GFNI variant multiplies the low and high
+ * input bytes by four 8x8 bit matrices instead.
  */
-
-typedef struct { V lo[4], hi[4]; } SIMD(Tab);
 
 #define FOR_SLICES(o, h, bytes) \
    for(o = 0; o < (bytes); o += 64) \
      for(h = o; h < o + 32; h += VW)
+
+#ifdef V_AFFINE
+
+typedef struct { V m[4]; } SIMD(Tab);
+
+TARGET static inline void SIMD(load_tab)(SIMD(Tab) *t, const MulLut *lut)
+{  unsigned n;
+
+   for(n = 0; n < 4; n++)
+     t->m[n] = V_SPLAT64(lut->affine[n]);
+}
+
+/* {x_lo, x_hi} ^= {y_lo, y_hi} * t */
+TARGET static inline void SIMD(muladd)(V *x_lo, V *x_hi, V y_lo, V y_hi, const SIMD(Tab) *t, V mask)
+{  (void)mask;
+   *x_lo = V_XOR(*x_lo, V_XOR(V_AFFINE(y_lo, t->m[0]), V_AFFINE(y_hi, t->m[1])));
+   *x_hi = V_XOR(*x_hi, V_XOR(V_AFFINE(y_lo, t->m[2]), V_AFFINE(y_hi, t->m[3])));
+}
+
+#else
+
+typedef struct { V lo[4], hi[4]; } SIMD(Tab);
 
 TARGET static inline void SIMD(load_tab)(SIMD(Tab) *t, const MulLut *lut)
 {  unsigned n;
@@ -74,6 +102,8 @@ TARGET static inline void SIMD(muladd)(V *x_lo, V *x_hi, V y_lo, V y_hi, const S
    *x_lo = V_XOR(*x_lo, lo);
    *x_hi = V_XOR(*x_hi, hi);
 }
+
+#endif
 
 /* x[] ^= y[] */
 TARGET static void SIMD(xor_mem)(void *x, const void *y, guint64 bytes)
@@ -236,6 +266,11 @@ TARGET static void SIMD(fft_dit4)(guint64 bytes, void **work, unsigned dist,
 
 static const Kernels SIMD(kernels) =
 {  SIMD_NAME,
+#ifdef V_AFFINE
+   TRUE,
+#else
+   FALSE,
+#endif
    SIMD(xor_mem), SIMD(mul_mem),
    SIMD(ifft_dit2), SIMD(fft_dit2),
    SIMD(ifft_dit4), SIMD(fft_dit4)
@@ -245,13 +280,4 @@ static const Kernels SIMD(kernels) =
 #undef SIMD
 #undef SIMD_NAME
 #undef TARGET
-#undef V
-#undef VW
-#undef V_LOAD
-#undef V_STORE
-#undef V_XOR
-#undef V_MASK
-#undef V_TABLE
-#undef V_SHUF
-#undef V_LONIB
-#undef V_HINIB
+#undef V_AFFINE

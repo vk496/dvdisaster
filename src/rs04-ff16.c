@@ -270,43 +270,81 @@ static void init_fft_tables(void)
  ***/
 
 /* Product table for multiplying by Exp(log_m), built per butterfly instead
-   of Leopard's precomputed 8-16MB tables: lo[16*n + v] / hi[16*n + v] are
-   the low / high bytes of (v << 4n) * Exp(log_m), i.e. four 16 byte shuffle
-   tables each (Leopard's Multiply128LUT_t). */
+   of Leopard's precomputed 8-16MB tables:
+   - lo[16*n + v] / hi[16*n + v] are the low / high bytes of
+     (v << 4n) * Exp(log_m), i.e. four 16 byte shuffle tables each
+     (Leopard's Multiply128LUT_t), for the scalar and shuffle based kernels;
+   - affine[] holds the multiplication as four 8x8 bit matrices for
+     GF2P8AFFINEQB (low byte to low, high to low, low to high, high to high),
+     only built for the GFNI kernels. */
 
 typedef struct
 {  guint8 lo[64], hi[64];
+   guint64 affine[4];
 } MulLut;
 
 static const MulLut zero_lut;
+static gboolean build_affine;   /* set together with the kernels */
+
+/* Transposes an 8x8 bit matrix (bit j of byte i <-> bit i of byte j)
+   and reverses the byte order, giving the GF2P8AFFINEQB matrix whose
+   output bit i is the parity of (input & byte i of x). */
+static guint64 affine_matrix(guint64 x)
+{  guint64 t;
+
+   t = (x ^ (x >> 7))  & 0x00aa00aa00aa00aaULL; x ^= t ^ (t << 7);
+   t = (x ^ (x >> 14)) & 0x0000cccc0000ccccULL; x ^= t ^ (t << 14);
+   t = (x ^ (x >> 28)) & 0x00000000f0f0f0f0ULL; x ^= t ^ (t << 28);
+
+   return GUINT64_SWAP_LE_BE(x);
+}
 
 static void build_lut(MulLut *lut, ffe_t log_m)
 {  const guint64 splat = 0x0101010101010101ULL;
+   ffe_t p[FF_BITS];
    unsigned n;
 
    /* Multiplication is linear over GF(2): only the products with single
-      bits need the log tables. The 16 entries of a nibble table are xor
-      combinations of four of them, computed eight bytes at a time;
-      byte v of the masks below is 0xff if bit 0/1/2 of v is set. */
+      bits need the log tables, everything else is xor combinations. */
+
+   for(n = 0; n < FF_BITS; n++)
+     p[n] = exp_lut[add_mod(log_bits[n], log_m)];
+
+   if(build_affine)
+   {  guint64 c[4] = { 0, 0, 0, 0 };
+
+      /* byte j of c[]: low/high byte of the product with bit j of the
+	 low/high input byte, i.e. column j of the matrix */
+
+      for(n = 0; n < 8; n++)
+      {  c[0] |= (guint64)(p[n] & 0xff) << (8 * n);
+	 c[1] |= (guint64)(p[n + 8] & 0xff) << (8 * n);
+	 c[2] |= (guint64)(p[n] >> 8) << (8 * n);
+	 c[3] |= (guint64)(p[n + 8] >> 8) << (8 * n);
+      }
+      for(n = 0; n < 4; n++)
+	lut->affine[n] = affine_matrix(c[n]);
+      return;
+   }
+
+   /* The 16 entries of a nibble table are xor combinations of four
+      products, computed eight bytes at a time; byte v of the masks
+      below is 0xff if bit 0/1/2 of v is set. */
 
    for(n = 0; n < 4; n++)
-   {  const ffe_t *log_bit = log_bits + 4 * n;
-      ffe_t p0 = exp_lut[add_mod(log_bit[0], log_m)];
-      ffe_t p1 = exp_lut[add_mod(log_bit[1], log_m)];
-      ffe_t p2 = exp_lut[add_mod(log_bit[2], log_m)];
-      ffe_t p3 = exp_lut[add_mod(log_bit[3], log_m)];
-      guint64 lo =   (0xff00ff00ff00ff00ULL & ((p0 & 0xff) * splat))
-	           ^ (0xffff0000ffff0000ULL & ((p1 & 0xff) * splat))
-		   ^ (0xffffffff00000000ULL & ((p2 & 0xff) * splat));
-      guint64 hi =   (0xff00ff00ff00ff00ULL & ((p0 >> 8) * splat))
-		   ^ (0xffff0000ffff0000ULL & ((p1 >> 8) * splat))
-		   ^ (0xffffffff00000000ULL & ((p2 >> 8) * splat));
+   {  const ffe_t *pn = p + 4 * n;
+      guint64 lo =   (0xff00ff00ff00ff00ULL & ((pn[0] & 0xff) * splat))
+		   ^ (0xffff0000ffff0000ULL & ((pn[1] & 0xff) * splat))
+		   ^ (0xffffffff00000000ULL & ((pn[2] & 0xff) * splat));
+      guint64 hi =   (0xff00ff00ff00ff00ULL & ((pn[0] >> 8) * splat))
+		   ^ (0xffff0000ffff0000ULL & ((pn[1] >> 8) * splat))
+		   ^ (0xffffffff00000000ULL & ((pn[2] >> 8) * splat));
       guint64 v;
 
-      v = GUINT64_TO_LE(lo);                         memcpy(lut->lo + 16 * n, &v, 8);
-      v = GUINT64_TO_LE(lo ^ ((p3 & 0xff) * splat)); memcpy(lut->lo + 16 * n + 8, &v, 8);
-      v = GUINT64_TO_LE(hi);                         memcpy(lut->hi + 16 * n, &v, 8);
-      v = GUINT64_TO_LE(hi ^ ((p3 >> 8) * splat));   memcpy(lut->hi + 16 * n + 8, &v, 8);
+      v = GUINT64_TO_LE(lo);                          memcpy(lut->lo + 16 * n, &v, 8);
+      v = GUINT64_TO_LE(lo ^ ((pn[3] & 0xff) * splat)); memcpy(lut->lo + 16 * n + 8, &v, 8);
+      v = GUINT64_TO_LE(hi);                          memcpy(lut->hi + 16 * n, &v, 8);
+      v = GUINT64_TO_LE(hi ^ ((pn[3] >> 8) * splat));   memcpy(lut->hi + 16 * n + 8, &v, 8);
    }
 }
 
@@ -322,6 +360,7 @@ static const MulLut *get_lut(MulLut *lut, ffe_t log_m)
 
 typedef struct
 {  const char *name;
+   gboolean affine;   /* uses MulLut.affine[] instead of lo[] / hi[] */
 
    /* x[] ^= y[] */
    void (*xor_mem)(void *x, const void *y, guint64 bytes);
@@ -421,7 +460,7 @@ static void fft_dit4_scalar(guint64 bytes, void **work, unsigned dist,
 }
 
 static const Kernels kernels_scalar =
-{  "scalar",
+{  "scalar", FALSE,
    xor_mem_scalar, mul_mem_scalar,
    ifft_dit2_scalar, fft_dit2_scalar,
    ifft_dit4_scalar, fft_dit4_scalar
@@ -451,10 +490,17 @@ static const Kernels kernels_scalar =
 #define V_LONIB(v, m) _mm_and_si128(v, m)
 #define V_HINIB(v, m) _mm_and_si128(_mm_srli_epi64(v, 4), m)
 #include "rs04-ff16-simd.h"
+#undef V
+#undef VW
+#undef V_LOAD
+#undef V_STORE
+#undef V_XOR
+#undef V_MASK
+#undef V_TABLE
+#undef V_SHUF
+#undef V_LONIB
+#undef V_HINIB
 
-#define SIMD(name)    name##_avx2
-#define SIMD_NAME     "AVX2"
-#define TARGET        __attribute__((target("avx2")))
 #define V             __m256i
 #define VW            32
 #define V_LOAD(p)     _mm256_loadu_si256((const __m256i*)(p))
@@ -465,7 +511,37 @@ static const Kernels kernels_scalar =
 #define V_SHUF(t, i)  _mm256_shuffle_epi8(t, i)
 #define V_LONIB(v, m) _mm256_and_si256(v, m)
 #define V_HINIB(v, m) _mm256_and_si256(_mm256_srli_epi64(v, 4), m)
+
+#define SIMD(name)    name##_avx2
+#define SIMD_NAME     "AVX2"
+#define TARGET        __attribute__((target("avx2")))
 #include "rs04-ff16-simd.h"
+
+/* GF2P8AFFINEQB multiplies 32 bytes by an 8x8 bit matrix at once
+   (VEX encoded, no AVX-512 needed) */
+
+#if defined(HAVE_CPUID) && ((defined(__clang__) && __clang_major__ >= 7) || (!defined(__clang__) && __GNUC__ >= 8))
+#include <cpuid.h>
+
+#define RS04_HAVE_GFNI_KERNELS
+
+#define SIMD(name)    name##_gfni
+#define SIMD_NAME     "GFNI"
+#define TARGET        __attribute__((target("avx2,gfni")))
+#define V_SPLAT64(x)  _mm256_set1_epi64x((long long)(x))
+#define V_AFFINE(v, m) _mm256_gf2p8affine_epi64_epi8(v, m, 0)
+#include "rs04-ff16-simd.h"
+#undef V_SPLAT64
+
+static gboolean cpu_has_gfni(void)
+{  unsigned a, b, c, d;
+
+   if(!__builtin_cpu_supports("avx2") || __get_cpuid_max(0, NULL) < 7)
+     return FALSE;
+   __cpuid_count(7, 0, a, b, c, d);
+   return (c >> 8) & 1;
+}
+#endif
 #endif
 
 /*
@@ -502,7 +578,8 @@ int RS04SelectKernel(int kernel)
 
    switch(kernel)
    {  case RS04_KERNEL_AUTO:
-	return    RS04SelectKernel(RS04_KERNEL_AVX2)
+	return    RS04SelectKernel(RS04_KERNEL_GFNI)
+	       || RS04SelectKernel(RS04_KERNEL_AVX2)
 	       || RS04SelectKernel(RS04_KERNEL_SSSE3)
 	       || RS04SelectKernel(RS04_KERNEL_NEON)
 	       || RS04SelectKernel(RS04_KERNEL_SCALAR);
@@ -519,6 +596,12 @@ int RS04SelectKernel(int kernel)
 	  k = &kernels_avx2;
 	break;
 #endif
+#ifdef RS04_HAVE_GFNI_KERNELS
+      case RS04_KERNEL_GFNI:
+	if(cpu_has_gfni())
+	  k = &kernels_gfni;
+	break;
+#endif
 #ifdef __aarch64__
       case RS04_KERNEL_NEON:
 	k = &kernels_neon;
@@ -530,6 +613,7 @@ int RS04SelectKernel(int kernel)
      return FALSE;
 
    kern = k;
+   build_affine = k->affine;
    return TRUE;
 }
 
