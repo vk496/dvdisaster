@@ -211,6 +211,7 @@ int  RS04ParseTag(unsigned char*, RS04Set*, guint64*, guint32*);
 void RS04BuildTag(RS04Set*, guint64, guint32*, unsigned char*);
 int  RS04ChooseParameters(RS04Set*, double, guint64, guint64);
 guint64 RS04MemoryBudget(void);
+void RS04ChooseKernel(void);
 guint64 RS04ZoneIndex(RS04Set*, guint64);
 void RS04SectorToShard(int, unsigned char*, unsigned char*);
 int  RS04ShardToSector(int, unsigned char*, unsigned char*);
