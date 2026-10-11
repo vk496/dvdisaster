@@ -300,7 +300,7 @@ static void checksum_data(ecc_closure *ec)
 	 p[0] = crc; p[1] = crc>>8; p[2] = crc>>16; p[3] = crc>>24;
       }
 
-      progress(ec, t+n);
+      progress(ec, (t+n)/8);
    }
 
    MD5Final(set->dataMD5, &md5);
@@ -539,8 +539,8 @@ void RS04Create(void)
    /*** Pass 1: checksums */
 
    ec->timer = g_timer_new();
-   ec->progressTotal = set->S + set->L*set->k;
-   ec->progressDone = set->S;
+   ec->progressTotal = set->S/8 + set->L*set->k;   /* checksums are fast */
+   ec->progressDone = set->S/8;
    checksum_data(ec);
 
    if(Closure->regtestMode)
