@@ -614,6 +614,7 @@ typedef struct _CrcBuf
    guint32 *crcbuf;
    guint64 crcSize;
    Bitmap *valid;
+   Bitmap *covered;             /* if not NULL: sectors which have a CRC at all */
    gint32 crcCached;            /* CRC has been retrieved from ECC or previous run */
   
    /* MD5 sum of image sectors */

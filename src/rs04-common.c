@@ -384,6 +384,60 @@ guint64 RS04ExpectedImageSize(Image *image)
 }
 
 /***
+ *** CRC buffer for checking sectors while reading a medium
+ ***
+ * Covers the data sectors of all sets with 2048 byte sectors at their
+ * image positions, and the CRC sectors of augmented sets (from the tags).
+ * Only the beginning of each added zone up to the last CRC sector is read.
+ * Sectors without a CRC (tags, parity, gaps between sets) are not covered.
+ */
+
+static void set_crc(CrcBuf *cb, guint64 idx, int known, guint32 crc)
+{  if(idx >= cb->crcSize) return;
+
+   SetBit(cb->covered, idx);
+   if(known)
+   {  cb->crcbuf[idx] = crc;
+      SetBit(cb->valid, idx);
+   }
+}
+
+CrcBuf* RS04GetCrcBuf(Image *image)
+{  RS04Info *info = RS04GetSets(image);
+   CrcBuf *cb = CreateCrcBuf(image);
+   int i;
+
+   cb->covered = CreateBitmap0(cb->crcSize);
+   cb->coveredSectors = cb->crcSize;
+
+   for(i=0; info && i<info->nSets; i++)
+   {  RS04Set *set = &info->set[i];
+      gint64 base = set->target == ECC_FILE ? 0 : set->start;
+      guint64 t, q, S = set->S;
+      RS04State st;
+
+      if(set->B != 2048) continue;
+      if(set->dataBytes % 2048) S--;  /* partial last sector of an ecc file set */
+
+      RS04InitState(&st, image, set);
+      RS04ScanZonePart(&st, NULL, RS04ZoneIndex(set, set->c-1)+1);
+
+      for(t=0; t<S; t++)
+	set_crc(cb, base+t, GetBit(st.dataKnown, t), st.dataCrc[t]);
+
+      if(set->target == ECC_IMAGE)
+	for(q=0; q<set->c; q++)
+	  set_crc(cb, base+set->S+RS04ZoneIndex(set, q),
+		  GetBit(st.payloadKnown, q), st.payloadCrc[q]);
+
+      RS04FreeState(&st);
+   }
+
+   g_free(info);
+   return cb;
+}
+
+/***
  *** Sector I/O
  ***
  * Data sector t of a set is at byte io->dataOffset + t*B of the image,

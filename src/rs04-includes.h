@@ -149,6 +149,7 @@ EccHeader* RS04CreateEccHeader(RS04Set*, int);
 RS04Info* RS04GetSets(Image*);
 guint64 RS04ExpectedImageSize(Image*);
 guint64 RS04MediumSectors(Image*);
+CrcBuf* RS04GetCrcBuf(Image*);
 
 void RS04InitIO(RS04IO*, Image*, RS04Set*);
 int  RS04ReadData(RS04IO*, guint64, int, unsigned char*, guint8*);
@@ -187,6 +188,7 @@ typedef struct _RS04State   /* results of RS04ScanZone() */
 void RS04InitState(RS04State*, Image*, RS04Set*);
 void RS04FreeState(RS04State*);
 void RS04ScanZone(RS04State*, GString*);
+void RS04ScanZonePart(RS04State*, GString*, guint64);
 void RS04SetCrcSector(RS04State*, guint64, unsigned char*);
 int  RS04DetectAudioOffset(RS04State*, int*, int*, int*);
 void RS04Verify(Image*);
