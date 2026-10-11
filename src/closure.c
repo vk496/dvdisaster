@@ -715,6 +715,7 @@ void FreeClosure()
    cond_free(Closure->docDir);
    cond_free(Closure->errorTitle);
    cond_free(Closure->simulateCD);
+   cond_free(Closure->simulateTOC);
    cond_free(Closure->dDumpDir);
    cond_free(Closure->dDumpPrefix);
 

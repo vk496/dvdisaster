@@ -145,6 +145,23 @@ require $dataBytes = S \cdot B$, otherwise the added zone would not start on
 a sector boundary. Ecc files may protect data of any length, e.g. arbitrary
 files.
 
+\paragraph{Missing sectors in image files.}
+\label{rs04-missing}
+dvdisaster stores a sector which could not be read as its {\em dead sector
+marker}: 2048 bytes starting with the text {\tt dvdisaster dead sector
+marker} (the marker used for RS01--RS03 images), or 2048 copies of a fill
+byte if the user requested one (e.g.\ zero for images made by other
+tools). For $B > 2048$ a missing sector is this 2048-byte marker followed by
+$B - 2048$ zero bytes (fill bytes if a fill byte is used). Readers recognise
+a missing sector by its first 2048 bytes only. A missing sector is an
+erasure; its Crc32 is meaningless.
+
+\paragraph{Whole-disc images (informative).} dvdisaster reads a
+multi-session medium as one image in which every sector is at its absolute
+position. The sectors between the sessions (lead-out, lead-in and pregap) can
+not be read; they are stored as zero-filled $B$-byte sectors. They belong to
+no set (section \ref{rs04-sessions}) and are not erasures.
+
 \subsubsection{Sector to shard mapping}
 \label{rs04-shard}
 
@@ -732,7 +749,8 @@ format.
   first ($C_j$ is in codeword $(S+j) \bmod L$). Data sectors whose Crc32 is
   not known yet are assumed to be correct if they are readable.
 \item For every codeword: a data sector is an erasure if it is unreadable
-  (in image files: contains the dead sector marker of dvdisaster) or its
+  (in image files: contains the dead sector marker of dvdisaster, section
+  \ref{rs04-missing}) or its
   Crc32 does not match. Zero sectors are known. With at most $m$
   erasures the codeword is decoded, otherwise its erased sectors stay
   unrecoverable. The data sector Crc32 values are checked after decoding.

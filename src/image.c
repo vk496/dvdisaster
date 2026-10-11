@@ -281,7 +281,7 @@ int GetImageFingerprint(Image *image, guint8 *fp_out, guint64 sector)
 	    return TRUE;
       }
 
-     ab = CreateAlignedBuffer(2048);
+     ab = CreateAlignedBuffer(CD_RAW_SECTOR_SIZE);  /* CD-DA media deliver 2352 bytes */
      status = ImageReadSectors(image, ab->buf, sector, 1);
    
      image->fpSector = sector;
@@ -295,7 +295,7 @@ int GetImageFingerprint(Image *image, guint8 *fp_out, guint64 sector)
 	image->fpState = 2;
 
 	MD5Init(&md5ctxt);
-	MD5Update(&md5ctxt, ab->buf, 2048);
+	MD5Update(&md5ctxt, ab->buf, image->type == IMAGE_MEDIUM ? image->dh->sectorBytes : 2048);
 	MD5Final(image->imageFP, &md5ctxt);
 	if(fp_out)
 	  memcpy(fp_out, image->imageFP, 16);

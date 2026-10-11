@@ -31,6 +31,7 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .RB [\| \-\-auto-suffix \|]
 .RB [\| \-\-cache-size
 .IR n \|]
+.RB [\| \-\-cdda \|]
 .RB [\| \-\-dao \|]
 .RB [\| \-\-defective-dump
 .IR d \|]
@@ -95,6 +96,10 @@ the \fB--read-raw\fP option is silently ignored.
 Creates an image as described above. Defective sectors are retried at least \fIn\fP
 times and at most \fIm\fP times. Recovery of defective CD media may improve when
 combined with \fB--read-raw\fP. 
+.TP
+\fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-i\fP \fIaudio.bin\fP \fB-r\fP
+Reads an audio CD into the file \fIaudio.bin\fP (2352 bytes per sector)
+and writes the cue sheet \fIaudio.cue\fP; see \fB--cdda\fP.
 .TP
 \fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-i\fP \fImedium.iso\fP \fB-e\fP \fIcorr.ecc\fP \fB-r\fP \fB--adaptive-read\fP
 Uses the adaptive reading strategy to read an image from 
@@ -299,6 +304,28 @@ automatically add .iso and .ecc file suffixes.
 .TP
 .B \-\-cache-size n
 image cache size in MiB during \-c mode (default: 32MiB).
+.TP
+.B \-\-cdda
+read a CD as a CD-DA image: every sector is stored with 2352 bytes
+(audio samples, or the raw data sector including sync pattern, header and EDC/ECC)
+into a .bin image, and a cue sheet with the same name and the suffix .cue is written.
+This is done automatically for audio CDs; use \-\-cdda for mixed mode and CD Extra
+discs to read their audio tracks as well. Audio sectors are read with C2 error pointers
+if the drive supports them; a sector with C2 errors counts as unreadable (it is retried
+according to \-\-read-attempts) and is stored as a dead sector marker (2048 bytes)
+followed by 304 zero bytes. Drives without C2 support may interpolate damaged audio
+sectors silently; dvdisaster prints a warning in that case. Adaptive reading is not
+available for CD-DA images, and RS01, RS02 and RS03 error correction data is not used
+while reading them.
+.RS
+Multi-session media (CD, DVD and BD) are always read as one image with the sectors
+at their real positions. The sectors between the sessions are not read; they are
+stored as zero-filled sectors and are not counted as read errors. Unreadable sectors
+among the last two sectors of a session (the run-out of sessions written in TAO mode)
+are reported separately.
+Without \-\-cdda, audio tracks of a CD with data tracks are stored the same way.
+Media with RS02 or RS03 error correction data can not be read in multi-session mode.
+.RE
 .TP
 .B \-\-dao
 assume DAO disc; do not trim image end.

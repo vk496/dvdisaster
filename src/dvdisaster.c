@@ -79,6 +79,7 @@ typedef enum
    MODIFIER_CACHE_SIZE, 
    MODIFIER_CLV_SPEED,    /* unused */ 
    MODIFIER_CAV_SPEED,    /* unused */
+   MODIFIER_CDDA,
    MODIFIER_CDUMP, 
    MODIFIER_DAO, 
    MODIFIER_DEBUG,
@@ -115,6 +116,7 @@ typedef enum
    MODIFIER_SET_VERSION,
    MODIFIER_SIMULATE_CD,
    MODIFIER_SIMULATE_DEFECTS,
+   MODIFIER_SIMULATE_TOC,
    MODIFIER_SPEED_WARNING, 
    MODIFIER_SPINUP_DELAY, 
    MODIFIER_TRUNCATE,
@@ -231,6 +233,7 @@ int main(int argc, char *argv[])
 	{"bruteforce-rs03-search", 0, 0, MODIFIER_BRUTEFORCE_RS03_SEARCH },
 	{"cache-size", 1, 0, MODIFIER_CACHE_SIZE },
 	{"cav", 1, 0, MODIFIER_CAV_SPEED },
+	{"cdda", 0, 0, MODIFIER_CDDA },
 	{"cdump", 0, 0, MODIFIER_CDUMP },
 	{"clv", 1, 0, MODIFIER_CLV_SPEED },
 	{"create", 0, 0, 'c'},
@@ -292,6 +295,7 @@ int main(int argc, char *argv[])
 	{"show-sector", 1, 0, MODE_SHOW_SECTOR},
 	{"sim-cd", 2, 0, MODIFIER_SIMULATE_CD},
 	{"sim-defects", 1, 0, MODIFIER_SIMULATE_DEFECTS},
+	{"sim-toc", 1, 0, MODIFIER_SIMULATE_TOC},
 	{"speed-warning", 2, 0, MODIFIER_SPEED_WARNING},
 	{"spinup-delay", 1, 0, MODIFIER_SPINUP_DELAY},
 	{"strip", 0, 0, 'z'},
@@ -616,6 +620,9 @@ int main(int argc, char *argv[])
          case MODIFIER_READ_RAW:
 	   Closure->readRaw = TRUE;
 	   break;
+         case MODIFIER_CDDA:
+	   Closure->cdda = TRUE;
+	   break;
          case MODIFIER_REGTEST:
 	   Closure->regtestMode = TRUE;
 	   break;
@@ -651,6 +658,11 @@ int main(int argc, char *argv[])
 	   break;
         case MODIFIER_SIMULATE_CD:
 	   if(optarg) Closure->simulateCD = g_strdup(optarg);
+	   debug_mode_required = TRUE;
+	   break;
+        case MODIFIER_SIMULATE_TOC:
+	   g_free(Closure->simulateTOC);
+	   Closure->simulateTOC = g_strdup(optarg);
 	   debug_mode_required = TRUE;
 	   break;
         case MODIFIER_SIMULATE_DEFECTS:
@@ -1021,6 +1033,7 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --audio-offset n           - RS04: read offset of a CD-DA rip in samples (default: detect)\n"));
       PrintCLI(_("  --auto-suffix              - automatically add .iso and .ecc file suffixes\n"));
       PrintCLI(_("  --cache-size n             - image cache size in MiB during -c mode (default: 32MiB)\n"));
+      PrintCLI(_("  --cdda                     - read CD as 2352 byte sectors (.bin + .cue; automatic for audio CDs)\n"));
       PrintCLI(_("  --dao                      - assume DAO disc; do not trim image end\n"));
       PrintCLI(_("  --defective-dump d         - directory for saving incomplete raw sectors\n"));
 #ifdef SYS_LINUX

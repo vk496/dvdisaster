@@ -1,0 +1,22 @@
+78197ec457872277cd4f3eb2c35e8b4d
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ CD.
+Medium: CD-R mode 1, 2560 sectors.
+
+  Session 1, track  1: sectors 0 - 1279, audio
+  Sectors 1280 - 1879: not part of a session
+  Session 2, track  2: sectors 1880 - 2559, data
+600 sectors between sessions are not part of the image;
+they are stored as zero-filled sectors and are not read.
+1280 audio sectors are not part of the data image;
+they are stored as zero-filled sectors (use --cdda to read them).
+
+Creating new reading-tmp.iso image.
+
+All sectors successfully read.
