@@ -82,6 +82,9 @@ takes one sector of every layer) and the robustness of the recovery data itself,
 - Error correction files for other sector formats: CD-DA audio rips (2352 bytes, drive read offsets are detected
   automatically) and Mode 2 Form 2 tracks (VCD/SVCD, 2324 bytes).
 - Intelligent adaptive reading is available, as for RS02.
+- More error correction can be added later: create another RS04 ecc file for the (augmented) image, possibly with a
+  different redundancy, and give all of them with `-e` (or a directory with `-e`). Verify and fix combine all sets,
+  so damage which neither set could repair alone may still be recoverable.
 
 There are, however, a few cons that must be noted for RS04:
 

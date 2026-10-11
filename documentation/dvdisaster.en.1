@@ -172,6 +172,9 @@ name of image file (default: medium.iso).
 name of parity file (default: medium.ecc).
 When reading, fixing or verifying, \fIeccfile\fP may also be a directory;
 the .ecc file in it whose fingerprint matches the medium or image is used.
+With RS04, \fB-e\fP may be given several times (or a directory may hold several
+matching .ecc files): fix and verify then combine all RS04 sets of the image,
+including those of an augmented image.
 .TP
 .B \-o, \-\-ecc-target file|image
 Specifies whether RS03 and RS04 should create error correction files

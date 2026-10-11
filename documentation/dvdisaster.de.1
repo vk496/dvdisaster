@@ -179,6 +179,9 @@ Name der Abbild - Datei (Standard: medium.iso).
 Name der Fehlerkorrektur-Datei (Standard: medium.ecc).
 Beim Lesen, Reparieren und Pr\[:u]fen darf \fIeccfile\fP auch ein Verzeichnis sein;
 dann wird die .ecc-Datei darin verwendet, deren Fingerabdruck zum Datentr\[:a]ger oder Abbild passt.
+Bei RS04 darf \fB-e\fP mehrfach angegeben werden (oder ein Verzeichnis mehrere
+passende .ecc-Dateien enthalten): Reparieren und Pr\[:u]fen verwenden dann alle
+RS04-Datens\[:a]tze des Abbilds gemeinsam, auch die eines erweiterten Abbilds.
 .TP
 .B \-o, \-\-ecc-target file|image
 Gibt an ob mit RS03 und RS04 Fehlerkorrektur-Dateien oder erweiterte
