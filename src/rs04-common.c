@@ -547,8 +547,8 @@ static int read_range(RS04IO *io, LargeFile *file, gint64 pos, gint64 limit,
       gint64 s1 = MIN(s0 + B, limit);
 
       present[i] = s0 >= 0 && s1 > s0 && s1 <= readable;
-      if(present[i] && B == 2048 && s1-s0 == 2048
-	 && CheckForMissingSector(buf+2048*i, s0/2048, NULL, 0) != SECTOR_PRESENT)
+      if(present[i] && s1-s0 == B   /* marker in the first 2048 bytes */
+	 && CheckForMissingSector(buf+(size_t)B*i, s0/B, NULL, 0) != SECTOR_PRESENT)
 	present[i] = 0;
       count += present[i];
    }
