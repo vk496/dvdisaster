@@ -161,9 +161,13 @@ static void handle_audio_offset(fix_closure *fc)
    }
    else
    {  if(probes)
-	Stop(_("The read offset of the rip could not be determined\n"
-	       "(best match: %d of %d probe sectors).\n"
-	       "Please specify it with --audio-offset."), score, probes);
+	Stop(Closure->guiMode
+	     ? _("The read offset of the rip could not be determined\n"
+		 "(best match: %d of %d probe sectors).\n"
+		 "Please specify it in the RS04 preferences under \"Read offset of audio images\".")
+	     : _("The read offset of the rip could not be determined\n"
+		 "(best match: %d of %d probe sectors).\n"
+		 "Please specify it with --audio-offset."), score, probes);
       return;
    }
 
