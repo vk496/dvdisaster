@@ -273,7 +273,7 @@ typedef struct
    gint64 base;                 /* medium sector of data sector 0 */
    Bitmap *zoneBad;             /* ecc file: unusable CRC and parity sectors */
    gint32 *missing;             /* symbols still missing per codeword */
-   int tagSeen;                 /* a valid tag of the set has been read */
+   int tagSeen;                 /* a valid tag at the end of the set has been read */
 } RS04Reading;
 
 typedef struct
@@ -1588,7 +1588,13 @@ static void rs04_mark_codeword(read_closure *rc, RS04Reading *rs, guint64 i, int
        rs04_mark(rc, rs04_zone_sector(rs, set->c + j*set->L + i), fill);
 }
 
-/* Once a valid tag has been read, fix can recreate the other ones */
+/* Fix can recreate missing tags, but the image must remain recognizable:
+   rs04.tex looks for tags in the last 256 sectors of an image, and for
+   further sets in the gaps between the sets found. So once a valid tag
+   in the last 256 sectors of a set has been read, the other tags of the
+   set are not needed. */
+
+#define RS04_END_TAG(set, a) ((a) + 256 >= (set)->A)
 
 static void rs04_mark_tags(read_closure *rc, RS04Reading *rs, int fill)
 {  RS04Set *set = rs->set;
@@ -1626,7 +1632,7 @@ static void rs04_prepare(read_closure *rc)
 
       if(set->target == ECC_IMAGE)
 	for(i=0; i<set->A; i+=set->T)
-	  if(rs04_present(rc, rs->base + set->S + i))
+	  if(RS04_END_TAG(set, i) && rs04_present(rc, rs->base + set->S + i))
 	  {  rs04_mark_tags(rc, rs, FALSE);
 	     break;
 	  }
@@ -1646,7 +1652,7 @@ static void rs04_sector_read(read_closure *rc, gint64 s, unsigned char *buf)
    set = rs->set;
 
    if(kind == RS04_TAG)
-   {  if(   !rs->tagSeen
+   {  if(   !rs->tagSeen && RS04_END_TAG(set, idx*set->T)
 	 && RS04ParseTag(buf, &tag, &own, NULL) == RS04_TAG_VALID
 	 && own == set->S + idx*set->T && !memcmp(tag.setID, set->setID, 8))
 	rs04_mark_tags(rc, rs, TRUE);
@@ -1662,22 +1668,30 @@ static void rs04_sector_read(read_closure *rc, gint64 s, unsigned char *buf)
 }
 
 /*
- * Unreadable sectors at the end of a session (TAO run-out) are not
- * needed unless they are protected by ecc data; see read-linear.c
+ * The last 2 sectors of a session (TAO run-out, unreadable then)
+ * are not needed if they are not part of an RS04 set; see read-linear.c.
+ * Without ecc data, unreadable ones are not counted as missing.
  */
+
+static void mark_rs04_run_out(read_closure *rc)
+{  guint64 idx;
+   gint64 s;
+   int i, kind;
+
+   for(i=0; rc->rs04 && i+1<rc->dh->nTracks; i++)
+     if(rc->dh->track[i].session != rc->dh->track[i+1].session)
+       for(s=rc->dh->track[i].end-2; s<rc->dh->track[i].end; s++)
+	 if(   s >= 0 && s < rc->map->size && !GetBit(rc->map, s)
+	    && !rs04_locate(rc, s, &kind, &idx))
+	 {  SetBit(rc->map, s);
+	    rc->expectedSectors--;
+	 }
+}
 
 static int is_session_tail(read_closure *rc, gint64 s)
 {  gint64 end = SessionEnd(rc->dh, s);
-   guint64 idx;
-   int kind;
 
-   if(!end || s < end-2)
-     return FALSE;
-
-   if(rc->readMode == ECC_RS04)
-     return !rs04_locate(rc, s, &kind, &idx);
-
-   return rc->readMode == IMAGE_ONLY;
+   return rc->readMode == IMAGE_ONLY && end && s >= end-2;
 }
 
 /*
@@ -1800,6 +1814,7 @@ reopen_image:
 
       mark_rs02_headers(rc);
       mark_gap_sectors(rc);
+      mark_rs04_run_out(rc);
       rs04_prepare(rc);
 
       /* Preload the CRC buffer */
@@ -1844,6 +1859,7 @@ reopen_image:
 
       mark_rs02_headers(rc);
       mark_gap_sectors(rc);
+      mark_rs04_run_out(rc);
       rs04_prepare(rc);
 
       /* Already enough information available? */
