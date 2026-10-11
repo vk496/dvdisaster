@@ -765,6 +765,7 @@ RS04i_read_good yes
 READ_multisession_read yes
 READ_multisession_scan yes
 READ_multisession_defective yes
+READ_multisession_defective_adaptive yes
 READ_multisession_adaptive yes
 READ_multisession_rs02_refused yes
 READ_multisession_medium_info yes

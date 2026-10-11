@@ -79,6 +79,17 @@ if try "reading defective multi-session medium" multisession_defective; then (
   run_regtest multisession_defective "--spinup-delay=0 -r" $TMPISO $ISODIR/no.ecc
 ) & limit_jobs; fi
 
+# Same with adaptive reading: the TAO run-out is not counted as missing
+
+if try "reading defective multi-session medium, adaptive" multisession_defective_adaptive; then (
+  cp $MASTERISO $SIMISO
+  $NEWVER --debug -i$SIMISO --erase 998-999 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$SIMISO --erase 2000 >>$LOGFILE 2>&1
+
+  extra_args="--debug --sim-cd=$SIMISO $MULTISESSION --fixed-speed-values"
+  run_regtest multisession_defective_adaptive "--spinup-delay=0 -r --adaptive-read" $TMPISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
 if try "reading multi-session medium, adaptive" multisession_adaptive; then (
   extra_args="--debug --sim-cd=$MASTERISO $MULTISESSION --fixed-speed-values"
   run_regtest multisession_adaptive "--spinup-delay=0 -r --adaptive-read" $TMPISO $ISODIR/no.ecc
