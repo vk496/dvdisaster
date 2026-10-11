@@ -75,7 +75,9 @@ static void write_sense(Sense *sense, int sense_key, int asc, int ascq)
  * A track is "a" (audio) or "d" (data, mode 1) followed by its
  * first and last sector, e.g. "d0-999/d1500-2999" (two sessions)
  * or "a0-1199,a1200-2399" (audio CD). An appended ":noc2" simulates
- * a drive without C2 error pointers.
+ * a drive without C2 error pointers, ":offset=n" a drive with a read
+ * offset of n samples for audio sectors (it delivers sample i of the
+ * disc as sample i+n of the rip).
  * Sector n is taken from the image at n*2048 bytes, or at n*2352 bytes
  * if the layout contains audio tracks; data sectors are then stored raw
  * (user data at offset 16). Sectors outside of the tracks are unreadable.
@@ -93,6 +95,7 @@ static int sim_tracks = -1;
 static int sim_sessions;
 static int sim_sector_size;
 static int sim_no_c2;
+static int sim_offset;
 
 static void parse_sim_toc(void)
 {  char *p = Closure->simulateTOC;
@@ -109,7 +112,8 @@ static void parse_sim_toc(void)
 
       if(*p == '/') { sim_sessions++; p++; continue; }
       if(*p == ',') { p++; continue; }
-      if(!strcmp(p, ":noc2")) { sim_no_c2 = TRUE; break; }
+      if(!strncmp(p, ":noc2", 5)) { sim_no_c2 = TRUE; p += 5; continue; }
+      if(!strncmp(p, ":offset=", 8)) { sim_offset = g_ascii_strtoll(p+8, &p, 10); continue; }
 
       if((*p != 'a' && *p != 'd') || sim_tracks >= 99)
 	Stop("--sim-toc: syntax error at \"%s\"", p);
@@ -207,6 +211,43 @@ static int simulate_read_toc(unsigned char *cdb, unsigned char *out_buf, int siz
    return 0;
 }
 
+/* Audio sector lba as delivered by a drive with a read offset:
+   made from parts of two recorded sectors (silence outside of the image).
+   Returns -1 if one of them is unreadable, TRUE if one has C2 errors. */
+
+static int read_shifted(DeviceHandle *dh, gint64 lba, unsigned char *out)
+{  gint64 pos = 2352*lba - 4*(gint64)sim_offset;
+   gint64 first = pos >= 0 ? pos/2352 : (pos-2351)/2352;
+   unsigned char rec[2*2352];
+   int i, c2 = FALSE;
+
+   memset(rec, 0, sizeof(rec));
+   for(i=0; i<2 && (!i || pos > 2352*first); i++)
+   {  unsigned char *r = rec+2352*i;
+
+      if(   first+i < 0
+	 || !LargeSeek(dh->simImage, 2352*(first+i))
+	 || LargeRead(dh->simImage, r, 2352) != 2352)
+      {  memset(r, 0, 2352);
+	 continue;
+      }
+
+      if(CheckForMissingSector(r, first+i, NULL, 0) != SECTOR_PRESENT)
+      {  char *sim_hint = GetSimulationHint(r);
+	 int is_c2 = sim_hint && !strcmp(sim_hint, "c2 error");
+
+	 g_free(sim_hint);
+	 if(!is_c2) return -1;
+	 c2 = TRUE;
+      }
+   }
+
+   if(c2) memset(out, 0, 2352);   /* drive interpolates silence */
+   else   memcpy(out, rec + (pos - 2352*first), 2352);
+
+   return c2;
+}
+
 /* READ CD for the simulated track layout */
 
 static int simulate_read_cd(DeviceHandle *dh, unsigned char *cdb, unsigned char *out_buf, Sense *sense)
@@ -242,7 +283,14 @@ static int simulate_read_cd(DeviceHandle *dh, unsigned char *cdb, unsigned char 
       }
 
       memset(rec, 0, sizeof(rec));
-      if(   !LargeSeek(dh->simImage, (gint64)sim_sector_size*lba)
+      if(t->audio && sim_offset)
+      {  c2_error = read_shifted(dh, lba, rec);
+	 if(c2_error < 0)
+	 {  write_sense(sense, 3, 0x11, 0x00);  /* unrecovered read error */
+	    return -1;
+	 }
+      }
+      else if(   !LargeSeek(dh->simImage, (gint64)sim_sector_size*lba)
 	 || LargeRead(dh->simImage, rec, sim_sector_size) != sim_sector_size)
       {  write_sense(sense, 3, 0x11, 0x00);  /* unrecovered read error */
 	 return -1;
@@ -250,7 +298,7 @@ static int simulate_read_cd(DeviceHandle *dh, unsigned char *cdb, unsigned char 
 
       /* Dead sector markers are unreadable sectors */
 
-      if(CheckForMissingSector(rec, lba, NULL, 0) != SECTOR_PRESENT)
+      if(!(t->audio && sim_offset) && CheckForMissingSector(rec, lba, NULL, 0) != SECTOR_PRESENT)
       {  char *sim_hint = GetSimulationHint(rec);
 
 	 if(t->audio && sim_hint && !strcmp(sim_hint, "c2 error"))
