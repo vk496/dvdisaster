@@ -113,6 +113,7 @@ typedef enum
    MODIFIER_SET_VERSION,
    MODIFIER_SIMULATE_CD,
    MODIFIER_SIMULATE_DEFECTS,
+   MODIFIER_SIMULATE_TOC,
    MODIFIER_SPEED_WARNING, 
    MODIFIER_SPINUP_DELAY, 
    MODIFIER_TRUNCATE,
@@ -288,6 +289,7 @@ int main(int argc, char *argv[])
 	{"show-sector", 1, 0, MODE_SHOW_SECTOR},
 	{"sim-cd", 2, 0, MODIFIER_SIMULATE_CD},
 	{"sim-defects", 1, 0, MODIFIER_SIMULATE_DEFECTS},
+	{"sim-toc", 1, 0, MODIFIER_SIMULATE_TOC},
 	{"speed-warning", 2, 0, MODIFIER_SPEED_WARNING},
 	{"spinup-delay", 1, 0, MODIFIER_SPINUP_DELAY},
 	{"strip", 0, 0, 'z'},
@@ -634,6 +636,11 @@ int main(int argc, char *argv[])
 	    break;
         case MODIFIER_SIMULATE_CD:
 	   if(optarg) Closure->simulateCD = g_strdup(optarg);
+	   debug_mode_required = TRUE;
+	   break;
+        case MODIFIER_SIMULATE_TOC:
+	   g_free(Closure->simulateTOC);
+	   Closure->simulateTOC = g_strdup(optarg);
 	   debug_mode_required = TRUE;
 	   break;
         case MODIFIER_SIMULATE_DEFECTS:

@@ -68,6 +68,222 @@ static void write_sense(Sense *sense, int sense_key, int asc, int ascq)
   sense->ascq=ascq;
 }
 
+/***
+ *** Simulated session/track layout (--sim-toc).
+ ***
+ * Syntax: tracks are separated by ',', sessions by '/'.
+ * A track is "a" (audio) or "d" (data, mode 1) followed by its
+ * first and last sector, e.g. "d0-999/d1500-2999" (two sessions)
+ * or "a0-1199,a1200-2399" (audio CD). An appended ":noc2" simulates
+ * a drive without C2 error pointers.
+ * Sector n is taken from the image at n*2048 bytes, or at n*2352 bytes
+ * if the layout contains audio tracks; data sectors are then stored raw
+ * (user data at offset 16). Sectors outside of the tracks are unreadable.
+ * A dead sector marker with the simulation hint "c2 error" in an audio
+ * sector simulates a sector with C2 errors (interpolated as silence).
+ */
+
+typedef struct
+{  gint64 first, last;
+   int audio, session;
+} sim_track;
+
+static sim_track sim_toc[99];
+static int sim_tracks = -1;
+static int sim_sessions;
+static int sim_sector_size;
+static int sim_no_c2;
+
+static void parse_sim_toc(void)
+{  char *p = Closure->simulateTOC;
+
+   if(sim_tracks >= 0)
+      return;
+
+   sim_tracks = 0;
+   sim_sessions = 1;
+   sim_sector_size = 2048;
+
+   while(*p)
+   {  sim_track *t = &sim_toc[sim_tracks];
+
+      if(*p == '/') { sim_sessions++; p++; continue; }
+      if(*p == ',') { p++; continue; }
+      if(!strcmp(p, ":noc2")) { sim_no_c2 = TRUE; break; }
+
+      if((*p != 'a' && *p != 'd') || sim_tracks >= 99)
+	Stop("--sim-toc: syntax error at \"%s\"", p);
+
+      t->audio = (*p++ == 'a');
+      t->session = sim_sessions;
+      t->first = g_ascii_strtoll(p, &p, 10);
+      if(*p++ != '-')
+	Stop("--sim-toc: syntax error at \"%s\"", p-1);
+      t->last = g_ascii_strtoll(p, &p, 10);
+      if(t->last < t->first || (sim_tracks && t->first <= sim_toc[sim_tracks-1].last))
+	Stop("--sim-toc: invalid track %d", sim_tracks+1);
+      if(t->audio)
+	sim_sector_size = 2352;
+      sim_tracks++;
+   }
+
+   if(!sim_tracks)
+      Stop("--sim-toc: no tracks given");
+}
+
+static sim_track* find_sim_track(gint64 lba)
+{  int i;
+
+   for(i=0; i<sim_tracks; i++)
+     if(lba >= sim_toc[i].first && lba <= sim_toc[i].last)
+       return &sim_toc[i];
+
+   return NULL;
+}
+
+static void lba_to_msf(gint64 lba, unsigned char *msf)
+{  lba += 150;
+   msf[0] = lba / 4500;
+   msf[1] = (lba / 75) % 60;
+   msf[2] = lba % 75;
+}
+
+/* READ TOC formats 0 (TOC) and 2 (full TOC) */
+
+static int simulate_read_toc(unsigned char *cdb, unsigned char *out_buf, int size)
+{  unsigned char buf[2048];
+   int len = 4;
+   int i;
+
+   memset(buf, 0, sizeof(buf));
+
+   if((cdb[2] & 0xf) == 0)
+   {  for(i=0; i<=sim_tracks; i++, len+=8)
+      {  gint64 lba = i<sim_tracks ? sim_toc[i].first : sim_toc[sim_tracks-1].last+1;
+
+	 buf[len+1] = 0x10 | (i<sim_tracks && !sim_toc[i].audio ? 4 : 0);
+	 buf[len+2] = i<sim_tracks ? i+1 : 0xaa;
+	 buf[len+4] = (lba>>24) & 0xff;
+	 buf[len+5] = (lba>>16) & 0xff;
+	 buf[len+6] = (lba>>8) & 0xff;
+	 buf[len+7] = lba & 0xff;
+      }
+      buf[2] = 1;
+      buf[3] = sim_tracks;
+   }
+   else /* full TOC: per session A0, A1, A2 and the track entries */
+   {  int session;
+
+      for(session=1; session<=sim_sessions; session++)
+      {  int first = -1, last = -1;
+
+	 for(i=0; i<sim_tracks; i++)
+	   if(sim_toc[i].session == session)
+	   {  if(first < 0) first = i;
+	      last = i;
+	   }
+
+	 buf[len+0] = buf[len+11] = buf[len+22] = session;
+	 buf[len+1] = buf[len+12] = buf[len+23] = 0x10 | (sim_toc[first].audio ? 0 : 4);
+	 buf[len+3] = 0xa0; buf[len+8] = first+1;
+	 buf[len+14] = 0xa1; buf[len+19] = last+1;
+	 buf[len+25] = 0xa2; lba_to_msf(sim_toc[last].last+1, buf+len+30);
+	 len += 33;
+
+	 for(i=first; i<=last; i++, len+=11)
+	 {  buf[len+0] = session;
+	    buf[len+1] = 0x10 | (sim_toc[i].audio ? 0 : 4);
+	    buf[len+3] = i+1;
+	    lba_to_msf(sim_toc[i].first, buf+len+8);
+	 }
+      }
+      buf[2] = 1;
+      buf[3] = sim_sessions;
+   }
+
+   buf[0] = ((len-2)>>8) & 0xff;
+   buf[1] = (len-2) & 0xff;
+   memcpy(out_buf, buf, size < len ? size : len);
+   return 0;
+}
+
+/* READ CD for the simulated track layout */
+
+static int simulate_read_cd(DeviceHandle *dh, unsigned char *cdb, unsigned char *out_buf, Sense *sense)
+{  gint64 lba = cdb[2] << 24 | cdb[3] << 16 | cdb[4] << 8 | cdb[5];
+   int n = cdb[6] << 16 | cdb[7] << 8 | cdb[8];
+   int type = (cdb[1] >> 2) & 7;   /* 0 any, 1 CD-DA, 2 mode 1 */
+   int c2 = cdb[9] & 0x06;
+   int user_only = (cdb[9] & 0xf8) == 0x10;
+   unsigned char rec[2352];
+   int i;
+
+   if(c2 && sim_no_c2)
+   {  write_sense(sense, 5, 0x24, 0x00);  /* invalid field in CDB */
+      return -1;
+   }
+
+   for(i=0; i<n; i++, lba++)
+   {  sim_track *t = find_sim_track(lba);
+      int c2_error = FALSE;
+      int bytes;
+
+      if(!t)
+      {  write_sense(sense, 5, 0x21, 0x00);  /* Illegal LBA */
+	 return -1;
+      }
+      if((type == 1 && !t->audio) || (type == 2 && t->audio))
+      {  write_sense(sense, 5, 0x64, 0x00);  /* Illegal mode for this track */
+	 return -1;
+      }
+      if(!t->audio && !user_only && sim_sector_size == 2048)
+      {  write_sense(sense, 5, 0xff, 0xe0);  /* raw data sectors only in 2352 layout */
+	 return -1;
+      }
+
+      memset(rec, 0, sizeof(rec));
+      if(   !LargeSeek(dh->simImage, (gint64)sim_sector_size*lba)
+	 || LargeRead(dh->simImage, rec, sim_sector_size) != sim_sector_size)
+      {  write_sense(sense, 3, 0x11, 0x00);  /* unrecovered read error */
+	 return -1;
+      }
+
+      /* Dead sector markers are unreadable sectors */
+
+      if(CheckForMissingSector(rec, lba, NULL, 0) != SECTOR_PRESENT)
+      {  char *sim_hint = GetSimulationHint(rec);
+
+	 if(t->audio && sim_hint && !strcmp(sim_hint, "c2 error"))
+	 {  memset(rec, 0, sizeof(rec));   /* drive interpolates silence */
+	    c2_error = TRUE;
+	    g_free(sim_hint);
+	 }
+	 else
+	 {  g_free(sim_hint);
+	    write_sense(sense, 3, 0x11, 0x00);  /* unrecovered read error */
+	    return -1;
+	 }
+      }
+
+      if(!t->audio && user_only)
+      {  bytes = 2048;
+	 memcpy(out_buf, sim_sector_size == 2048 ? rec : rec+16, 2048);
+      }
+      else
+      {  bytes = 2352;
+	 memcpy(out_buf, rec, 2352);
+      }
+      out_buf += bytes;
+
+      if(c2)
+      {  memset(out_buf, c2_error ? 0xff : 0, 294);
+	 out_buf += 294;
+      }
+   }
+
+   return 0;
+}
+
 int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsigned char *out_buf, int size, Sense *sense, int direction)
 {  unsigned char buf[2048];
    int real_size;
@@ -119,7 +335,11 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
                  assert_cdb_direction(cdb[0], DATA_READ, direction);
 	      {	 guint64 sectors;	 
 
-		 sectors = dh->simImage->size/2048 - 1;
+		 if(Closure->simulateTOC)
+		 {  parse_sim_toc();
+		    sectors = sim_toc[sim_tracks-1].last;
+		 }
+		 else sectors = dh->simImage->size/2048 - 1;
 		 memset(buf, 0, 16);
 		 buf[0] = (sectors >> 24) & 0xff;		 
 		 buf[1] = (sectors >> 16) & 0xff;
@@ -142,6 +362,10 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
                  assert_cdb_direction(cdb[0], DATA_READ, direction);
 	   
 		 alloc_len = cdb[7]<<8 | cdb[8];
+		 if(Closure->simulateTOC && ((cdb[2] & 0xf) == 0 || (cdb[2] & 0xf) == 2))
+		 {  parse_sim_toc();
+		    return simulate_read_toc(cdb, out_buf, alloc_len);
+		 }
 		 switch(cdb[2] & 0xf)  /* format field */
 		 {  case 0x00:         /* formatted TOC */
 		       memset(out_buf, 0, 12);
@@ -226,6 +450,11 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
 	         useconds_t delay;
 		 int fact;
 		 int i;
+
+		 if(Closure->simulateTOC)
+		 {  parse_sim_toc();
+		    return simulate_read_cd(dh, cdb, out_buf, sense);
+		 }
 
 		 if(cdb[9] & ~16)  /* We can only deliver user data */
 		 {  write_sense(sense, 5, 0xff, 0xe0);

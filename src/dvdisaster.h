@@ -295,6 +295,7 @@ typedef struct _GlobalClosure
    int dotFileVersion;  /* version of dotfile */
    int simulateDefects; /* if >0, this is the percentage of simulated media defects */
    char *simulateCD;    /* Simulate CD from given image */
+   char *simulateTOC;   /* Session/track layout of the simulated CD */
    int defectiveDump;   /* dump non-recoverable sectors into given path */
    char *dDumpDir;      /* directory for above */
    char *dDumpPrefix;   /* file name prefix for above */
