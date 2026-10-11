@@ -1,0 +1,12 @@
+2e187d840cda164edbbd1a7f327f91ed
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04i-tmp.iso: 8000 medium sectors.
+Augmenting the image with Method RS04:
+8000 data sectors of 2048 bytes, 16111 ecc sectors (501+501 layers of 32 sectors; 200.0% redundancy).
+Image has been augmented with error correction data.
+New image size is 47 MiB (24111 sectors).

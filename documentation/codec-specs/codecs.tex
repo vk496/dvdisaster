@@ -1,7 +1,6 @@
 \documentclass[12pt,a4paper,twoside]{article}
 \usepackage{times}	% Skalierbarer und lesbarer Zeichensatz
-\usepackage{ucs}	% Benötigt für Eingabe von unicode-Zeichensätzen
-\usepackage[utf8x]{inputenc} % Aktiviert Eingabe von unicode-Zeichensätzen
+\usepackage[utf8]{inputenc} % Aktiviert Eingabe von unicode-Zeichensätzen
 \usepackage{epsfig}	% Makros zum Einfügen von Grafiken
 \usepackage{anysize}	% Makros zum Einstellen der Seitenränder
 %\usepackage{makeidx}	% Makros zum Erstellen des Indexes
@@ -21,7 +20,7 @@
 
 % Ende der Voreinstellungen
 
-\newcommand{\paperversion}{{\em Version 1.01}}
+\newcommand{\paperversion}{{\em Version 1.02}}
 
 \fancyhead{}
 \fancyhead[LE,RO]{page \thepage\ of \pageref{LastPage}}
@@ -57,7 +56,7 @@
 
 \begin{abstract}
 This is the {\em blue manual}, describing the data formats of the dvdisaster
-Reed-Solomon codecs which are currently called RS01, RS02 and RS03.
+Reed-Solomon codecs which are currently called RS01, RS02, RS03 and RS04 (draft).
 The codecs create Reed-Solomon parity data to protect data stored on optical media.
 Depending on the codec, parity data can either be stored in a separate file 
 or be integrated with the .iso image on the same medium. 
@@ -103,6 +102,8 @@ provided this notice is preserved.}
 
 % Reed-Solomon encoding details
 
+\input{rs04}
+
 \input{rs03}
 
 \input{rs02}
@@ -116,6 +117,8 @@ provided this notice is preserved.}
 \input{ecc-header}
 
 \input{crc-block}
+
+\input{rs04-tag}
 
 \input{rs-params}
 \end{document}
