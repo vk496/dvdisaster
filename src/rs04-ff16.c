@@ -76,8 +76,9 @@
  *           with the error locator evaluated by a mod-65535 Walsh-Hadamard
  *           transform against the precomputed FWHT(Log[]) table.
  *
- * Only the data kernels below (xor_mem, muladd_mem, mul_mem and the
- * fft/ifft butterflies) touch buffer bytes; SIMD variants can replace them.
+ * Only the data kernels below (xor_mem, mul_mem and the fft/ifft
+ * butterflies) touch buffer bytes. They come in scalar, SSSE3, AVX2 and
+ * NEON variants (rs04-ff16-simd.h), all giving identical results.
  */
 
 #define FF_BITS       16
@@ -103,6 +104,9 @@ static ffe_t exp_lut[FF_ORDER];
 static ffe_t fft_skew_storage[FF_MODULUS + 1];
 #define fft_skew (fft_skew_storage + 1)
 #define fft_skew_m1 (fft_skew_storage)
+
+/* Log[1 << i] for build_lut() */
+static ffe_t log_bits[FF_BITS];
 
 /* FWHT(Log[i]) for the error locator evaluation */
 static ffe_t log_walsh[FF_ORDER];
@@ -214,6 +218,9 @@ static void init_log_tables(void)
      exp_lut[log_lut[i]] = (ffe_t)i;
 
    exp_lut[FF_MODULUS] = exp_lut[0];
+
+   for(i = 0; i < FF_BITS; i++)
+     log_bits[i] = log_lut[1U << i];
 }
 
 static void init_fft_tables(void)
@@ -257,23 +264,88 @@ static void init_fft_tables(void)
    fwht(log_walsh, FF_ORDER, FF_ORDER);
 }
 
-void RS04InitGF16(void)
-{  static gsize initialized = 0;
-
-   if(g_once_init_enter(&initialized))
-   {  init_log_tables();
-      init_fft_tables();
-      g_once_init_leave(&initialized, 1);
-   }
-}
-
 /***
- *** Data kernels (scalar).
+ *** Data kernels.
  *** Each 64-byte block holds 32 symbols: low bytes in [0..31], high bytes in [32..63].
  ***/
 
-/* x[] ^= y[] */
-static void xor_mem(void *x, const void *y, guint64 bytes)
+/* Product table for multiplying by Exp(log_m), built per butterfly instead
+   of Leopard's precomputed 8-16MB tables: lo[16*n + v] / hi[16*n + v] are
+   the low / high bytes of (v << 4n) * Exp(log_m), i.e. four 16 byte shuffle
+   tables each (Leopard's Multiply128LUT_t). */
+
+typedef struct
+{  guint8 lo[64], hi[64];
+} MulLut;
+
+static const MulLut zero_lut;
+
+static void build_lut(MulLut *lut, ffe_t log_m)
+{  const guint64 splat = 0x0101010101010101ULL;
+   unsigned n;
+
+   /* Multiplication is linear over GF(2): only the products with single
+      bits need the log tables. The 16 entries of a nibble table are xor
+      combinations of four of them, computed eight bytes at a time;
+      byte v of the masks below is 0xff if bit 0/1/2 of v is set. */
+
+   for(n = 0; n < 4; n++)
+   {  const ffe_t *log_bit = log_bits + 4 * n;
+      ffe_t p0 = exp_lut[add_mod(log_bit[0], log_m)];
+      ffe_t p1 = exp_lut[add_mod(log_bit[1], log_m)];
+      ffe_t p2 = exp_lut[add_mod(log_bit[2], log_m)];
+      ffe_t p3 = exp_lut[add_mod(log_bit[3], log_m)];
+      guint64 lo =   (0xff00ff00ff00ff00ULL & ((p0 & 0xff) * splat))
+	           ^ (0xffff0000ffff0000ULL & ((p1 & 0xff) * splat))
+		   ^ (0xffffffff00000000ULL & ((p2 & 0xff) * splat));
+      guint64 hi =   (0xff00ff00ff00ff00ULL & ((p0 >> 8) * splat))
+		   ^ (0xffff0000ffff0000ULL & ((p1 >> 8) * splat))
+		   ^ (0xffffffff00000000ULL & ((p2 >> 8) * splat));
+      guint64 v;
+
+      v = GUINT64_TO_LE(lo);                         memcpy(lut->lo + 16 * n, &v, 8);
+      v = GUINT64_TO_LE(lo ^ ((p3 & 0xff) * splat)); memcpy(lut->lo + 16 * n + 8, &v, 8);
+      v = GUINT64_TO_LE(hi);                         memcpy(lut->hi + 16 * n, &v, 8);
+      v = GUINT64_TO_LE(hi ^ ((p3 >> 8) * splat));   memcpy(lut->hi + 16 * n + 8, &v, 8);
+   }
+}
+
+/* Returns NULL for log_m == FF_MODULUS (butterflies skip the multiply) */
+static const MulLut *get_lut(MulLut *lut, ffe_t log_m)
+{  if(log_m == FF_MODULUS)
+     return NULL;
+   build_lut(lut, log_m);
+   return lut;
+}
+
+/* The data kernels; a NULL lut means "skip the multiply". */
+
+typedef struct
+{  const char *name;
+
+   /* x[] ^= y[] */
+   void (*xor_mem)(void *x, const void *y, guint64 bytes);
+
+   /* x[] = y[] * lut */
+   void (*mul_mem)(void *x, const void *y, const MulLut *lut, guint64 bytes);
+
+   /* IFFT butterfly: y[] ^= x[]; x[] ^= y[] * lut
+      FFT butterfly:  x[] ^= y[] * lut; y[] ^= x[] */
+   void (*ifft_dit2)(void *x, void *y, const MulLut *lut, guint64 bytes);
+   void (*fft_dit2)(void *x, void *y, const MulLut *lut, guint64 bytes);
+
+   /* Two layers of butterflies on work[0], work[dist], work[2*dist], work[3*dist] */
+   void (*ifft_dit4)(guint64 bytes, void **work, unsigned dist,
+		     const MulLut *lut01, const MulLut *lut23, const MulLut *lut02);
+   void (*fft_dit4)(guint64 bytes, void **work, unsigned dist,
+		    const MulLut *lut01, const MulLut *lut23, const MulLut *lut02);
+} Kernels;
+
+/*
+ * Scalar kernels
+ */
+
+static void xor_mem_scalar(void *x, const void *y, guint64 bytes)
 {  guint8 *x1 = x;
    const guint8 *y1 = y;
    guint64 i;
@@ -287,20 +359,14 @@ static void xor_mem(void *x, const void *y, guint64 bytes)
    }
 }
 
-/* Nibble product table for multiplying by Exp(log_m):
-   lut[16*n + v] = (v << 4n) * Exp(log_m) */
-static void build_lut(ffe_t *lut, ffe_t log_m)
-{  unsigned n, v;
-
-   for(n = 0; n < 4; n++)
-     for(v = 0; v < 16; v++)
-       lut[16 * n + v] = multiply_log((ffe_t)(v << (4 * n)), log_m);
-}
-
-/* x[] ^= y[] * lut */
-static void muladd_mem(void *x, const void *y, const ffe_t *lut, guint64 bytes)
-{  guint8 *x1 = x;
+static void muladd_mem_scalar(void *x, const void *y, const MulLut *l, guint64 bytes)
+{  ffe_t lut[64];
+   guint8 *x1 = x;
    const guint8 *y1 = y;
+   unsigned j;
+
+   for(j = 0; j < 64; j++)
+     lut[j] = l->lo[j] | l->hi[j] << 8;
 
    for(; bytes; bytes -= 64, x1 += 64, y1 += 64)
    {  unsigned i;
@@ -315,61 +381,181 @@ static void muladd_mem(void *x, const void *y, const ffe_t *lut, guint64 bytes)
    }
 }
 
-/* x[] = y[] * Exp(log_m) */
+static void mul_mem_scalar(void *x, const void *y, const MulLut *lut, guint64 bytes)
+{  memset(x, 0, bytes);
+   muladd_mem_scalar(x, y, lut, bytes);
+}
+
+static void ifft_dit2_scalar(void *x, void *y, const MulLut *lut, guint64 bytes)
+{  xor_mem_scalar(y, x, bytes);
+   if(lut)
+     muladd_mem_scalar(x, y, lut, bytes);
+}
+
+static void fft_dit2_scalar(void *x, void *y, const MulLut *lut, guint64 bytes)
+{  if(lut)
+     muladd_mem_scalar(x, y, lut, bytes);
+   xor_mem_scalar(y, x, bytes);
+}
+
+static void ifft_dit4_scalar(guint64 bytes, void **work, unsigned dist,
+			     const MulLut *lut01, const MulLut *lut23, const MulLut *lut02)
+{  /* First layer */
+   ifft_dit2_scalar(work[0], work[dist], lut01, bytes);
+   ifft_dit2_scalar(work[dist * 2], work[dist * 3], lut23, bytes);
+
+   /* Second layer */
+   ifft_dit2_scalar(work[0], work[dist * 2], lut02, bytes);
+   ifft_dit2_scalar(work[dist], work[dist * 3], lut02, bytes);
+}
+
+static void fft_dit4_scalar(guint64 bytes, void **work, unsigned dist,
+			    const MulLut *lut01, const MulLut *lut23, const MulLut *lut02)
+{  /* First layer */
+   fft_dit2_scalar(work[0], work[dist * 2], lut02, bytes);
+   fft_dit2_scalar(work[dist], work[dist * 3], lut02, bytes);
+
+   /* Second layer */
+   fft_dit2_scalar(work[0], work[dist], lut01, bytes);
+   fft_dit2_scalar(work[dist * 2], work[dist * 3], lut23, bytes);
+}
+
+static const Kernels kernels_scalar =
+{  "scalar",
+   xor_mem_scalar, mul_mem_scalar,
+   ifft_dit2_scalar, fft_dit2_scalar,
+   ifft_dit4_scalar, fft_dit4_scalar
+};
+
+/*
+ * SSSE3 and AVX2 kernels, selected at runtime; the rest of the binary
+ * stays at the baseline instruction set.
+ */
+
+#if defined(HAVE_SSE2) && defined(__GNUC__)
+#include <immintrin.h>
+
+#define RS04_HAVE_X86_KERNELS
+
+#define SIMD(name)    name##_ssse3
+#define SIMD_NAME     "SSSE3"
+#define TARGET        __attribute__((target("ssse3")))
+#define V             __m128i
+#define VW            16
+#define V_LOAD(p)     _mm_loadu_si128((const __m128i*)(p))
+#define V_STORE(p, v) _mm_storeu_si128((__m128i*)(p), v)
+#define V_XOR(a, b)   _mm_xor_si128(a, b)
+#define V_MASK        _mm_set1_epi8(0x0f)
+#define V_TABLE(p)    _mm_loadu_si128((const __m128i*)(p))
+#define V_SHUF(t, i)  _mm_shuffle_epi8(t, i)
+#define V_LONIB(v, m) _mm_and_si128(v, m)
+#define V_HINIB(v, m) _mm_and_si128(_mm_srli_epi64(v, 4), m)
+#include "rs04-ff16-simd.h"
+
+#define SIMD(name)    name##_avx2
+#define SIMD_NAME     "AVX2"
+#define TARGET        __attribute__((target("avx2")))
+#define V             __m256i
+#define VW            32
+#define V_LOAD(p)     _mm256_loadu_si256((const __m256i*)(p))
+#define V_STORE(p, v) _mm256_storeu_si256((__m256i*)(p), v)
+#define V_XOR(a, b)   _mm256_xor_si256(a, b)
+#define V_MASK        _mm256_set1_epi8(0x0f)
+#define V_TABLE(p)    _mm256_broadcastsi128_si256(_mm_loadu_si128((const __m128i*)(p)))
+#define V_SHUF(t, i)  _mm256_shuffle_epi8(t, i)
+#define V_LONIB(v, m) _mm256_and_si256(v, m)
+#define V_HINIB(v, m) _mm256_and_si256(_mm256_srli_epi64(v, 4), m)
+#include "rs04-ff16-simd.h"
+#endif
+
+/*
+ * NEON kernels (always available on aarch64)
+ */
+
+#ifdef __aarch64__
+#include <arm_neon.h>
+
+#define SIMD(name)    name##_neon
+#define SIMD_NAME     "NEON"
+#define TARGET
+#define V             uint8x16_t
+#define VW            16
+#define V_LOAD(p)     vld1q_u8((const guint8*)(p))
+#define V_STORE(p, v) vst1q_u8((guint8*)(p), v)
+#define V_XOR(a, b)   veorq_u8(a, b)
+#define V_MASK        vdupq_n_u8(0x0f)
+#define V_TABLE(p)    vld1q_u8(p)
+#define V_SHUF(t, i)  vqtbl1q_u8(t, i)
+#define V_LONIB(v, m) vandq_u8(v, m)
+#define V_HINIB(v, m) vshrq_n_u8(v, 4)
+#include "rs04-ff16-simd.h"
+#endif
+
+/*
+ * Kernel selection
+ */
+
+static const Kernels *kern;
+
+int RS04SelectKernel(int kernel)
+{  const Kernels *k = NULL;
+
+   switch(kernel)
+   {  case RS04_KERNEL_AUTO:
+	return    RS04SelectKernel(RS04_KERNEL_AVX2)
+	       || RS04SelectKernel(RS04_KERNEL_SSSE3)
+	       || RS04SelectKernel(RS04_KERNEL_NEON)
+	       || RS04SelectKernel(RS04_KERNEL_SCALAR);
+      case RS04_KERNEL_SCALAR:
+	k = &kernels_scalar;
+	break;
+#ifdef RS04_HAVE_X86_KERNELS
+      case RS04_KERNEL_SSSE3:
+	if(__builtin_cpu_supports("ssse3"))
+	  k = &kernels_ssse3;
+	break;
+      case RS04_KERNEL_AVX2:
+	if(__builtin_cpu_supports("avx2"))
+	  k = &kernels_avx2;
+	break;
+#endif
+#ifdef __aarch64__
+      case RS04_KERNEL_NEON:
+	k = &kernels_neon;
+	break;
+#endif
+   }
+
+   if(!k)
+     return FALSE;
+
+   kern = k;
+   return TRUE;
+}
+
+const char *RS04KernelName(void)
+{  RS04InitGF16();
+   return kern->name;
+}
+
+void RS04InitGF16(void)
+{  static gsize initialized = 0;
+
+   if(g_once_init_enter(&initialized))
+   {  init_log_tables();
+      init_fft_tables();
+      if(!kern)
+	RS04SelectKernel(RS04_KERNEL_AUTO);
+      g_once_init_leave(&initialized, 1);
+   }
+}
+
+/* x[] = y[] * Exp(log_m); log_m == FF_MODULUS multiplies by 1 */
 static void mul_mem(void *x, const void *y, ffe_t log_m, guint64 bytes)
-{  ffe_t lut[64];
+{  MulLut lut;
 
-   build_lut(lut, log_m);
-   memset(x, 0, bytes);
-   muladd_mem(x, y, lut, bytes);
-}
-
-/* IFFT butterfly: y[] ^= x[]; if(log_m != FF_MODULUS) x[] ^= y[] * Exp(log_m) */
-static void ifft_dit2(void *x, void *y, ffe_t log_m, const ffe_t *lut, guint64 bytes)
-{  xor_mem(y, x, bytes);
-   if(log_m != FF_MODULUS)
-     muladd_mem(x, y, lut, bytes);
-}
-
-/* FFT butterfly: if(log_m != FF_MODULUS) x[] ^= y[] * Exp(log_m); y[] ^= x[] */
-static void fft_dit2(void *x, void *y, ffe_t log_m, const ffe_t *lut, guint64 bytes)
-{  if(log_m != FF_MODULUS)
-     muladd_mem(x, y, lut, bytes);
-   xor_mem(y, x, bytes);
-}
-
-static void ifft_dit4(guint64 bytes, void **work, unsigned dist,
-		      ffe_t log_m01, ffe_t log_m23, ffe_t log_m02)
-{  ffe_t lut01[64], lut23[64], lut02[64];
-
-   if(log_m01 != FF_MODULUS) build_lut(lut01, log_m01);
-   if(log_m23 != FF_MODULUS) build_lut(lut23, log_m23);
-   if(log_m02 != FF_MODULUS) build_lut(lut02, log_m02);
-
-   /* First layer */
-   ifft_dit2(work[0], work[dist], log_m01, lut01, bytes);
-   ifft_dit2(work[dist * 2], work[dist * 3], log_m23, lut23, bytes);
-
-   /* Second layer */
-   ifft_dit2(work[0], work[dist * 2], log_m02, lut02, bytes);
-   ifft_dit2(work[dist], work[dist * 3], log_m02, lut02, bytes);
-}
-
-static void fft_dit4(guint64 bytes, void **work, unsigned dist,
-		     ffe_t log_m01, ffe_t log_m23, ffe_t log_m02)
-{  ffe_t lut01[64], lut23[64], lut02[64];
-
-   if(log_m01 != FF_MODULUS) build_lut(lut01, log_m01);
-   if(log_m23 != FF_MODULUS) build_lut(lut23, log_m23);
-   if(log_m02 != FF_MODULUS) build_lut(lut02, log_m02);
-
-   /* First layer */
-   fft_dit2(work[0], work[dist * 2], log_m02, lut02, bytes);
-   fft_dit2(work[dist], work[dist * 3], log_m02, lut02, bytes);
-
-   /* Second layer */
-   fft_dit2(work[0], work[dist], log_m01, lut01, bytes);
-   fft_dit2(work[dist * 2], work[dist * 3], log_m23, lut23, bytes);
+   build_lut(&lut, log_m);
+   kern->mul_mem(x, y, &lut, bytes);
 }
 
 /***
@@ -380,29 +566,29 @@ static void fft_dit4(guint64 bytes, void **work, unsigned dist,
    first m_truncated are non-zero. skew points to Leopard's "skewLUT". */
 static void ifft_dit(guint64 bytes, void **work, unsigned m_truncated, unsigned m,
 		     const ffe_t *skew)
-{  unsigned dist = 1, dist4 = 4;
+{  const Kernels *k = kern;
+   MulLut l01, l23, l02;
+   unsigned dist = 1, dist4 = 4;
    unsigned r, i;
 
    for(; dist4 <= m; dist = dist4, dist4 <<= 2)
    {  for(r = 0; r < m_truncated; r += dist4)
       {  unsigned i_end = r + dist;
-	 ffe_t log_m01 = skew[i_end];
-	 ffe_t log_m02 = skew[i_end + dist];
-	 ffe_t log_m23 = skew[i_end + dist * 2];
+	 const MulLut *lut01 = get_lut(&l01, skew[i_end]);
+	 const MulLut *lut02 = get_lut(&l02, skew[i_end + dist]);
+	 const MulLut *lut23 = get_lut(&l23, skew[i_end + dist * 2]);
 
 	 for(i = r; i < i_end; i++)
-	   ifft_dit4(bytes, work + i, dist, log_m01, log_m23, log_m02);
+	   k->ifft_dit4(bytes, work + i, dist, lut01, lut23, lut02);
       }
    }
 
    /* If there is one layer left (dist == m/2) */
    if(dist < m)
-   {  ffe_t log_m = skew[dist];
-      ffe_t lut[64];
+   {  const MulLut *lut = get_lut(&l01, skew[dist]);
 
-      if(log_m != FF_MODULUS) build_lut(lut, log_m);
       for(i = 0; i < dist; i++)
-	ifft_dit2(work[i], work[i + dist], log_m, lut, bytes);
+	k->ifft_dit2(work[i], work[i + dist], lut, bytes);
    }
 }
 
@@ -494,38 +680,36 @@ static gboolean eb_is_needed(const ErrorBitfield *eb, unsigned mip_level, unsign
    [0..m_truncated-1] (further restricted by eb, if given) are valid. */
 static void fft_dit(guint64 bytes, void **work, unsigned m_truncated, unsigned m,
 		    const ffe_t *skew, const ErrorBitfield *eb)
-{  unsigned mip_level = last_nonzero_bit(m);
+{  const Kernels *k = kern;
+   MulLut l01, l23, l02;
+   unsigned mip_level = last_nonzero_bit(m);
    unsigned dist4 = m, dist = m >> 2;
    unsigned r, i;
 
    for(; dist != 0; dist4 = dist, dist >>= 2, mip_level -= 2)
    {  for(r = 0; r < m_truncated; r += dist4)
       {  unsigned i_end = r + dist;
-	 ffe_t log_m01, log_m02, log_m23;
+	 const MulLut *lut01, *lut02, *lut23;
 
 	 if(!eb_is_needed(eb, mip_level, r))
 	   continue;
 
-	 log_m01 = skew[i_end];
-	 log_m02 = skew[i_end + dist];
-	 log_m23 = skew[i_end + dist * 2];
+	 lut01 = get_lut(&l01, skew[i_end]);
+	 lut02 = get_lut(&l02, skew[i_end + dist]);
+	 lut23 = get_lut(&l23, skew[i_end + dist * 2]);
 
 	 for(i = r; i < i_end; i++)
-	   fft_dit4(bytes, work + i, dist, log_m01, log_m23, log_m02);
+	   k->fft_dit4(bytes, work + i, dist, lut01, lut23, lut02);
       }
    }
 
    /* If there is one layer left */
    if(dist4 == 2)
    {  for(r = 0; r < m_truncated; r += 2)
-      {  ffe_t log_m = skew[r + 1];
-	 ffe_t lut[64];
-
-	 if(!eb_is_needed(eb, mip_level, r))
+      {  if(!eb_is_needed(eb, mip_level, r))
 	   continue;
 
-	 if(log_m != FF_MODULUS) build_lut(lut, log_m);
-	 fft_dit2(work[r], work[r + 1], log_m, lut, bytes);
+	 k->fft_dit2(work[r], work[r + 1], get_lut(&l01, skew[r + 1]), bytes);
       }
    }
 }
@@ -549,7 +733,7 @@ static void ifft_encoder_step(guint64 bytes, const void* const* data, unsigned m
 
    if(xor_result)
      for(i = 0; i < m; i++)
-       xor_mem(xor_result[i], work[i], bytes);
+       kern->xor_mem(xor_result[i], work[i], bytes);
 }
 
 static void rs_encode(guint64 bytes, unsigned original_count, unsigned recovery_count,
@@ -629,7 +813,7 @@ static void rs_decode(guint64 bytes, unsigned original_count, unsigned recovery_
       unsigned j;
 
       for(j = 0; j < width; j++)
-	xor_mem(work[i - width + j], work[i + j], bytes);
+	kern->xor_mem(work[i - width + j], work[i + j], bytes);
    }
 
    /* work <- FFT(work, n, 0) truncated to m + original_count */
@@ -672,7 +856,7 @@ static void xor_parity(guint64 bytes, unsigned count, const void* const* src,
    memcpy(dest, init, bytes);
    for(i = 0; i < count; i++)
      if(src[i])
-       xor_mem(dest, src[i], bytes);
+       kern->xor_mem(dest, src[i], bytes);
 }
 
 int RS04Encode(guint64 buffer_bytes, unsigned original_count, unsigned recovery_count,

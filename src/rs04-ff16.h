@@ -69,6 +69,20 @@ G_BEGIN_DECLS
 /* Optional: build the tables now instead of on first use. */
 void RS04InitGF16(void);
 
+/* Data kernels; all variants give identical results.
+   RS04_KERNEL_AUTO (the default) picks the fastest one supported by the CPU:
+   AVX2 or SSSE3 (x86, runtime detection), NEON (aarch64), else scalar.
+   RS04SelectKernel() returns FALSE if the variant is not available here;
+   call it before starting encoder/decoder threads. */
+#define RS04_KERNEL_AUTO     0
+#define RS04_KERNEL_SCALAR   1
+#define RS04_KERNEL_SSSE3    2
+#define RS04_KERNEL_AVX2     3
+#define RS04_KERNEL_NEON     4
+
+int RS04SelectKernel(int kernel);
+const char *RS04KernelName(void);
+
 /* Number of work[] buffers needed by RS04Encode() / RS04Decode(). */
 unsigned RS04EncodeWorkCount(unsigned original_count, unsigned recovery_count);
 unsigned RS04DecodeWorkCount(unsigned original_count, unsigned recovery_count);
