@@ -434,15 +434,21 @@ static void finish_pass(fix_closure *fc)
       if(fc->result[w] == CW_NOTHING)
 	continue;
 
+      if(fc->result[w] == CW_REPAIRED && !check_codeword(fc, w))
+	fc->result[w] = CW_FAILED;
+
+      /* Failures while recovering CRC sectors may be caused by data errors
+	 which are not detectable yet; the main pass tries again. */
+
+      if(fc->select && fc->result[w] != CW_REPAIRED)
+	continue;
+
       for(j=0; j<set->k; j++) if(fc->dstat[j*fc->pw+w]) count++;
       for(j=0; j<set->m; j++) if(fc->pstat[j*fc->pw+w]) count++;
 
       fc->damaged += count;
       fc->damagedCw++;
       fc->worst = MAX(fc->worst, count);
-
-      if(fc->result[w] == CW_REPAIRED && !check_codeword(fc, w))
-	fc->result[w] = CW_FAILED;
 
       if(fc->result[w] != CW_REPAIRED)
       {  if(fc->result[w] == CW_TOO_MANY)
