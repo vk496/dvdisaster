@@ -389,7 +389,9 @@ guint64 RS04ExpectedImageSize(Image *image)
  * Covers the data sectors of all sets with 2048 byte sectors at their
  * image positions, and the CRC sectors of augmented sets (from the tags).
  * Only the beginning of each added zone up to the last CRC sector is read.
- * Sectors without a CRC (tags, parity, gaps between sets) are not covered.
+ * Sectors without a CRC (tags, parity, gaps between sets) are not covered;
+ * their CRC is taken from the image while reading, so that the buffer
+ * can be used for creating other ecc data from the image afterwards.
  */
 
 static void set_crc(CrcBuf *cb, guint64 idx, int known, guint32 crc)

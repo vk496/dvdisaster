@@ -110,7 +110,8 @@ int AddSectorToCrcBuffer(CrcBuf *cb, int mode, guint64 idx, unsigned char *buf, 
    /* Update the CRC sums */
 
    if(   (mode & CRCBUF_UPDATE_CRC)
-      || ((mode & CRCBUF_UPDATE_CRC_AFTER_DATA) && idx >= cb->coveredSectors))
+      || ((mode & CRCBUF_UPDATE_CRC_AFTER_DATA)
+	  && (idx >= cb->coveredSectors || (cb->covered && !GetBit(cb->covered, idx)))))
    {  crc = Crc32(buf, 2048);  /* should be buf_size, but remains at 2048 for backwards compatibility. */
       cb->crcbuf[idx] = crc;   /* does not harm except that the last sector is padded with the contents */
       SetBit(cb->valid, idx);  /* of the previous sector when reading an image file whole size is not */
