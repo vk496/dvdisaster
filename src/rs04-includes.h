@@ -129,6 +129,14 @@ enum  /* per-set fields of the verify window */
 };
 
 typedef struct
+{  GtkWidget *eccFile, *eccImage;
+   GtkWidget *fillRadio, *normalRadio, *highRadio, *rootsRadio, *sizeRadio;
+   GtkWidget *mediumAuto, *mediumForce, *mediumManual, *mediumCombo, *mediumSpin;
+   GtkWidget *rootsScale, *sizeSpin;
+   GtkWidget *memorySpin, *threadsSpin, *sectorCombo, *offsetAuto, *offsetSpin;
+} RS04Prefs;
+
+typedef struct
 {  /* Encoding window */
 
    GtkWidget *encHeadline, *encLabel2, *encPBar1, *encPBar2;
@@ -154,14 +162,9 @@ typedef struct
    guint8 cmpSegment[RS04_SPIRAL_SEGMENTS];
    gint64 cmpSectors;       /* image sectors mapped onto the spiral */
 
-   /* Preferences page */
+   /* Preferences page [0] and its copies in the help windows [1] */
 
-   GtkWidget *eccFile, *eccImage, *redundancyFrame;
-   GtkWidget *fillRadio, *normalRadio, *highRadio, *rootsRadio, *sizeRadio;
-   GtkWidget *mediumAuto, *mediumForce, *mediumManual, *mediumCombo, *mediumSpin;
-   GtkWidget *rootsScale, *sizeSpin;
-   GtkWidget *memorySpin, *threadsSpin, *sectorCombo, *offsetAuto, *offsetSpin;
-   int prefsUpdating;
+   RS04Prefs prefs[2];
 } RS04Widgets;
 
 /* rs04-window.c; the functions do nothing in CLI mode */

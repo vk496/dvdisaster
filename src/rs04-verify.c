@@ -122,7 +122,7 @@ void RS04ScanZonePart(RS04State *st, GString *report, guint64 zone_sectors)
    gint64 base = set->target == ECC_FILE ? 0 : set->start + set->S;
    guint64 a0;
 
-   r.first = -1;
+   r.first = r.last = -1;
    r.suffix = set->target == ECC_FILE ? _(" (in ecc file)") : " ";
    r.out = report ? report : g_string_new(NULL);
 
@@ -517,7 +517,9 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
       }
       else
       {  if(probes)
-	   PrintLog(_("* read offset      : unknown; use --audio-offset (best match: %d of %d probe sectors)\n"),
+	   PrintLog(Closure->guiMode
+		    ? _("* read offset      : unknown; set it in the preferences (best match: %d of %d probe sectors)\n")
+		    : _("* read offset      : unknown; use --audio-offset (best match: %d of %d probe sectors)\n"),
 		    score, probes);
 	 else PrintLog(_("- read offset      : not checked (no probe sectors)\n"));
 	 RS04VerifyField(idx, RS04_V_OFFSET, "<span %s>%s</span>",
@@ -529,7 +531,7 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
 
    /*** Data sectors */
 
-   r.first = -1;
+   r.first = r.last = -1;
    r.suffix = " ";
    r.out = g_string_new(NULL);
    MD5Init(&md5);

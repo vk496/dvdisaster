@@ -33,7 +33,7 @@ This version will never break compatibility with upstream versions,
 the goal is to ensure an optical media protected by upstream dvdisaster will still be able to be repaired
 with this version, decades from now. Regression tests are here to ensure this is the case.
 
-# :twisted_rightwards_arrows: 3 available protection modes ("codecs")
+# :twisted_rightwards_arrows: 4 available protection modes ("codecs")
 
 For a more detailed explanation of the algorithms, please refer to the [codecs specification PDF](documentation/codecs.pdf).
 
@@ -68,24 +68,31 @@ There are, however, a few cons that must be noted for RS03:
   correction data has slighly less (around -3%) error correction capacity than RS02 on images with equal size. This is
   usually considered a cheap price to pay for the added robustness against corruption.
 
-## RS04 (experimental)
+:arrow_forward: **RS04** (experimental, only available in this fork for now) is a further development of RS03. It can create
+both error correction files and augmented images, keeps the RS03 layout idea (the image is split into layers, each codeword
+takes one sector of every layer) and the robustness of the recovery data itself, with the following added features:
 
-RS04 is a newer codec, only available in this fork for now. It keeps the RS03 layout idea (the image is split into layers, each
-codeword takes one sector of every layer) but uses Reed-Solomon over GF(2^16), so a codeword can span thousands of layers
-instead of 255. This makes a big difference when the damage is scattered over the disc (worn dye, many small scratches):
-with ~14% redundancy on a BD-25, RS03 reliably survives about 5% of such losses, RS04 about 11.6% (the theoretical
-maximum being 12.5%). Against one contiguous damaged area, e.g. the outer edge going bad, both are equally good.
+- It uses Reed-Solomon over GF(2^16), so a codeword can span thousands of layers instead of 255. This makes a big
+  difference when the damage is scattered over the disc (worn dye, many small scratches): with ~14% redundancy on a
+  BD-25, RS03 reliably survives about 5% of such losses, RS04 about 11.6% (the theoretical maximum being 12.5%).
+  Against one contiguous damaged area, e.g. the outer edge going bad, both are equally good.
+- Small self-describing tags are stored all over the error correction data, so RS04 never needs to know the medium size:
+  augmented images can have any size, and you don't have to remember any setting to repair them.
+- Multi-session discs: each session is augmented on its own, and reading the disc then verifies/repairs all sessions at once.
+- Error correction files for other sector formats: CD-DA audio rips (2352 bytes, drive read offsets are detected
+  automatically) and Mode 2 Form 2 tracks (VCD/SVCD, 2324 bytes).
+- Intelligent adaptive reading is available, as for RS02.
 
-RS04 also stores small self-describing tags all over its error correction data, so it never needs to know the medium size,
-and augmented images can have any size. This also allows:
+There are, however, a few cons that must be noted for RS04:
 
-- multi-session discs: each session is augmented on its own, and reading the disc then verifies/repairs all sessions at once,
-- error correction files for other sector formats: CD-DA audio rips (2352 bytes, drive read offsets are detected automatically)
-  and Mode 2 Form 2 tracks (VCD/SVCD, 2324 bytes).
+- It's new. The format is fully specified and covered by regression tests, but it hasn't seen real-world use yet:
+  keep using RS02/RS03 for anything important until RS04 had more testing, or use both.
+- Long codewords need more memory: by default RS04 sizes its codewords for a 4 GiB memory budget (`--rs04-memory`).
+  Any RS04 data can be repaired with less memory, it's just slower, especially for images stored on a hard disk.
+- Error correction data created by RS04 can't be used by upstream dvdisaster versions.
 
 The format is described in the [codecs specification PDF](documentation/codecs.pdf), and the layout choices are justified by
-the damage simulator in [contrib/rs04-layout-sim.py](contrib/rs04-layout-sim.py). As it's new, keep using RS02/RS03 for
-anything important until RS04 had more real-world testing.
+the damage simulator in [contrib/rs04-layout-sim.py](contrib/rs04-layout-sim.py).
 
 # :mag: Comparison table
 
@@ -111,7 +118,7 @@ This attempts to summarize the differences, pros and cons of each codec:
 
 :four: The robustness of RS03 comes at the cost of having to augment images strictly to well-known media sizes, as explained in the previous section above. This usually doesn't make much difference as long as you intend to burn the augmented image to a classic medium (CD-R, DVD-R, BD-R, ...).
 
-:five: Sectors lost at random places all over the disc (e.g. worn dye or many small scratches), as opposed to one contiguous damaged area. With ~14% redundancy on a BD-25, RS01-RS03 reliably survive about 5% of such losses and RS04 about 11.6%; see the RS04 section above.
+:five: Sectors lost at random places all over the disc (e.g. worn dye or many small scratches), as opposed to one contiguous damaged area. With ~14% redundancy on a BD-25, RS01-RS03 reliably survive about 5% of such losses and RS04 about 11.6%; see the RS04 description above.
 
 # :bulb: Rationale
 

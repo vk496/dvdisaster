@@ -224,7 +224,13 @@ void PrintMediumInfo(void *mi_ptr)
       {  RS04Info *info = RS04GetSets(image);
 	 int i;
 
-	 PrintCLIorLabel(mi->eccState, _("%s, %d set(s).\n"), method, info->nSets);
+	 if(Closure->guiMode && info->nSets == 1)  /* the per-set lines below are CLI only */
+	 {  RS04Set *set = &info->set[0];
+
+	    PrintCLIorLabel(mi->eccState, _("%s, %u+%u layers, %4.1f%% redundancy.\n"),
+			    method, set->k, set->m, (100.0*set->m*set->L)/set->D);
+	 }
+	 else PrintCLIorLabel(mi->eccState, _("%s, %d set(s).\n"), method, info->nSets);
 	 for(i=0; i<info->nSets; i++)
 	 {  RS04Set *set = &info->set[i];
 
@@ -253,9 +259,9 @@ void PrintMediumInfo(void *mi_ptr)
 #ifdef WITH_GUI_YES
    if (!mi->exhaustiveSearchButton)  /* CLI mode */
       ;
-   else if (Closure->examineRS02 && Closure->examineRS03)
+   else if (Closure->examineRS02 && Closure->examineRS03 && Closure->examineRS04)
    {  GuiSetLabelText(mi->exhaustiveSearch, _("yes"));
-      /*** Hide exhaustive search button if exhaustive search is already enabled for RS02 / RS03 */
+      /*** Hide exhaustive search button if exhaustive search is already enabled for RS02 - RS04 */
       gtk_widget_hide(mi->exhaustiveSearchButton);
    }
    else
@@ -315,16 +321,19 @@ static void es_cb(GtkWidget *widget, gpointer data)
 {   medium_info *mi=(medium_info*)data;
 	int oldRS02 = Closure->examineRS02;
 	int oldRS03 = Closure->examineRS03;
+	int oldRS04 = Closure->examineRS04;
 
 	gtk_widget_hide(mi->exhaustiveSearchButton);
 
 	Closure->examineRS02 = TRUE;
 	Closure->examineRS03 = TRUE;
+	Closure->examineRS04 = TRUE;
 
 	PrintMediumInfo(mi);
 
 	Closure->examineRS02 = oldRS02;
 	Closure->examineRS03 = oldRS03;
+	Closure->examineRS04 = oldRS04;
 }
 
 /*
