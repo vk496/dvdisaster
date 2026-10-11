@@ -205,6 +205,26 @@ if try "missing tag 0 and trailing garbage, -a RS04" tag0_lost_garbage_assume; t
 
 # An RS04 ecc file at the end of an image must not be taken for an augmented image
 
+# Tag 0 claims another creator version (with a valid self CRC);
+# the values of the majority of the tags are used (created by 0.80).
+
+if try "tags disagree" tags_disagree; then (
+  cp $MASTERISO $TMPISO
+  for b in 24,220 25,30 26,0 27,0 28,39 29,79 30,55 31,116; do
+     $NEWVER --debug -i$TMPISO --byteset 8000,$b >>$LOGFILE 2>&1
+  done
+  run_regtest tags_disagree "-t" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+# The first 8 of the 16 CRC sectors are lost; the set is still
+# confirmed with the remaining ones.
+
+if try "first CRC sectors lost" crc_sectors_lost; then (
+  cp $MASTERISO $TMPISO
+  $NEWVER --debug -i$TMPISO --erase 8001-8008 >>$LOGFILE 2>&1
+  run_regtest crc_sectors_lost "-t" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
 if try "ecc file at the end of an image" embedded_ecc_file; then (
   $NEWVER --debug -i$TEST_TMPDIR/other.iso --random-image 1000 --random-seed 3 >>$LOGFILE 2>&1
   $NEWVER --regtest --debug --set-version $SETVERSION -i$TEST_TMPDIR/other.iso -e$TEST_TMPDIR/other.ecc -mRS04 -n 50% -o file -c >>$LOGFILE 2>&1

@@ -745,6 +745,8 @@ RS04i_trailing_garbage yes
 RS04i_tag0_lost yes
 RS04i_tag0_lost_garbage yes
 RS04i_tag0_lost_garbage_assume yes
+RS04i_tags_disagree yes
+RS04i_crc_sectors_lost yes
 RS04i_embedded_ecc_file yes
 RS04i_multisession yes
 RS04i_multisession_gap_scan yes
