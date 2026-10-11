@@ -168,6 +168,15 @@ void PrintMediumInfo(void *mi_ptr)
    PrintCLIorLabel(mi->blankCapacity, _("%" PRId64 " sectors (%" PRId64 " MiB)\n"),
 		dh->blankCapacity, (dh->blankCapacity)>>9);
 
+   /* Sessions and tracks (only shown for multi-session and audio media) */
+
+   if(dh->zeroFill)
+   {  PrintCLI("\n\n");
+      PrintCLI(_("Sessions and tracks"));
+      PrintCLI("\n\n");
+      PrintTrackTable(dh, PrintCLI);
+   }
+
    /* Filesystem properties */
 
    if(image->isoInfo)

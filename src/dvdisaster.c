@@ -78,6 +78,7 @@ typedef enum
    MODIFIER_CACHE_SIZE, 
    MODIFIER_CLV_SPEED,    /* unused */ 
    MODIFIER_CAV_SPEED,    /* unused */
+   MODIFIER_CDDA,
    MODIFIER_CDUMP, 
    MODIFIER_DAO, 
    MODIFIER_DEBUG,
@@ -227,6 +228,7 @@ int main(int argc, char *argv[])
 	{"bruteforce-rs03-search", 0, 0, MODIFIER_BRUTEFORCE_RS03_SEARCH },
 	{"cache-size", 1, 0, MODIFIER_CACHE_SIZE },
 	{"cav", 1, 0, MODIFIER_CAV_SPEED },
+	{"cdda", 0, 0, MODIFIER_CDDA },
 	{"cdump", 0, 0, MODIFIER_CDUMP },
 	{"clv", 1, 0, MODIFIER_CLV_SPEED },
 	{"create", 0, 0, 'c'},
@@ -603,6 +605,9 @@ int main(int argc, char *argv[])
 	   break;
          case MODIFIER_READ_RAW:
 	   Closure->readRaw = TRUE;
+	   break;
+         case MODIFIER_CDDA:
+	   Closure->cdda = TRUE;
 	   break;
          case MODIFIER_REGTEST:
 	   Closure->regtestMode = TRUE;
@@ -998,6 +1003,7 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --adaptive-read            - use optimized strategy for reading damaged media\n"));
       PrintCLI(_("  --auto-suffix              - automatically add .iso and .ecc file suffixes\n"));
       PrintCLI(_("  --cache-size n             - image cache size in MiB during -c mode (default: 32MiB)\n"));
+      PrintCLI(_("  --cdda                     - read CD as 2352 byte sectors (.bin + .cue; automatic for audio CDs)\n"));
       PrintCLI(_("  --dao                      - assume DAO disc; do not trim image end\n"));
       PrintCLI(_("  --defective-dump d         - directory for saving incomplete raw sectors\n"));
 #ifdef SYS_LINUX

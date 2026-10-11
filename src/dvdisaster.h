@@ -263,6 +263,7 @@ typedef struct _GlobalClosure
    char *redundancy;    /* Error correction code redundancy */
    int eccTarget;       /* 0=file; 1=augmented image */
    int readRaw;         /* Read CD sectors raw + verify them */
+   int cdda;            /* Read CDs as CD-DA images (2352 bytes per sector) */
    int rawMode;         /* mode for mode page */
    int minReadAttempts; /* minimum reading attempts */
    int maxReadAttempts; /* maximal reading attempts */
