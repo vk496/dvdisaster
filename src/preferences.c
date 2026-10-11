@@ -2392,6 +2392,16 @@ void GuiCreatePreferencesWindow(void)
 	 "over RS01 and RS02. However it should not be used for productive work "
 	 "unless a stable version is released with dvdisaster V0.80."));
 
+      GuiAddHelpParagraph(lwoh, "");  /* the RS03 text lacks the trailing newline */
+      GuiAddHelpListItem(lwoh, _("The RS04 codec (Warning: experimental)\n"
+	 "RS04 is a further development of RS03 which can also store error correction "
+	 "data in a separate file or augment the image with it. Its longer codewords "
+	 "survive about twice as many sectors lost at random places all over the medium, "
+	 "and it can protect audio CD (CD-DA) and Mode 2 Form 2 images. "
+	 "RS04 has not seen real-world use yet; keep using RS01, RS02 or RS03 for "
+	 "important data, or use RS04 in addition to them. Its error correction data "
+	 "can not be used by upstream dvdisaster versions."));
+
       /* sub pages for individual method configuration */
       
       pc->methodNotebook = gtk_notebook_new();
