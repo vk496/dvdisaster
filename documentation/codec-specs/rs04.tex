@@ -670,7 +670,10 @@ by the sets found so far (gaps between and before sessions), and to a whole
 image without any set found only on request (option {\tt -a RS04}), since
 reading every sector of every opened image would be too slow. A set whose
 tag 0 is lost and whose image has more than 256 sectors appended is
-therefore only found with {\tt -a RS04}. On a medium, steps 1 and 2 are used.
+therefore only found with {\tt -a RS04}. On a medium, steps 1 and 2 are used,
+step 2 also for the end of every session in the table of contents.
+To confirm a candidate, dvdisaster tries up to 16 CRC sectors spread over
+the set and the first 16 data sectors covered by each of them.
 
 \paragraph{Ecc files.} Sector 0 of an ecc file is tag 0. If it is
 unreadable or invalid, the reader searches the file for the 16-byte
@@ -704,8 +707,9 @@ $2352\,t + 4\delta$. The recommended procedure is:
 
 \begin{enumerate}
 \item {\bf Probe sectors.} Take every data sector $t$ with
-  $10 \le t < S - 10$ whose $crc_t$ is known (from a readable or recovered
-  CRC sector) and differs from {\tt 0x416831C0}, the Crc32 of digital
+  $10 \le t < S - 10$ whose $crc_t$ is known from a readable CRC sector
+  (a lost CRC sector can only be recovered after the rip has been aligned,
+  since its codeword contains data sectors) and differs from {\tt 0x416831C0}, the Crc32 of digital
   silence (silence matches at every offset). Choose up to 64 of them, evenly
   spread over this range.
 \item {\bf Fast path.} If all probe sectors match for $\delta = 0$, the rip
@@ -761,6 +765,26 @@ format.
 The decoder only needs one $B_s$-byte shard per layer and codeword at a
 time; an implementation processes $W$ consecutive codewords per pass to read
 the image in larger pieces.
+
+\subsection{Reading media (informative)}
+\label{rs04-reading}
+
+While reading a medium, dvdisaster checks the data sectors of every set
+with $B = 2048$ (the augmented sets on the medium, or an ecc file given for
+it) against their Crc32 values, and the CRC sectors of augmented sets
+against their tags. Only the beginning of each added zone, up to the last
+CRC sector, is read in advance; parity sectors are checked when the image
+is verified or repaired.
+
+\medskip
+
+Adaptive reading stops as soon as every codeword of every set has at most
+$m$ erasures (sectors which could not be read, or whose Crc32 does not
+match). Tags are not part of the code and are recreated by the repair, but
+the image must remain recognizable (section \ref{rs04-recognize}): one
+valid tag among the last 256 sectors of every augmented set must have been
+read. Sectors between sessions are not read, and the last 2 sectors of a
+session (TAO run-out) are not needed if they belong to no set.
 
 \subsection{Versioning and compatibility}
 \label{rs04-versions}
