@@ -250,10 +250,17 @@ void GuiReadDotfile()
       if(!strcmp(symbol, "prefetch-sectors")){ Closure->prefetchSectors  = atoi(value); continue; }
       if(!strcmp(symbol, "raw-mode"))        { Closure->rawMode = atoi(value); continue; }
       if(!strcmp(symbol, "read-and-create")) { Closure->readAndCreate = atoi(value); continue; }
+      if(!strcmp(symbol, "read-cdda"))       { Closure->cdda = atoi(value); continue; }
       if(!strcmp(symbol, "read-medium"))     { Closure->readingPasses = atoi(value); continue; }
       if(!strcmp(symbol, "read-raw"))        { Closure->readRaw = atoi(value); continue; }
       if(!strcmp(symbol, "redundancy"))      { if(Closure->redundancy) g_free(Closure->redundancy);
                                                Closure->redundancy  = g_strdup(value); continue; }
+      if(!strcmp(symbol, "rs04-audio-offset")) { Closure->audioOffsetGiven = strcmp(value, "auto");
+	                                         Closure->audioOffset = atoi(value); continue; }
+      if(!strcmp(symbol, "rs04-memory"))     { Closure->rs04MemoryMiB = CLAMP(atoi(value), 1, 1024*1024); continue; }
+      if(!strcmp(symbol, "rs04-sector-size")){ int b = atoi(value);
+	                                       if(b == 2048 || b == 2324 || b == 2352) Closure->sectorBytes = b;
+					       continue; }
       if(!strcmp(symbol, "spinup-delay"))    { Closure->spinupDelay = atoi(value); continue; }
       if(!strcmp(symbol, "unlink"))          { Closure->unlinkImage = atoi(value); continue; }
       if(!strcmp(symbol, "verbose"))         { Closure->verbose = atoi(value); continue; }
@@ -355,10 +362,16 @@ static void update_dotfile()
    g_fprintf(dotfile, "prefetch-sectors:  %d\n", Closure->prefetchSectors);
    g_fprintf(dotfile, "raw-mode:          %d\n", Closure->rawMode);
    g_fprintf(dotfile, "read-and-create:   %d\n", Closure->readAndCreate);
+   g_fprintf(dotfile, "read-cdda:         %d\n", Closure->cdda);
    g_fprintf(dotfile, "read-medium:       %d\n", Closure->readingPasses);
    g_fprintf(dotfile, "read-raw:          %d\n", Closure->readRaw);
    if(Closure->redundancy)
      g_fprintf(dotfile, "redundancy:        %s\n", Closure->redundancy);
+   if(Closure->audioOffsetGiven)
+        g_fprintf(dotfile, "rs04-audio-offset: %d\n", Closure->audioOffset);
+   else g_fprintf(dotfile, "rs04-audio-offset: auto\n");
+   g_fprintf(dotfile, "rs04-memory:       %d\n", Closure->rs04MemoryMiB);
+   g_fprintf(dotfile, "rs04-sector-size:  %d\n", Closure->sectorBytes);
    g_fprintf(dotfile, "spinup-delay:      %d\n", Closure->spinupDelay);
    g_fprintf(dotfile, "unlink:            %d\n", Closure->unlinkImage);
    g_fprintf(dotfile, "verbose:           %d\n", Closure->verbose);
