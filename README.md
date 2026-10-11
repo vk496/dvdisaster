@@ -19,7 +19,8 @@ This version is built on top of the latest upstream version, with the following 
 - Re-enabled adaptive reading for RS01 and RS02, and optionally for RS03 on user request (more on that below)
 - Ability to strip an augmented image from its additional ECC-data
 - New experimental RS04 codec with long codewords and self-describing layout (more on that below)
-- Reading of multi-session discs (all sessions in one image) and of audio CDs (2352-byte `.bin` + `.cue`, with C2 error pointers)
+- Reading of multi-session discs (all sessions in one image) and of audio CDs (2352-byte `.bin` + `.cue`, with C2 error pointers);
+  Video CD, PlayStation and CD-i discs (Mode 2 Form 2 sectors) are read the same way, with EDC checks of the data sectors
 - Optional pause after a given number of read errors, to let drives that overheat on damaged media cool down (`--pause-after-errors`)
 - A new CLI-only version, not depending on gtk (`./configure --with-gui=no && make clean && make -j4`)
 - GUI codebase ported from gtk2 to gtk3 to ensure future-proofness
@@ -81,6 +82,8 @@ takes one sector of every layer) and the robustness of the recovery data itself,
 - Multi-session discs: each session is augmented on its own, and reading the disc then verifies/repairs all sessions at once.
 - Error correction files for other sector formats: CD-DA audio rips (2352 bytes, drive read offsets are detected
   automatically) and Mode 2 Form 2 tracks (VCD/SVCD, 2324 bytes).
+- BIN/CUE and GDI sets as written by redumper, DiscImageCreator or Aaru (one `.bin` per track) can be protected by
+  a single error correction file: pass the `.cue` or `.gdi` file as the image (`-i disc.cue -mRS04 -o file -c`).
 - Intelligent adaptive reading is available, as for RS02.
 
 There are, however, a few cons that must be noted for RS04:
