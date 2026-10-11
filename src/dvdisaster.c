@@ -101,6 +101,7 @@ typedef enum
    MODIFIER_INTERNAL_REREADS,
    MODIFIER_JSON,
    MODIFIER_MAPFILE,
+   MODIFIER_LIST_DAMAGED_FILES,
    MODIFIER_NO_BDR_DEFECT_MANAGEMENT,
    MODIFIER_NO_PROGRESS,
    MODIFIER_OLD_DS_MARKER,
@@ -314,6 +315,7 @@ int main(int argc, char *argv[])
 	{"json", 1, 0, MODIFIER_JSON },
 	{"jump", 1, 0, 'j'},
 	{"mapfile", 1, 0, MODIFIER_MAPFILE },
+	{"list-damaged-files", 0, 0, MODIFIER_LIST_DAMAGED_FILES },
 	{"marked-image", 1, 0, MODE_MARKED_IMAGE },
 	{"medium-info", 0, 0, MODE_MEDIUM_INFO },
 	{"merge-images", 1, 0, MODE_MERGE_IMAGES },
@@ -630,6 +632,8 @@ int main(int argc, char *argv[])
 	 case MODIFIER_MAPFILE:
 	    g_free(Closure->mapFile);
 	    Closure->mapFile = g_strdup(optarg);
+	 case MODIFIER_LIST_DAMAGED_FILES:
+	    Closure->listDamagedFiles = TRUE;
 	    if(mode == MODE_NONE)
 	       mode = MODE_SEQUENCE;
 	    break;
@@ -1088,6 +1092,10 @@ int main(int argc, char *argv[])
 
    if(Closure->mapFile && mode == MODE_SEQUENCE)
       WriteMapfile(Closure->imageName, Closure->mapFile);
+   /*** List the files containing missing sectors if requested */
+
+   if(Closure->listDamagedFiles && mode == MODE_SEQUENCE)
+      ListDamagedFiles(Closure->imageName);
 
    if(debug_arg) g_free(debug_arg);
 
@@ -1156,6 +1164,7 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --internal-rereads n       - drive may attempt n rereads before reporting an error\n"));
       PrintCLI(_("  --json f                   - write a JSON report of the results to file f (- for stdout)\n"));
       PrintCLI(_("  --mapfile f                - write a GNU ddrescue mapfile of the image to file f\n"));
+      PrintCLI(_("  --list-damaged-files       - list the files of an ISO image containing missing sectors\n"));
       PrintCLI(_("  --medium-info              - print info about medium in drive\n"));
       PrintCLI(_("  --no-bdr-defect-management - use bigger RS03/RS04 images for BD-R (see man page!)\n"));
       PrintCLI(_("  --no-progress              - do not print progress information\n"));

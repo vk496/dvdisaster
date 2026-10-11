@@ -58,6 +58,7 @@ oder Kratzer
 .IR file \|]
 .RB [\| \-\-mapfile
 .IR f \|]
+.RB [\| \-\-list-damaged-files \|]
 .RB [\| \-\-medium-info \|]
 .RB [\| \-\-no-progress \|]
 .RB [\| \-\-old-ds-marker \|]
@@ -475,6 +476,12 @@ schreibt eine zu GNU ddrescue kompatible Map-Datei des Abbilds in die Datei f.
 Vorhandene Sektoren werden als fertig (+), fehlende Sektoren (Markierungen f\[:u]r
 defekte Sektoren) als defekt (\-) eingetragen. Die Datei kann mit ddrescueview
 angezeigt oder zum Weiterlesen mit ddrescue verwendet werden.
+.TP
+.B \-\-list-damaged-files
+listet die Dateien eines ISO-9660-Abbilds auf (Joliet-Namen werden verwendet, sofern
+vorhanden), die fehlende Sektoren enthalten, und wie viele fehlende Sektoren
+au\[ss]erhalb von Dateien liegen. Kann mit dem Lesen (\-r) kombiniert oder alleine
+auf ein Abbild angewendet werden. Reine UDF-Abbilder werden noch nicht unterst\[:u]tzt.
 .TP
 .B \-\-medium-info
 Gibt Informationen \[:u]ber den Datentr\[:a]ger im ausgew\[:a]hlten Laufwerk aus.

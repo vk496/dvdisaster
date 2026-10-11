@@ -57,6 +57,7 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .IR file \|]
 .RB [\| \-\-mapfile
 .IR f \|]
+.RB [\| \-\-list-damaged-files \|]
 .RB [\| \-\-medium-info \|]
 .RB [\| \-\-no-progress \|]
 .RB [\| \-\-old-ds-marker \|]
@@ -479,6 +480,12 @@ write a GNU ddrescue compatible mapfile of the image to file f. Present sectors
 are marked as finished (+), missing sectors (dead sector markers) as bad sectors (\-).
 The mapfile can be viewed with ddrescueview or used to continue with ddrescue.
 With -r or -s it is written after reading.
+.TP
+.B \-\-list-damaged-files
+list the files of an ISO 9660 image (Joliet names are used if present) which contain
+missing sectors, and how many missing sectors are outside of files.
+Can be combined with reading (\-r) or used alone on an image file.
+UDF-only images are not supported yet.
 .TP
 .B \-\-medium-info
 Prints information about the currently inserted medium.

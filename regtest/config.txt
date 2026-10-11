@@ -10,6 +10,7 @@ INTERACTIVE_DIFF yes
 RS01_good yes
 RS01_good_quick yes
 RS01_mapfile_export yes
+RS01_list_damaged_files yes
 RS01_no_files yes
 RS01_good_json yes
 RS01_no_files_quiet_json yes

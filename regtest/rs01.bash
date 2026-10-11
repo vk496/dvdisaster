@@ -92,6 +92,14 @@ if try "exporting a ddrescue mapfile" mapfile_export; then (
    run_regtest mapfile_export "--mapfile $TMPECC" $TMPISO $TMPECC
 ) & limit_jobs; fi
 
+# List the files containing missing sectors
+if try "listing damaged files" list_damaged_files; then (
+   cp $MASTERISO $TMPISO
+   $NEWVER --debug -i$TMPISO --erase 1000-1099 >>$LOGFILE 2>&1
+   $NEWVER --debug -i$TMPISO --erase 5 >>$LOGFILE 2>&1
+   run_regtest list_damaged_files "--list-damaged-files" $TMPISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
 # Test with neither image nor ecc file
 if try "missing files" no_files; then (
    run_regtest no_files "-t" $ISODIR/no.iso  $ISODIR/no.ecc EXITCODE
