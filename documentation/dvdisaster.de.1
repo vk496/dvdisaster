@@ -45,6 +45,7 @@ oder Kratzer
 .RB [\| \-\-dao \|]
 .RB [\| \-\-defective-dump \|
 .IR d \|]
+.RB [\| \-\-drive-test \|]
 .RB [\| \-\-driver \|
 .IR d \|]
 .RB [\| \-\-eject \|]
@@ -417,6 +418,19 @@ unterstelle DAO; Abbild am Ende nicht k\[:u]rzen.
 .B \-\-defective-dump d
 Gibt das Unterverzeichnis zum Sammeln von unvollst\[:a]ndigen
 Roh-Sektoren an.
+.TP
+.B \-\-drive-test
+Gibt einen Bericht dar\[:u]ber aus, was das mit \-d gew\[:a]hlte Laufwerk f\[:u]r
+dvdisaster leisten kann: Hersteller, Modell und Firmware, die unterst\[:u]tzten
+Profile und Lesefunktionen (CD, DVD, BD, HD DVD, C2-Fehlerzeiger, CD-TEXT,
+Streaming), die Fehlerbehandlungs-Seite (mode page 01h; ob das Laufwerk im
+Roh-Modus defekte Sektoren liefern kann) sowie eine Zusammenfassung der
+geeigneten Lesemodi. Bei eingelegter CD werden Lesen der Nutzdaten, Roh-Lesen
+und CD-DA-Lesen mit und ohne C2-Fehlerzeiger am ersten Daten- und Audiosektor
+ausprobiert. Es werden nur lesende Befehle gesendet; die Einstellungen des
+Laufwerks werden nicht ver\[:a]ndert. Der Leseversatz (read offset) des
+Laufwerks wird nicht gemessen.
+Bitte f\[:u]gen Sie diesen Bericht Fehlermeldungen zu Laufwerksproblemen bei.
 .TP
 .B \-\-driver d  (nur f\[:u]r Linux)
 W\[:a]hlt zwischen dem sg (SG_IO)-Treiber (voreingestellt) und dem

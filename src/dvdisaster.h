@@ -1511,6 +1511,7 @@ AlignedBuffer *CreateAlignedBuffer(int);
 void FreeAlignedBuffer(AlignedBuffer*);
 
 char* DefaultDevice(void);
+void DriveTest(char*);
 gint64 CurrentImageSize(void);
 gint64 CurrentImageCapacity(void);
 
