@@ -517,7 +517,9 @@ static void verify_set(Image *image, RS04Set *set, int idx, int n)
       }
       else
       {  if(probes)
-	   PrintLog(_("* read offset      : unknown; use --audio-offset (best match: %d of %d probe sectors)\n"),
+	   PrintLog(Closure->guiMode
+		    ? _("* read offset      : unknown; set it in the preferences (best match: %d of %d probe sectors)\n")
+		    : _("* read offset      : unknown; use --audio-offset (best match: %d of %d probe sectors)\n"),
 		    score, probes);
 	 else PrintLog(_("- read offset      : not checked (no probe sectors)\n"));
 	 RS04VerifyField(idx, RS04_V_OFFSET, "<span %s>%s</span>",
