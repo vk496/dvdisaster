@@ -12,9 +12,18 @@ src/rs04-ff16.c. Running it
      hex dump of the first tag) quoted in the specification.
 
 Usage: python3 rs04-reference.py      (Python 3 only, runs in a few seconds)
+
+       python3 rs04-reference.py --check DATA ZONE [--ratio R | --capacity C]
+       recomputes the added zone (= ecc file) of the data file DATA with the
+       parameters, set ID, creator version and flags of tag 0 of ZONE and
+       compares it byte by byte with ZONE (used by the regression tests).
+       With --ratio or --capacity, the parameters must also be those of the
+       recommended choice. Exit status 0 means identical.
 """
+import functools
 import hashlib
 import struct
+import sys
 import zlib
 
 POLY = 0x1002D
@@ -63,6 +72,7 @@ def next_pow2(n):
     return p
 
 
+@functools.lru_cache(maxsize=None)
 def generator(k, m):
     """m x k matrix G (std basis): parity_j = sum_i G[j][i] * d_i."""
     M = next_pow2(m)
@@ -174,7 +184,7 @@ def make_tag(B, T, set_id, data_bytes, L, k, m, own_pos, md5, crcs, creator=0, f
     return bytes(tag) + bytes(B - 2048)
 
 
-def added_zone(data, B, L, k, m, T, set_id):
+def added_zone(data, B, L, k, m, T, set_id, creator=0, flags=0):
     """Returns the added zone (= .ecc file) of an RS04 set as a list of B-byte sectors."""
     S = (len(data) + B - 1) // B
     c = (S + 511) // 512
@@ -199,7 +209,7 @@ def added_zone(data, B, L, k, m, T, set_id):
         if a % T == 0:
             g = a // T
             crcs = [crc32(p) for p in payload[g * (T - 1):(g + 1) * (T - 1)]]
-            zone.append(make_tag(B, T, set_id, len(data), L, k, m, S + a, md5, crcs))
+            zone.append(make_tag(B, T, set_id, len(data), L, k, m, S + a, md5, crcs, creator, flags))
         else:
             zone.append(payload[a - a // T - 1])
     return zone
@@ -227,7 +237,7 @@ def choose(S, B=2048, ratio=None, capacity=None, ram=4 << 30):
         P = min(Z - -(-Z // T0) - c, 2 * D)
         C = capacity
     else:
-        P = min(round(ratio * D), 2 * D)
+        P = min(int(ratio * D + 0.5), 2 * D)       # round half up
         C = D + P
     if P < 1 or P * 247 < 8 * D:
         return None
@@ -298,5 +308,30 @@ def main():
               f'FFT={next_pow2(next_pow2(m) + k)} set size={total} parity/protected={m * L / (S + (S + 511) // 512):.3f}')
 
 
+def check(argv):
+    data = open(argv[0], 'rb').read()
+    zone = open(argv[1], 'rb').read()
+    (cookie, version, variant, flags, B, T, creator, _, set_id, data_bytes, L, k, m, own, md5) = \
+        struct.unpack_from('<16sHBBHHII8sQQIIQ16s', zone)
+    assert cookie == b'*dvdisaster*RS04' and len(data) == data_bytes, 'not tag 0 of this data'
+    S = (data_bytes + B - 1) // B
+    if len(argv) == 4:
+        opt = dict(ratio=float(argv[3])) if argv[2] == '--ratio' else dict(capacity=int(argv[3]))
+        want = choose(S, B, **opt)[:4]
+        if want != (L, k, m, T):
+            print(f'parameter choice differs: zone has L,k,m,T = {(L, k, m, T)}, reference {want}')
+            return 1
+    ref = b''.join(added_zone(data, B, L, k, m, T, set_id, creator, flags))
+    if ref != zone:
+        bad = next(i for i in range(min(len(ref), len(zone))) if ref[i] != zone[i]) \
+            if len(ref) == len(zone) else min(len(ref), len(zone))
+        print(f'added zone differs from the reference (first difference in sector {bad // B})')
+        return 1
+    print(f'added zone identical to the reference (B={B} L={L} k={k} m={m} T={T}, {len(zone) // B} sectors)')
+    return 0
+
+
 if __name__ == '__main__':
+    if len(sys.argv) > 1 and sys.argv[1] == '--check':
+        sys.exit(check(sys.argv[2:]))
     main()
