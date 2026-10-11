@@ -707,6 +707,7 @@ RS04f_image_plus56 yes
 RS04f_ecc_truncated yes
 RS04f_ecc_plus1 yes
 RS04f_wrong_image yes
+RS04f_supplementary yes
 RS04f_fix_good yes
 RS04f_fix_correctable yes
 RS04f_fix_correctable_threads yes
@@ -720,6 +721,7 @@ RS04f_fix_truncated_ecc yes
 RS04f_fix_image_plus56 yes
 RS04f_fix_image_plus56_truncate yes
 RS04f_fix_partial_last_sector yes
+RS04f_fix_supplementary_dir yes
 RS04f_audio_create yes
 RS04f_audio_good yes
 RS04f_audio_offset_verify yes
@@ -758,6 +760,7 @@ RS04i_crc_sectors_lost yes
 RS04i_embedded_ecc_file yes
 RS04i_multisession yes
 RS04i_multisession_gap_scan yes
+RS04i_supplementary yes
 RS04i_fix_good yes
 RS04i_fix_correctable yes
 RS04i_fix_crc_sectors yes
@@ -768,6 +771,7 @@ RS04i_fix_truncated_threads yes
 RS04i_fix_trailing_garbage yes
 RS04i_fix_tiny_1 yes
 RS04i_fix_multisession yes
+RS04i_fix_supplementary yes
 RS04i_strip_ecc yes
 RS04i_read_good yes
 ### Reading tests (codec independent): multi-session media and audio CDs
