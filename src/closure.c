@@ -726,6 +726,7 @@ void FreeClosure()
    cond_free(Closure->imageName);
    cond_free(Closure->eccName);
    cond_free(Closure->mapFile);
+   cond_free(Closure->abortFile);
    cond_free(Closure->redundancy);
 
    CallMethodDestructors();
