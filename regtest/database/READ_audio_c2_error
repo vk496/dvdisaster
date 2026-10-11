@@ -1,0 +1,22 @@
+bbdc1097d2a46403d45efcdbbda1ddd6
+4f4afd3e115963bc8a11a468c0f5b943
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ CD.
+Medium: CD-R Audio, 2560 sectors.
+
+Reading CD-DA image: 2560 sectors of 2352 bytes, using C2 error pointers.
+  Session 1, track  1: sectors 0 - 1279, audio
+  Session 1, track  2: sectors 1280 - 2559, audio
+
+Creating new audio.bin image.
+Sectors 496 - 511: Raw Reader: C2 error in audio sector.
+Sector 500, try 1: Raw Reader: C2 error in audio sector.
+Sector 500: Raw Reader: C2 error in audio sector.
+
+1 unreadable sectors.
+Cue sheet written to audio.cue.

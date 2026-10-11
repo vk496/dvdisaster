@@ -668,3 +668,20 @@ RS03f_read_multipass_ecc_partial_success yes
 # Reading tests (adaptive)
 
 RS03f_adaptive_good yes
+
+### Reading tests (codec independent): multi-session media and audio CDs
+
+READ_multisession_read yes
+READ_multisession_scan yes
+READ_multisession_defective yes
+READ_multisession_adaptive yes
+READ_multisession_rs02_refused yes
+READ_multisession_medium_info yes
+READ_audio_read yes
+READ_audio_c2_error yes
+READ_audio_no_c2 yes
+READ_audio_complete yes
+READ_audio_adaptive_refused yes
+READ_cdextra_read yes
+READ_cdextra_cdda yes
+READ_cdextra_medium_info yes
