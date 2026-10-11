@@ -639,8 +639,14 @@ int main(int argc, char *argv[])
 	 case MODIFIER_MAPFILE:
 	    g_free(Closure->mapFile);
 	    Closure->mapFile = g_strdup(optarg);
+	    if(mode == MODE_NONE)
+	       mode = MODE_SEQUENCE;
+	    break;
 	 case MODIFIER_LIST_DAMAGED_FILES:
 	    Closure->listDamagedFiles = TRUE;
+	    if(mode == MODE_NONE)
+	       mode = MODE_SEQUENCE;
+	    break;
 	 case MODIFIER_CATALOG:
 	    g_free(Closure->catalogFile);
 	    Closure->catalogFile = g_strdup(optarg);
@@ -1117,10 +1123,12 @@ int main(int argc, char *argv[])
 
    if(Closure->mapFile && mode == MODE_SEQUENCE)
       WriteMapfile(Closure->imageName, Closure->mapFile);
+
    /*** List the files containing missing sectors if requested */
 
    if(Closure->listDamagedFiles && mode == MODE_SEQUENCE)
       ListDamagedFiles(Closure->imageName);
+
    /*** Print the medium history from a catalog file if requested */
 
    if(Closure->catalogReport && mode == MODE_SEQUENCE)
