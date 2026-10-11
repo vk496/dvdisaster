@@ -453,6 +453,7 @@ static void encode(ecc_closure *ec)
    guint64 j;
    int i;
 
+   RS04ChooseKernel();
    ec->W = MIN(set->L, MAX(1, RS04MemoryBudget()/per_codeword));
    ec->data    = g_malloc(ec->W*set->k*set->Bs);
    ec->parity  = g_malloc(ec->W*set->m*set->Bs);
