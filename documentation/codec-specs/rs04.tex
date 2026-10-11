@@ -518,8 +518,9 @@ can be decoded. dvdisaster chooses them as follows.
   redundancy $\rho$ (parity sectors per protected sector). The size of the
   set is $C_{tot} = D + E$. dvdisaster takes $\rho$ from the option
   {\tt -n}: $p${\tt \%} gives $\rho = p/100$, $r${\tt r} (``roots'' as for
-  RS03) $\rho = r/(255-r)$, {\tt normal} (the default) $32/223$ and
-  {\tt high} $64/191$.
+  RS03; also without the suffix) $\rho = r/(255-r)$, {\tt normal} (the
+  default) $32/223$ and {\tt high} $64/191$. $x${\tt m} chooses the
+  largest $\rho$ for which the ecc file has at most $x$ MiB.
 \item {\em Augmented images (default): fill the medium.} Let $C$ be the
   number of sectors available for the whole set: the capacity of the target
   medium (as reported by the drive, from the medium size table also used by

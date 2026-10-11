@@ -103,6 +103,7 @@ typedef struct _prefs_context
    GtkWidget *daoButtonA, *daoButtonB;
    GtkWidget *ignoreISOSizeA, *ignoreISOSizeB;
    GtkWidget *dsmButtonA, *dsmButtonB;
+   GtkWidget *cddaButtonA, *cddaButtonB;
    GtkWidget *recogRS02A, *recogRS02B;
    GtkWidget *recogRS03A, *recogRS03B;
    GtkWidget *bruteforceRS03A, *bruteforceRS03B;
@@ -345,6 +346,7 @@ enum
    TOGGLE_SIZEDRIVE,
    TOGGLE_DAO,
    TOGGLE_DSM,
+   TOGGLE_CDDA,
    TOGGLE_RANGE,
    TOGGLE_RAW,
    TOGGLE_RAW_20H,
@@ -482,6 +484,12 @@ static void toggle_cb(GtkWidget *widget, gpointer data)
 	   if(pc->byteCheckB)
 	      activate_toggle_button(GTK_TOGGLE_BUTTON(pc->byteCheckB), FALSE);
 	}
+	break;
+
+      case TOGGLE_CDDA:
+	Closure->cdda = state;
+	activate_toggle_button(GTK_TOGGLE_BUTTON(pc->cddaButtonA), state);
+	activate_toggle_button(GTK_TOGGLE_BUTTON(pc->cddaButtonB), state);
 	break;
 
       case TOGGLE_RAW:
@@ -1587,6 +1595,38 @@ void GuiCreatePreferencesWindow(void)
 	   "N.b.: dvdisaster >= 0.72 will automatically recognize "
 	   "both tag formats when reading images; setting this value "
 	   "only affects the creation of new images."));
+
+      /* CD-DA images */
+
+      lwoh = GuiCreateLabelWithOnlineHelp(_("CD-DA images"),
+					  _("Read all CDs as CD-DA images (2352 bytes per sector, .bin + .cue)"));
+      GuiRegisterPreferencesHelpWindow(lwoh);
+
+      for(i=0; i<2; i++)
+      {  GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+	 GtkWidget *button = gtk_check_button_new();
+
+	 gtk_box_pack_start(GTK_BOX(hbox), button, FALSE, FALSE, 0);
+	 gtk_box_pack_start(GTK_BOX(hbox), i ? lwoh->normalLabel : lwoh->linkBox, FALSE, FALSE, 0);
+         if(!i) gtk_box_pack_start(GTK_BOX(hbox), lwoh->tooltip, FALSE, FALSE, 0);
+
+	 if(!i) pc->cddaButtonA = button;
+	 else   pc->cddaButtonB = button;
+
+	 activate_toggle_button(GTK_TOGGLE_BUTTON(button), Closure->cdda);
+	 g_signal_connect(G_OBJECT(button), "toggled", G_CALLBACK(toggle_cb), GINT_TO_POINTER(TOGGLE_CDDA));
+	 if(!i) gtk_box_pack_start(GTK_BOX(vbox2), hbox, FALSE, FALSE, 0);
+	 else   GuiAddHelpWidget(lwoh, hbox);
+      }
+
+      GuiAddHelpParagraph(lwoh,
+	 _("<b>CD-DA images</b>\n\n"
+	   "Audio CDs are always read as CD-DA images: every sector is stored "
+	   "with 2352 bytes into a .bin image, and a cue sheet with the same name "
+	   "and the suffix .cue is written.\n"
+	   "Activate this option to read mixed mode and CD Extra discs the same way, "
+	   "including their audio tracks. Such images can be protected with RS04 "
+	   "error correction data; adaptive reading is not available for them."));
 
       /** byte filling */
 

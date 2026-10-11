@@ -20,7 +20,7 @@
  *  along with dvdisaster. If not, see <http://www.gnu.org/licenses/>.
  */
 
-/*** src type: no GUI code ***/
+/*** src type: some GUI code ***/
 
 #include "dvdisaster.h"
 
@@ -44,6 +44,7 @@ typedef struct
 
 struct _ecc_closure
 {  Method *self;
+   RS04Widgets *wl;
    Image *image;
    RS04Set set;
    RS04IO io;
@@ -60,6 +61,8 @@ struct _ecc_closure
    int nWorkers;
    worker *workers;
    GTimer *timer;
+   double lastElapsed;      /* GUI performance display */
+   guint64 lastDone;
    int earlyTermination;
    int zoneWritten;         /* remove partial ecc data on abort */
 };
@@ -71,7 +74,11 @@ static void ecc_cleanup(gpointer data)
    UnregisterCleanup();
 
    if(ec->earlyTermination)
-     PrintLog(_("Aborted by unrecoverable error.\n"));
+   {  PrintLog(_("Aborted by unrecoverable error.\n"));
+      GuiSetLabelText(ec->wl->encFootline,
+		      _("<span %s>Aborted by unrecoverable error.</span>"),
+		      Closure->redMarkup);
+   }
 
    GuiAllowActions(TRUE);
 
@@ -118,6 +125,10 @@ static void abort_encoding(ecc_closure *ec)
    }
    else PrintLog(_("Aborted by user request!\n"));
 
+   GuiSetLabelText(ec->wl->encFootline,
+		   _("<span %s>Aborted by user request!</span>"),
+		   Closure->redMarkup);
+
    ec->earlyTermination = FALSE;
    ecc_cleanup((gpointer)ec);
 }
@@ -125,10 +136,42 @@ static void abort_encoding(ecc_closure *ec)
 static void progress(ecc_closure *ec, guint64 done)
 {  int permille = (int)((1000*done)/ec->progressTotal);
 
-   if(permille != ec->lastPermille)
-   {  PrintProgressETA(ec->timer, permille, _("Ecc generation: %3d.%1d%%"), permille/10, permille%10);
-      ec->lastPermille = permille;
+   if(permille == ec->lastPermille)
+     return;
+   ec->lastPermille = permille;
+
+#ifdef WITH_GUI_YES
+   if(Closure->guiMode)
+   {  RS04Set *set = &ec->set;
+      guint64 pass1 = set->S/8;
+      double elapsed = g_timer_elapsed(ec->timer, NULL);
+
+      if(done <= pass1)
+      {  GuiSetProgress(ec->wl->encPBar1, (int)((1000*done)/MAX(pass1,1)), 1000);
+	 return;
+      }
+
+      GuiSetProgress(ec->wl->encPBar2, (int)((1000*(done-pass1))/(ec->progressTotal-pass1)), 1000);
+
+      /* done counts protected sectors; the checksum pass counts 1/8 */
+
+      if(elapsed - ec->lastElapsed > 1.0)
+      {  double mbs = ((double)(done - MAX(ec->lastDone, pass1))*set->B)
+	              / (1048576.0*(elapsed - ec->lastElapsed));
+	 int eta = elapsed * (1000 - permille) / MAX(permille, 1);
+	 char *rate = g_strdup_printf(_("%5.2fMiB/s current"), mbs);
+
+	 GuiSetLabelText(ec->wl->encPerformance, "%s (ETA %02d:%02d:%02d)",
+			 rate, eta/3600, (eta/60)%60, eta%60);
+	 g_free(rate);
+	 ec->lastElapsed = elapsed;
+	 ec->lastDone = done;
+      }
+      return;
    }
+#endif
+
+   PrintProgressETA(ec->timer, permille, _("Ecc generation: %3d.%1d%%"), permille/10, permille%10);
 }
 
 /***
@@ -189,7 +232,7 @@ static void remove_old_ecc(ecc_closure *ec)
  *** Determine the encoding parameters
  ***/
 
-static double get_ratio(void)
+static double get_ratio(RS04Set *set)
 {  char *r = Closure->redundancy;
    int len = r ? strlen(r) : 0;
 
@@ -204,7 +247,7 @@ static double get_ratio(void)
       return p/100.0;
    }
 
-   if(r[len-1] == 'r')
+   if(r[len-1] == 'r' || g_ascii_isdigit(r[len-1]))  /* roots, as RS03 */
    {  int n = atoi(r);
 
       if(n < 8 || n > 170)
@@ -212,8 +255,28 @@ static double get_ratio(void)
       return (double)n/(255.0-n);
    }
 
-   Stop(_("Invalid redundancy specification '%s' for RS04.\n"
-	  "Valid formats: normal, high, <number>%%, <number>r"), r);
+   if(r[len-1] == 'm')   /* largest ecc data within the given MiB */
+   {  guint64 S = (set->dataBytes + set->B - 1) / set->B;
+      double mib = (double)S * set->B / 1048576.0;
+      gint64 size = strtoll(r, NULL, 10);
+      double limit = size * 1048576.0 / set->B;   /* in sectors */
+      double ratio = limit / S;
+      RS04Set tmp = *set;
+      int i;
+
+      if(ratio < 8.0/247.0 || ratio > 2.0)
+	Stop(_("Ecc file size %" PRId64 "m out of useful range [%" PRId64 " .. %" PRId64 "]"),
+	     size, (gint64)ceil(mib*8.0/247.0), (gint64)(mib*2.0));
+
+      /* CRC sectors and tags come on top of the parity */
+
+      for(i=0; i<10 && RS04ChooseParameters(&tmp, ratio, 0, RS04MemoryBudget()) && tmp.A > limit; i++)
+	ratio *= (limit - 1) / tmp.A;
+      return MIN(ratio, 2.0);
+   }
+
+   Stop(_("Invalid redundancy specification '%s'.\n"
+	  "Valid formats: normal, high, <number>%%, <number>r, <number>m"), r);
    return 0.0;
 }
 
@@ -222,7 +285,7 @@ static void choose_parameters(ecc_closure *ec)
    guint64 ram = RS04MemoryBudget();
 
    if(Closure->eccTarget == ECC_FILE)
-   {  if(!RS04ChooseParameters(set, get_ratio(), 0, ram))
+   {  if(!RS04ChooseParameters(set, get_ratio(set), 0, ram))
 	Stop(_("The data is too small for RS04 with the requested redundancy."));
       return;
    }
@@ -238,7 +301,7 @@ static void choose_parameters(ecc_closure *ec)
 	     set->S, Closure->mediumSize);
    }
    else if(Closure->redundancy && strlen(Closure->redundancy))
-   {  if(!RS04ChooseParameters(set, get_ratio(), 0, ram))
+   {  if(!RS04ChooseParameters(set, get_ratio(set), 0, ram))
 	Stop(_("The data is too small for RS04 with the requested redundancy."));
    }
    else
@@ -413,6 +476,17 @@ static void encode(ecc_closure *ec)
 
    Verbose("RS04 encoding: %" PRIu64 " codewords per pass, %d threads\n", ec->W, ec->nWorkers);
 
+   GuiShowWidget(ec->wl->encLabel2);
+   GuiShowWidget(ec->wl->encPBar2);
+   GuiShowWidget(ec->wl->encLabel3);
+   GuiShowWidget(ec->wl->encInfo);
+   GuiShowWidget(ec->wl->encLabel4);
+   GuiShowWidget(ec->wl->encPerformance);
+   GuiSetProgress(ec->wl->encPBar1, 100, 100);
+   GuiSetLabelText(ec->wl->encInfo, _("%d threads, %" PRIu64 " codewords of %u+%u sectors per pass"),
+		   ec->nWorkers, ec->W, set->k, set->m);
+   GuiSetLabelText(ec->wl->encPerformance, "");
+
    for(ec->i0=0; ec->i0<set->L; ec->i0+=ec->W)
    {  ec->pw = MIN(ec->W, set->L-ec->i0);
 
@@ -460,9 +534,18 @@ void RS04Create(void)
    char *msg;
 
    ec->self = method;
+   ec->wl = (RS04Widgets*)method->widgetList;
    ec->earlyTermination = TRUE;
    ec->lastPermille = -1;
    RegisterCleanup(_("Error correction data creation aborted"), ecc_cleanup, ec);
+
+   if(Closure->eccTarget == ECC_IMAGE)
+        GuiSetLabelText(ec->wl->encHeadline,
+			_("<big>Augmenting the image with error correction data.</big>\n<i>%s</i>"),
+			_("- checking image -"));
+   else GuiSetLabelText(ec->wl->encHeadline,
+			_("<big>Creating the error correction file.</big>\n<i>%s</i>"),
+			_("- checking image -"));
 
    /*** Open the image file */
 
@@ -523,8 +606,15 @@ void RS04Create(void)
 			 set->S, set->B, ecc_sectors, set->k, set->m, set->L,
 			 (100.0*set->m*set->L)/set->D);
    if(Closure->eccTarget == ECC_IMAGE)
-        PrintLog(_("Augmenting the image with Method RS04:\n%s\n"), msg);
-   else PrintLog(_("Creating the error correction file with Method RS04:\n%s\n"), msg);
+   {  PrintLog(_("Augmenting the image with Method RS04:\n%s\n"), msg);
+      GuiSetLabelText(ec->wl->encHeadline,
+		      _("<big>Augmenting the image with error correction data.</big>\n<i>%s</i>"), msg);
+   }
+   else
+   {  PrintLog(_("Creating the error correction file with Method RS04:\n%s\n"), msg);
+      GuiSetLabelText(ec->wl->encHeadline,
+		      _("<big>Creating the error correction file.</big>\n<i>%s</i>"), msg);
+   }
    g_free(msg);
 
    if(5*set->m*set->L < set->D)
@@ -569,7 +659,7 @@ void RS04Create(void)
    {  PrintLog(_("Image has been augmented with error correction data.\n"
 		 "New image size is %" PRId64 " MiB (%" PRId64 " sectors).\n"),
 	       ((set->S+set->A)*set->B) >> 20, set->S+set->A);
-      GuiSetLabelText(RS04_LABEL(createLabel), _("Image has been augmented with error correction data.\n"
+      GuiSetLabelText(ec->wl->encFootline, _("Image has been augmented with error correction data.\n"
 		 "New image size is %" PRId64 " MiB (%" PRId64 " sectors).\n"),
 	       ((set->S+set->A)*set->B) >> 20, set->S+set->A);
    }
@@ -577,16 +667,18 @@ void RS04Create(void)
    {  PrintLog(_("Error correction file \"%s\" created.\n"
 		 "Make sure to keep this file on a reliable medium.\n"),
 	       Closure->eccName);
-      GuiSetLabelText(RS04_LABEL(createLabel), "%s",
+      GuiSetLabelText(ec->wl->encFootline, "%s",
 		      _("The error correction file has been successfully created.\n"
 			"Make sure to keep this file on a reliable medium."));
    }
 
-   if(!Closure->regtestMode)
+   GuiSetProgress(ec->wl->encPBar2, 100, 100);
    {  double elapsed = g_timer_elapsed(ec->timer, NULL);
+      double mbs = (set->dataBytes/1048576.0)/MAX(elapsed, 0.001);
 
-      PrintLog(_("Avg performance: %5.2fs (%5.2fMiB/s) total\n"),
-	       elapsed, (set->dataBytes/1048576.0)/elapsed);
+      if(!Closure->regtestMode)
+	PrintLog(_("Avg performance: %5.2fs (%5.2fMiB/s) total\n"), elapsed, mbs);
+      GuiSetLabelText(ec->wl->encPerformance, _("%5.2fMiB/s average"), mbs);
    }
 
    ec->earlyTermination = FALSE;
