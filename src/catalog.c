@@ -43,7 +43,7 @@ static void sanitize(char *s)
 
 void AppendCatalog(Image *image, char *action, char *label,
 		   gint64 sectors, gint64 unreadable, gint64 crc_errors)
-{  FILE *file = g_fopen(Closure->catalogFile, "a");
+{  FILE *file = g_fopen(Closure->catalogFile, "ab");
    char fingerprint[33], date[32];
    char *l = g_strdup(label && *label ? label : "-");
 
