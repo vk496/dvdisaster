@@ -143,14 +143,27 @@ static gint compare_extents(gconstpointer a, gconstpointer b)
    return 0;
 }
 
-/* Find the root directory; prefer Joliet names if available */
+/* Primary volume descriptor of a later session: it is at session start + 16
+   and its root directory (an absolute address) lies within that session.
+   ISO images stored as files on the disc fail this test, their addresses
+   are relative to the start of the file. */
 
-static int find_root(iso_walk *w, guint32 *lba, guint32 *length)
+static int later_session_pvd(unsigned char *buf, guint64 s)
+{  guint64 start = s-16, root = le32(buf+156+2);
+
+   return s > 16 && buf[0] == 1 && !memcmp(buf+1, "CD001", 5)
+          && root >= start && root < start + le32(buf+80);
+}
+
+/* Find the root directory of the session starting at base;
+   prefer Joliet names if available */
+
+static int find_root(iso_walk *w, guint64 base, guint32 *lba, guint32 *length)
 {  unsigned char buf[2048];
    int found = FALSE;
    guint64 s;
 
-   for(s=16; s<16+64; s++)
+   for(s=base+16; s<base+16+64; s++)
    {  if(!read_sector(w, s, buf) || memcmp(buf+1, "CD001", 5))
 	 break;
       if(buf[0] == 255)  /* volume descriptor set terminator */
@@ -180,7 +193,7 @@ void ListDamagedFiles(char *image_name)
    guint32 root_lba, root_length;
    unsigned char *buf;
    char *damaged;
-   guint64 damaged_total = 0, outside = 0;
+   guint64 damaged_total = 0, outside = 0, session = 0;
    int damaged_files = 0;
    guint i;
 
@@ -207,6 +220,8 @@ void ListDamagedFiles(char *image_name)
 	 {  damaged[s+i] = 1;
 	    damaged_total++;
 	 }
+	 else if(later_session_pvd(buf+2048*i, s+i))
+	    session = s+i-16;  /* the last session lists the files of all sessions */
    }
    g_free(buf);
 
@@ -217,7 +232,10 @@ void ListDamagedFiles(char *image_name)
    w.extents = g_ptr_array_new();
    w.visited = g_hash_table_new(g_direct_hash, g_direct_equal);
 
-   if(!find_root(&w, &root_lba, &root_length))
+   if(session)
+      PrintLog(_("(file system of the last session, starting at sector %" PRId64 ")\n"), session);
+
+   if(!find_root(&w, session, &root_lba, &root_length))
    {  PrintLog(_("- no ISO 9660 file system found\n"));
       goto cleanup;
    }
