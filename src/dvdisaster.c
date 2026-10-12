@@ -1030,7 +1030,7 @@ int main(int argc, char *argv[])
 	   method->verify(image);
 
 	   if(!Closure->quickVerify)
-	      CheckXorrisoTags(Closure->imageName);
+	      g_free(CheckXorrisoTags(Closure->imageName));
 	}
 	break;
 
