@@ -385,7 +385,9 @@ according to \-\-read-attempts) and is stored as a dead sector marker (2048 byte
 followed by 304 zero bytes. Drives without C2 support may interpolate damaged audio
 sectors silently; dvdisaster prints a warning in that case. Adaptive reading is not
 available for CD-DA images, and RS01, RS02 and RS03 error correction data is not used
-while reading them.
+while reading them. An RS04 error correction file for 2352 byte sectors given with \-e
+is used to check the sectors against their CRC32, provided the rip it was made from
+was read with the same read offset (otherwise the check is skipped).
 Data sectors are checked against their EDC (Mode 1, Mode 2 Form 1, and Form 2 if
 the sector carries one); a sector failing the check counts as unreadable like a sector
 with C2 errors, so that RS04 can repair it.

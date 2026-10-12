@@ -27,6 +27,14 @@
 #include "read-linear.h"
 #include "scsi-layer.h"
 #include "udf.h"
+#include "rs04-includes.h"
+
+/* CD-DA rips are only comparable with the CRCs of an RS04 ecc file
+   if both were read with the same read offset. This is assumed once a
+   sector which is not digital silence matches; CRC errors before that
+   are held back, and checking ends if the first 8 such sectors fail. */
+
+enum { AUDIO_ALIGNED, AUDIO_UNSURE, AUDIO_SHIFTED };
 
 /*
  * IO buffer states
@@ -444,9 +452,9 @@ static void prepare_crc_cache(read_closure *rc)
      Closure->crcBuf = NULL;
   }
     
-   /*** CD-DA images are not handled by the RS01..RS03 codecs. */
+   /*** CD-DA images are only handled by RS04 ecc files. */
 
-   if(rc->sectorBytes != 2048)
+   if(rc->sectorBytes != 2048 && !rc->eccMethod)
       return;
 
    /*** Memory for the CRC32 sums is needed in two cases: */
@@ -480,7 +488,9 @@ static void prepare_crc_cache(read_closure *rc)
 	    the data portion, but not for the full image.
 	    Request calculation of them from the image. */
 	 
-	 if(Closure->crcBuf->md5State & MD5_BUILDING)
+	 if(rc->sectorBytes != 2048)
+	   rc->audioOffset = AUDIO_UNSURE;
+	 else if(Closure->crcBuf->md5State & MD5_BUILDING)
 	   rc->doChecksumsFromImage = CRCBUF_UPDATE_MD5 | CRCBUF_UPDATE_CRC_AFTER_DATA;
       }
       else Closure->crcBuf = NULL;
@@ -503,6 +513,60 @@ static void prepare_crc_cache(read_closure *rc)
 
    Closure->crcBuf = CreateCrcBuf(rc->image);
    rc->doChecksumsFromImage = CRCBUF_UPDATE_ALL;
+}
+
+/*
+ * CD-DA images can be checked against an RS04 ecc file for 2352 byte sectors
+ */
+
+static void cdda_ecc_file(Image *image)
+{  RS04Info *info;
+
+   if(!OpenEccFileForImage(image, Closure->eccName, O_RDONLY, IMG_PERMS) || !image->eccFile)
+     return;
+
+   info = image->eccFileMethod && !strncmp(image->eccFileMethod->name, "RS04", 4) ? RS04GetSets(image) : NULL;
+   if(!info || info->set[0].B != CD_RAW_SECTOR_SIZE)
+   {  LargeClose(image->eccFile);
+      image->eccFile = NULL;
+      image->eccFileMethod = NULL;
+      g_free(image->eccFileHeader);
+      image->eccFileHeader = NULL;
+   }
+   g_free(info);
+}
+
+/*
+ * CRC errors found by the writer thread
+ */
+
+static void crc_error(read_closure *rc, gint64 sector)
+{  ClearProgress();
+   PrintCLI(_("* CRC error, sector: %lld\n"), (long long int)sector);
+   Closure->crcErrors++;
+   if(rc->readMap)  /* trigger re-read */
+   {  g_mutex_lock(rc->mutex);  /* reader sets bits in the same words */
+      ClearBit(rc->readMap, sector);
+      g_mutex_unlock(rc->mutex);
+   }
+}
+
+static int all_zero(unsigned char *buf, int n)
+{  int i;
+
+   for(i=0; i<n; i++)
+     if(buf[i]) return FALSE;
+   return TRUE;
+}
+
+static void audio_shifted(read_closure *rc)
+{  rc->audioOffset = AUDIO_SHIFTED;
+   if(!rc->nAudioPending) return;
+
+   ClearProgress();
+   PrintLog(_("* The rip does not match the CRCs of the ecc file; it was probably made\n"
+	      "  with another read offset. CRCs are not compared while reading;\n"
+	      "  verifying and fixing the rip take the offset into account.\n"));
 }
 
 /*
@@ -726,15 +790,24 @@ static gpointer worker_thread(read_closure *rc)
 	   
 	   if(Closure->crcBuf && sector < Closure->crcBuf->coveredSectors)
 	   {  switch(CheckAgainstCrcBuffer(Closure->crcBuf, sector, buf))
-	      {  case CRC_BAD:
-		   ClearProgress();
-		   PrintCLI(_("* CRC error, sector: %lld\n"), (long long int)s+i);
-		   Closure->crcErrors++;
-		   if(rc->readMap)  /* trigger re-read */
-		   {  g_mutex_lock(rc->mutex);  /* reader sets bits in the same words */
-		      ClearBit(rc->readMap, sector);
-		      g_mutex_unlock(rc->mutex);
+	      {  case CRC_GOOD:
+		   if(rc->audioOffset == AUDIO_UNSURE && !all_zero(buf, rc->sectorBytes))
+		   {  int j;
+
+		      rc->audioOffset = AUDIO_ALIGNED;
+		      for(j=0; j<rc->nAudioPending; j++)
+			crc_error(rc, rc->audioPending[j]);
 		   }
+		   break;
+
+	         case CRC_BAD:
+		   if(rc->audioOffset == AUDIO_UNSURE)
+		   {  rc->audioPending[rc->nAudioPending++] = sector;
+		      if(rc->nAudioPending == 8)
+			audio_shifted(rc);
+		   }
+		   else if(rc->audioOffset == AUDIO_ALIGNED)
+		     crc_error(rc, sector);
 		   break;
 
 	         case CRC_UNKNOWN:  /* CRC data missing or detected as defective */
@@ -848,12 +921,19 @@ void ReadMediumLinear(gpointer data)
    {  OpenEccFileForImage(rc->image, Closure->eccName, O_RDONLY, IMG_PERMS);
       HintOverwritableMedium(rc->image);
    }
+   else if(Closure->eccName && !g_file_test(Closure->eccName, G_FILE_TEST_IS_DIR))
+      cdda_ecc_file(rc->image);
 
    /*** If ecc information is available in both the image and the
 	ecc file, the ecc file gets precedence. */
 
    if(rc->sectorBytes != 2048)
-      ;  /* RS01..RS03 data does not apply to CD-DA images */
+   {  /* RS01..RS03 data does not apply to CD-DA images */
+      if(rc->image->eccFile)
+      {  rc->eccMethod = rc->image->eccFileMethod;
+	 rc->eccHeader = rc->image->eccFileHeader;
+      }
+   }
    else if(rc->image->eccFileMethod)
    {  rc->eccMethod = rc->image->eccFileMethod;
       rc->eccHeader = rc->image->eccFileHeader;
@@ -1399,6 +1479,9 @@ step_counter:
    g_thread_join(rc->worker);
    rc->worker = NULL;
 
+   if(rc->audioOffset == AUDIO_UNSURE)
+     audio_shifted(rc);
+
    /*** Finalize on-the-fly checksum calculation */
 
    if(rc->doChecksumsFromCodec && rc->eccMethod)
@@ -1442,7 +1525,7 @@ step_counter:
 
 	 if(t) SetExitCode(EXIT_CODE_DEFECTS);
 	 else
-	 {  if(rc->eccMethod) /* we had CRC sums to compare against */
+	 {  if(rc->eccMethod && rc->audioOffset == AUDIO_ALIGNED) /* we had CRC sums to compare against */
 	    {  if(rc->crcIncomplete)
 	       {  t = g_strdup(_("All sectors successfully read, but incomplete or damaged checksums."));
 		  SetExitCode(EXIT_CODE_DEFECTS);

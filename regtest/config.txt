@@ -867,4 +867,5 @@ RS04r_xa_read yes
 RS04r_xa_form1_only yes
 RS04r_cdi_read yes
 RS04r_xa_edc_errors yes
+RS04r_xa_edc_errors_ecc yes
 RS04r_xa_fix yes

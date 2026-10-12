@@ -371,7 +371,10 @@ Sektoren (2048 Bytes) gefolgt von 304 Null-Bytes gespeichert. Laufwerke ohne
 C2-Unterst\[:u]tzung interpolieren besch\[:a]digte Audio-Sektoren eventuell
 unbemerkt; dvdisaster gibt in diesem Fall eine Warnung aus. Das angepasste
 Lesen ist f\[:u]r CD-DA-Abbilder nicht verf\[:u]gbar, und RS01-, RS02- und
-RS03-Fehlerkorrekturdaten werden beim Lesen nicht verwendet.
+RS03-Fehlerkorrekturdaten werden beim Lesen nicht verwendet. Eine mit \-e
+angegebene RS04-Fehlerkorrekturdatei f\[:u]r 2352-Byte-Sektoren dient zur Pr\[:u]fung
+der Sektoren anhand ihrer CRC32, sofern das Abbild, aus dem sie erstellt wurde, mit
+demselben Lese-Offset gelesen wurde (andernfalls entf\[:a]llt die Pr\[:u]fung).
 Datensektoren werden anhand ihres EDC gepr\[:u]ft (Mode 1, Mode 2 Form 1 und Form 2,
 sofern der Sektor einen tr\[:a]gt); ein Sektor, der die Pr\[:u]fung nicht besteht, gilt
 wie ein Sektor mit C2-Fehlern als unlesbar, so dass RS04 ihn reparieren kann.

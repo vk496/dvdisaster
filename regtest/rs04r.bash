@@ -375,6 +375,23 @@ if try "ripping the damaged CD with another drive" audio_read_offset; then (
   run_regtest audio_read_offset "--spinup-delay=0 -r -j 0" $TEST_TMPDIR/rip.bin $NO_FILE
 ) & limit_jobs; fi
 
+# Ripping with the ecc file of the CD: a corrupted sample without
+# C2 error is found by the CRCs
+
+if try "ripping the audio CD with its ecc file" audio_read_ecc; then (
+  cp $AUDIO $TEST_TMPDIR/sim.bin
+  printf 'X' | dd of=$TEST_TMPDIR/sim.bin bs=1 seek=$((2352*1000+500)) conv=notrunc >>$LOGFILE 2>&1
+  extra_args="--debug --sim-cd=$TEST_TMPDIR/sim.bin $AUDIOTOC --fixed-speed-values"
+  run_regtest audio_read_ecc "--spinup-delay=0 -r" $TEST_TMPDIR/rip.bin $AUDIOECC
+) & limit_jobs; fi
+
+# With another read offset the CRCs can not be compared while ripping
+
+if try "ripping with the ecc file, other read offset" audio_read_ecc_offset; then (
+  extra_args="--debug --sim-cd=$AUDIO $AUDIOTOC:offset=100 --fixed-speed-values"
+  run_regtest audio_read_ecc_offset "--spinup-delay=0 -r" $TEST_TMPDIR/rip.bin $AUDIOECC
+) & limit_jobs; fi
+
 if try "fixing the rip, read offset +100 samples" audio_fix_offset; then (
   read_disc $AUDIO $AUDIOTOC $TEST_TMPDIR/rip.bin
   step -i$TEST_TMPDIR/rip.bin -e$TEST_TMPDIR/rip.ecc --debug --set-version $SETVERSION --sector-size 2352 -n 20% -mRS04 -o file -c
@@ -467,6 +484,16 @@ if try "reading sectors with EDC errors" xa_edc_errors; then (
   xa_damaged $TEST_TMPDIR/sim.bin
   extra_args="--debug --sim-cd=$TEST_TMPDIR/sim.bin $XATOC --fixed-speed-values"
   run_regtest xa_edc_errors "--spinup-delay=0 -r -j 0" $TEST_TMPDIR/rip.bin $NO_FILE
+) & limit_jobs; fi
+
+# With the ecc file the corrupted Form 2 sector without EDC is found
+
+if try "reading sectors with EDC errors and the ecc file" xa_edc_errors_ecc; then (
+  command -v python3 >/dev/null 2>&1 || exit 0
+  step -i$XA -e$TEST_TMPDIR/xa.ecc --debug --set-version $SETVERSION --sector-size 2352 -n 20% -mRS04 -o file -c
+  xa_damaged $TEST_TMPDIR/sim.bin
+  extra_args="--debug --sim-cd=$TEST_TMPDIR/sim.bin $XATOC --fixed-speed-values"
+  run_regtest xa_edc_errors_ecc "--spinup-delay=0 -r -j 0" $TEST_TMPDIR/rip.bin $TEST_TMPDIR/xa.ecc
 ) & limit_jobs; fi
 
 if try "fixing the rip of the damaged XA disc" xa_fix; then (

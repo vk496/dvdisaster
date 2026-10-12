@@ -41,6 +41,7 @@ CrcBuf *CreateCrcBuf(Image *image)
    MD5Init(cb->md5Ctxt);
    cb->md5State = MD5_BUILDING;
    cb->lastSector = 0;
+   cb->sectorBytes = 2048;
    memset(cb->dataMD5sum, 0, 16);
    memset(cb->imageMD5sum, 0, 16);
 
@@ -165,7 +166,7 @@ int CheckAgainstCrcBuffer(CrcBuf *cb, gint64 idx, unsigned char *buf)
    if(cb->covered && !GetBit(cb->covered, idx))
      return CRC_OUTSIDE_BOUND;
    
-   crc = Crc32(buf, 2048);
+   crc = Crc32(buf, cb->sectorBytes);
 
    if(!GetBit(cb->valid, idx))
       return CRC_UNKNOWN;

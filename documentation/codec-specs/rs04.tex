@@ -822,8 +822,8 @@ the confirmation of candidates in section \ref{rs04-recognize}).
 \label{rs04-reading}
 
 While reading a medium, dvdisaster checks the data sectors of every set
-with $B = 2048$ (the augmented sets on the medium, or an ecc file given for
-it) against their Crc32 values, and the CRC
+with the sector size of the image being read (the augmented sets on the
+medium, or an ecc file given for it) against their Crc32 values, and the CRC
 and parity sectors of augmented sets against their tags. Only the beginning
 of each added zone, up to the last CRC sector, is read in advance; a parity
 sector is checked with the tag in front of it, which is read just before it.
@@ -832,6 +832,17 @@ behind a tag, reads that tag first. A parity sector whose tag is unreadable
 is assumed to be correct. Since a skipped tag is missing in the image, a
 parity sector which fails its check is stored as a missing sector, so that
 it is an erasure for the repair.
+
+\medskip
+
+Audio CDs (and other CDs read as 2352 byte sectors) are checked against an
+ecc file with $B = 2352$. The Crc32 values only match if the rip and the ecc
+file were made with the same read offset (section \ref{rs04-audio}): this
+is assumed once a sector which is not digital silence matches. If the first
+8 such sectors do not match, the CRCs are not compared for the rest of the
+rip, which verifying and repairing then align. Sets with $B = 2324$ can not
+be checked while reading, since the 2352 byte sectors read from the CD do
+not tell which of them make up the protected data.
 
 \medskip
 

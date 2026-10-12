@@ -384,10 +384,11 @@ RS04Info* RS04GetSets(Image *image)
    return NULL;
 }
 
-/* Expected image size in 2048 byte sectors */
+/* Expected image size in 2048 byte sectors (2352 when reading CD-DA) */
 
 guint64 RS04ExpectedImageSize(Image *image)
 {  RS04Info *info = RS04GetSets(image);
+   int unit = image->type == IMAGE_MEDIUM ? image->dh->sectorBytes : 2048;
    guint64 bytes = 0;
    int i;
 
@@ -403,15 +404,16 @@ guint64 RS04ExpectedImageSize(Image *image)
    }
 
    g_free(info);
-   return (bytes+2047)/2048;
+   return (bytes+unit-1)/unit;
 }
 
 /***
  *** CRC buffer for checking sectors while reading a medium
  ***
- * Covers the data sectors of all sets with 2048 byte sectors at their
- * image positions, and the CRC sectors of augmented sets (from the tags).
- * Only the beginning of each added zone up to the last CRC sector is read;
+ * Covers the data sectors of all sets with the sector size of the medium
+ * (2048 bytes, or 2352 for CD-DA) at their image positions, and the CRC
+ * sectors of augmented sets (from the tags). Only the beginning of each
+ * added zone up to the last CRC sector is read;
  * the Crc32 of the other parity sectors are entered by RS04TagToCrcBuf()
  * when their tag is read. Sectors without a CRC (tags, parity with lost
  * tags, gaps between sets) are not covered; their CRC is taken from the
@@ -436,6 +438,8 @@ CrcBuf* RS04GetCrcBuf(Image *image)
 
    cb->covered = CreateBitmap0(cb->crcSize);
    cb->coveredSectors = cb->crcSize;
+   if(image->type == IMAGE_MEDIUM)
+     cb->sectorBytes = image->dh->sectorBytes;
 
    for(i=0; info && i<info->nSets; i++)
    {  RS04Set *set = &info->set[i];
@@ -443,8 +447,8 @@ CrcBuf* RS04GetCrcBuf(Image *image)
       guint64 t, q, S = set->S;
       RS04State st;
 
-      if(set->B != 2048) continue;
-      if(set->dataBytes % 2048) S--;  /* partial last sector of an ecc file set */
+      if(set->B != cb->sectorBytes) continue;
+      if(set->dataBytes % set->B) S--;  /* partial last sector of an ecc file set */
 
       RS04InitState(&st, image, set);
       RS04ScanZonePart(&st, NULL, RS04ZoneIndex(set, set->c-1)+1);

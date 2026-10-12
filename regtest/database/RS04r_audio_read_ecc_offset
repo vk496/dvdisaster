@@ -1,0 +1,29 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ CD.
+Medium: CD-R Audio, 2560 sectors.
+
+Reading CD-DA image: 2560 sectors of 2352 bytes, using C2 error pointers.
+  Session 1, track  1: sectors 0 - 1279, audio
+  Session 1, track  2: sectors 1280 - 2559, audio
+
+Creating new rip.bin image.
+Reading CRC information from ecc data (RS04) ... done.
+* The rip does not match the CRCs of the ecc file; it was probably made
+  with another read offset. CRCs are not compared while reading;
+  verifying and fixing the rip take the offset into account.
+
+All sectors successfully read.
+
+AccurateRip checksums (no read offset correction; see --audio-offset):
+  Track  1: v1 7c625039, v2 6f881ac5, CRC32 5a8cb2c0
+  Track  2: v1 dac55930, v2 908d4273, CRC32 4a406dd0
+AccurateRip disc id: 002-00000f00-00002801-0c002202
+CTDB TOC id: jMITwptWUXZfy4sfzMMsQhQp0YA-, CRC32 dc805544
+Cue sheet written to rip.cue.

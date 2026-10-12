@@ -635,6 +635,7 @@ typedef struct _CrcBuf
    Bitmap *valid;
    Bitmap *covered;             /* if not NULL: sectors which have a CRC at all */
    void *rs04;                  /* RS04Info: augmented sets whose tags hold more CRCs */
+   int sectorBytes;             /* 2048, or 2352 for CD-DA */
    gint32 crcCached;            /* CRC has been retrieved from ECC or previous run */
   
    /* MD5 sum of image sectors */

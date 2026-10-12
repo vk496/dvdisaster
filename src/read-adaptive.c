@@ -145,6 +145,7 @@ CrcBuf *GetCRCFromRS01_obsolete(EccInfo *ei)   /* FIXME: obsolete */
    gint64 i,j,sec_idx;
 
    cb->crcbuf = g_malloc0(ei->sectors * sizeof(guint32));
+   cb->sectorBytes = 2048;
    cb->crcSize   = ei->sectors;
    cb->valid  = CreateBitmap0(ei->sectors);
    buf = cb->crcbuf;
@@ -200,6 +201,7 @@ CrcBuf *GetCRCFromRS02_obsolete(void *layv, void *dhv, LargeFile *image)
    image_sectors = lay->eccSectors+lay->dataSectors;
  
    cb->crcbuf = g_malloc0(image_sectors * sizeof(guint32));
+   cb->sectorBytes = 2048;
    cb->crcSize   = image_sectors;
    cb->valid  = CreateBitmap0(image_sectors);
 

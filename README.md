@@ -87,7 +87,7 @@ takes one sector of every layer) and the robustness of the recovery data itself,
   augmented images can have any size, and you don't have to remember any setting to repair them.
 - Multi-session discs: each session is augmented on its own, and reading the disc then verifies/repairs all sessions at once.
 - Error correction files for other sector formats: CD-DA audio rips (2352 bytes, drive read offsets are detected
-  automatically) and Mode 2 Form 2 tracks (VCD/SVCD, 2324 bytes).
+  automatically; ripping again with the ecc file checks every sector) and Mode 2 Form 2 tracks (VCD/SVCD, 2324 bytes).
 - BIN/CUE and GDI sets as written by redumper, DiscImageCreator or Aaru (one `.bin` per track) can be protected by
   a single error correction file: pass the `.cue` or `.gdi` file as the image (`-i disc.cue -mRS04 -o file -c`).
 - Intelligent adaptive reading is available, as for RS02.
