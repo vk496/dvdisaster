@@ -682,7 +682,16 @@ signature at byte offsets which are multiples of 4 (all three sector sizes
 are multiples of 4) and accepts a valid tag at offset $o$ only if
 $o = (ownPosition - S) \cdot sectorBytes$. The ecc file must be
 $A \cdot B$ bytes long; shorter files are treated as truncated (the missing
-sectors are erasures).
+sectors are erasures). An ecc file holds one set; if valid tags at their
+proper places belong to different sets (other $setID$) or disagree, the set
+held by the majority of the tags is used, and tags of other sets count as
+invalid.
+
+{\em Informative:} dvdisaster takes tag 0 and the tags in the last 256
+sectors of the file. If they describe different sets, it compares up to 16
+tag positions of each set, spread over the file, and uses the set with the
+most valid tags at them (tag 0 wins a tie). This catches e.g.\ a tag 0
+which belongs to another ecc file after damage to the file system.
 
 \medskip
 

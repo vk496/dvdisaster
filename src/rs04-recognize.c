@@ -59,31 +59,85 @@ static int scan_buffer(unsigned char *buf, gint64 len, gint64 last, gint64 pos,
  ***/
 
 typedef struct
-{  RS04Set set;
+{  GArray *cands;           /* distinct sets of the valid tags found */
+   int collect;             /* FALSE: stop at the first valid tag */
    int unsupported;
 } file_scan;
 
-static int file_tag_found(unsigned char *buf, gint64 pos, gpointer data)
-{  file_scan *fs = (file_scan*)data;
-   guint64 own;
+/* Tags of one set should be identical except for their position and CRCs */
 
-   switch(RS04ParseTag(buf, &fs->set, &own, NULL))
+static int same_params(RS04Set *a, RS04Set *b)
+{  return a->B == b->B && a->T == b->T && a->dataBytes == b->dataBytes
+       && a->L == b->L && a->k == b->k && a->m == b->m && a->flags == b->flags
+       && a->creatorVersion == b->creatorVersion && !memcmp(a->dataMD5, b->dataMD5, 16);
+}
+
+static int same_set(RS04Set *a, RS04Set *b)
+{  return !memcmp(a->setID, b->setID, 8) && same_params(a, b);
+}
+
+/* A valid tag at its proper place in the ecc file */
+
+static int parse_file_tag(unsigned char *buf, gint64 pos, RS04Set *set, int *unsupported)
+{  guint64 own;
+
+   switch(RS04ParseTag(buf, set, &own, NULL))
    {  case RS04_TAG_VALID:
-	 return (guint64)pos == (own - fs->set.S) * fs->set.B;
+	 return (guint64)pos == (own - set->S) * set->B;
       case RS04_TAG_UNSUPPORTED:
-	 fs->unsupported = TRUE;
+	 *unsupported = TRUE;
 	 break;
    }
    return FALSE;
 }
 
+static int file_tag_found(unsigned char *buf, gint64 pos, gpointer data)
+{  file_scan *fs = (file_scan*)data;
+   RS04Set set;
+   guint i;
+
+   if(!parse_file_tag(buf, pos, &set, &fs->unsupported))
+     return FALSE;
+
+   for(i=0; i<fs->cands->len; i++)
+     if(same_set(&g_array_index(fs->cands, RS04Set, i), &set))
+       return !fs->collect;
+
+   g_array_append_val(fs->cands, set);
+   return !fs->collect;
+}
+
+/* Tags of set c among up to 16 of its tag positions spread over the file */
+
+static int votes(LargeFile *file, RS04Set *c)
+{  unsigned char buf[2048];
+   guint64 tags = (c->A + c->T - 1)/c->T;
+   int probe, probes = MIN(tags, 16), n = 0, dummy;
+
+   for(probe=0; probe<probes; probe++)
+   {  guint64 g = probes > 1 ? probe*(tags-1)/(probes-1) : 0;
+      gint64 pos = g*c->T*c->B;
+      RS04Set set;
+
+      if(   LargeSeek(file, pos) && RS04ReadAll(file, buf, 2048)
+	 && parse_file_tag(buf, pos, &set, &dummy) && same_set(&set, c))
+	n++;
+   }
+
+   return n;
+}
+
 int RS04RecognizeFile(LargeFile *ecc_file, EccHeader **eh)
 {  unsigned char *buf = g_malloc(SCAN_CHUNK);
+   gint64 size = ecc_file->size;
    file_scan fs;
+   RS04Set *best;
    gint64 pos;
-   int found = FALSE;
+   guint i;
+   int best_votes;
 
    memset(&fs, 0, sizeof(fs));
+   fs.cands = g_array_new(FALSE, FALSE, sizeof(RS04Set));
    *eh = NULL;
 
    /* Sector 0 is tag 0 */
@@ -91,6 +145,7 @@ int RS04RecognizeFile(LargeFile *ecc_file, EccHeader **eh)
    LargeSeek(ecc_file, 0);
    if(!RS04ReadAll(ecc_file, buf, 2048))
    {  g_free(buf);
+      g_array_free(fs.cands, TRUE);
       return ECCFILE_INVALID;
    }
 
@@ -109,32 +164,62 @@ int RS04RecognizeFile(LargeFile *ecc_file, EccHeader **eh)
 #endif
       if(Crc32(buf, sizeof(EccHeader)) == recorded)
       {  g_free(buf);
+	 g_array_free(fs.cands, TRUE);
 	 return ECCFILE_WRONG_CODEC;
       }
    }
 
-   found = file_tag_found(buf, 0, &fs);
+   /* Tag 0 and the tags in the last 256 sectors, so that a tag 0 which
+      does not belong to the rest of the file is noticed */
+
+   fs.collect = TRUE;
+   file_tag_found(buf, 0, &fs);
+
+   pos = MAX(2048, size - 256*2352) & ~3;
+   if(pos < size && LargeSeek(ecc_file, pos) && RS04ReadAll(ecc_file, buf, size-pos))
+     scan_buffer(buf, size-pos, size-pos, pos, file_tag_found, &fs);
 
    /* Otherwise look for any tag at its proper place */
 
-   for(pos=0; !found && pos < (gint64)ecc_file->size; pos += SCAN_CHUNK-2048)
-   {  gint64 len = MIN(SCAN_CHUNK, (gint64)ecc_file->size - pos);
+   fs.collect = FALSE;
+   for(pos=0; !fs.cands->len && pos < size; pos += SCAN_CHUNK-2048)
+   {  gint64 len = MIN(SCAN_CHUNK, size - pos);
 
       if(!LargeSeek(ecc_file, pos) || !RS04ReadAll(ecc_file, buf, len))
 	break;
-      found = scan_buffer(buf, len, len, pos, file_tag_found, &fs);
+      scan_buffer(buf, len, len, pos, file_tag_found, &fs);
       if(len < SCAN_CHUNK) break;
    }
    g_free(buf);
 
-   if(!found)
+   if(!fs.cands->len)
    {  if(fs.unsupported)
 	unsupported(ecc_file->path);
+      g_array_free(fs.cands, TRUE);
       return ECCFILE_INVALID;
    }
 
-   fs.set.target = ECC_FILE;
-   *eh = RS04CreateEccHeader(&fs.set, 1);
+   /* Tags which disagree: the set held by the majority of the tags wins
+      (rs04.tex, "Recognising RS04 data"); tag 0 wins a tie. */
+
+   best = &g_array_index(fs.cands, RS04Set, 0);
+   if(fs.cands->len > 1)
+   {  best_votes = votes(ecc_file, best);
+      for(i=1; i<fs.cands->len; i++)
+      {  RS04Set *c = &g_array_index(fs.cands, RS04Set, i);
+	 int v = votes(ecc_file, c);
+
+	 Verbose("RS04RecognizeFile(): sets disagree, %d vs. %d tags\n", v, best_votes);
+	 if(v > best_votes)
+	 {  best = c;
+	    best_votes = v;
+	 }
+      }
+   }
+
+   best->target = ECC_FILE;
+   *eh = RS04CreateEccHeader(best, 1);
+   g_array_free(fs.cands, TRUE);
    Verbose("RS04RecognizeFile(): set found\n");
    return ECCFILE_PRESENT;
 }
@@ -153,14 +238,6 @@ static gint64 image_bytes(Image *image)
 {  if(image->type == IMAGE_FILE)
      return image->file->size;
    return RS04MediumSectors(image) * 2048;
-}
-
-/* Tags of one set should be identical except for their position and CRCs */
-
-static int same_params(RS04Set *a, RS04Set *b)
-{  return a->B == b->B && a->T == b->T && a->dataBytes == b->dataBytes
-       && a->L == b->L && a->k == b->k && a->m == b->m && a->flags == b->flags
-       && a->creatorVersion == b->creatorVersion && !memcmp(a->dataMD5, b->dataMD5, 16);
 }
 
 static int image_tag_found(unsigned char *buf, gint64 pos, gpointer data)

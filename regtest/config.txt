@@ -723,6 +723,8 @@ RS04f_crc_errors yes
 RS04f_ecc_damaged yes
 RS04f_tag0_lost yes
 RS04f_tag0_invalid yes
+RS04f_tag0_foreign yes
+RS04f_fix_tag0_foreign yes
 RS04f_tag_newer_version yes
 RS04f_image_truncated yes
 RS04f_image_plus56 yes

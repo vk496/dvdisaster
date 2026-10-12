@@ -216,6 +216,28 @@ if try "invalid tag 0" tag0_invalid; then (
   run_regtest tag0_invalid "-t" $MASTERISO $TMPECC
 ) & limit_jobs; fi
 
+# Tag 0 is replaced by tag 0 of another ecc file (e.g. a block of another
+# file after file system damage): the set held by the majority of the tags
+# is used, and fix restores tag 0.
+
+function foreign_tag0()
+{  $NEWVER --debug -i$TEST_TMPDIR/other.iso --random-image $ISOSIZE --random-seed 3 >>$LOGFILE 2>&1
+   $NEWVER --regtest --debug --set-version $SETVERSION -i$TEST_TMPDIR/other.iso -e$TEST_TMPDIR/other.ecc -mRS04 -o file -c >>$LOGFILE 2>&1
+   cp $MASTERECC $TMPECC
+   dd if=$TEST_TMPDIR/other.ecc of=$TMPECC bs=2048 count=1 conv=notrunc >>$LOGFILE 2>&1
+}
+
+if try "tag 0 of another set" tag0_foreign; then (
+  foreign_tag0
+  run_regtest tag0_foreign "-t" $MASTERISO $TMPECC
+) & limit_jobs; fi
+
+if try "fixing tag 0 of another set" fix_tag0_foreign; then (
+  foreign_tag0
+  cp $MASTERISO $TMPISO
+  run_regtest fix_tag0_foreign "-f" $TMPISO $TMPECC
+) & limit_jobs; fi
+
 # All tags claim a newer format version (needs python3 for the checksums)
 
 if try "tags of an unsupported version" tag_newer_version; then (
