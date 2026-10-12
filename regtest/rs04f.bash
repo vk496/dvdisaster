@@ -395,6 +395,16 @@ if try "fixing with two ecc files from a directory" fix_supplementary_dir; then 
   run_regtest fix_supplementary_dir "-f" $TMPISO $TEST_TMPDIR/eccdir
 ) & limit_jobs; fi
 
+# Damage beyond repair for both ecc files: the image sectors which
+# neither set can repair are counted once.
+
+if try "fixing with two ecc files, damage beyond repair" fix_supplementary_unrepairable; then (
+  $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TEST_TMPDIR/supp.ecc -mRS04 -n 20% -o file -c >>$LOGFILE 2>&1
+  cp $MASTERISO $TMPISO
+  $NEWVER --debug -i$TMPISO --erase 100-3000 >>$LOGFILE 2>&1
+  run_regtest fix_supplementary_unrepairable "-e $TEST_TMPDIR/supp.ecc -f" $TMPISO $MASTERECC EXITCODE
+) & limit_jobs; fi
+
 ### CD-DA rips
 
 REGTEST_SECTION="Audio tests"

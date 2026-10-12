@@ -794,7 +794,8 @@ sector recovered by one set is no longer an erasure for the others:
 \end{enumerate}
 
 This way damage can be repaired which exceeds the capacity of each single
-set. The prognosis for the combined sets is obtained by applying the same
+set. A sector which remains unrecovered is reported once, however many
+sets could not recover it. The prognosis for the combined sets is obtained by applying the same
 iteration to the erasure maps: every codeword with at most $m$ erasures is
 assumed to be recovered until no set makes progress.
 

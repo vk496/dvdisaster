@@ -744,6 +744,7 @@ RS04f_fix_image_plus56 yes
 RS04f_fix_image_plus56_truncate yes
 RS04f_fix_partial_last_sector yes
 RS04f_fix_supplementary_dir yes
+RS04f_fix_supplementary_unrepairable yes
 RS04f_audio_create yes
 RS04f_audio_good yes
 RS04f_audio_offset_verify yes

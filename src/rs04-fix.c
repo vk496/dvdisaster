@@ -67,6 +67,7 @@ struct _fix_closure
    GTimer *timer;
    int lastPermille;
    guint64 dataCorr, crcCorr, eccCorr, tagCorr, uncorrected;
+   Bitmap *unrepaired;      /* combined sets: image sectors counted in uncorrected */
    guint64 damaged, damagedCw;
    guint32 worst;
    guint64 Ldone, Ltotal;   /* codewords of the previous / all sets (GUI progress) */
@@ -106,6 +107,7 @@ static void fix_cleanup(gpointer data)
    GuiAllowActions(TRUE);
 
    free_buffers(fc);
+   if(fc->unrepaired) FreeBitmap(fc->unrepaired);
    if(fc->timer) g_timer_destroy(fc->timer);
    RS04FreeSets(fc->image, fc->info);
    if(fc->image) CloseImage(fc->image);
@@ -432,6 +434,38 @@ static int check_codeword(fix_closure *fc, guint64 w)
    return TRUE;
 }
 
+/* Count the erased sectors of codeword w as unrepaired. Combined sets
+   may share image sectors, which are counted only once. */
+
+static void count_unrepaired(fix_closure *fc, guint64 w)
+{  RS04Set *set = fc->set;
+   guint64 j, col = fc->i0 + w;
+
+   for(j=0; j<set->k+set->m; j++)
+   {  guint64 t = j*set->L + col, q, bit;
+
+      if(j < set->k ? !fc->dstat[j*fc->pw+w] : !fc->pstat[(j-set->k)*fc->pw+w])
+	continue;
+
+      if(t < set->S)
+	bit = (set->target == ECC_FILE ? 0 : set->start) + t;
+      else if(set->target == ECC_FILE)   /* ecc file sectors belong to one set */
+      {  fc->uncorrected++;
+	 continue;
+      }
+      else
+      {  q = j < set->k ? t - set->S : set->c + (j-set->k)*set->L + col;
+	 bit = set->start + set->S + RS04ZoneIndex(set, q);
+      }
+
+      if(fc->unrepaired)
+      {  if(GetBit(fc->unrepaired, bit)) continue;
+	 SetBit(fc->unrepaired, bit);
+      }
+      fc->uncorrected++;
+   }
+}
+
 /* Write a repaired payload sector and update the checksums */
 
 static void write_payload(fix_closure *fc, guint64 q, unsigned char *sector)
@@ -484,7 +518,7 @@ static void finish_pass(fix_closure *fc)
 	   PrintCLI(_("* ecc block %" PRId64 ": %d erasures, but only %d can be corrected\n"),
 		    col, count, set->m);
 	 else PrintCLI(_("* ecc block %" PRId64 ": repaired sectors do not match their checksums\n"), col);
-	 fc->uncorrected += count;
+	 count_unrepaired(fc, w);
 	 continue;
       }
 
@@ -774,6 +808,17 @@ void RS04Fix(Image *image)
 	PrintLog(_("\nRepeating the repair with all sets (pass %d).\n"), pass);
       fc->uncorrected = 0;
       fc->Ldone = 0;
+      if(combined)
+      {  gint64 end = 0;
+
+	 for(i=0; i<fc->info->nSets; i++)
+	 {  RS04Set *set = &fc->info->set[i];
+
+	    end = MAX(end, set->target == ECC_FILE ? (gint64)set->S : set->start + (gint64)(set->S + set->A));
+	 }
+	 if(fc->unrepaired) FreeBitmap(fc->unrepaired);
+	 fc->unrepaired = CreateBitmap0(end);
+      }
 
       for(i=0; i<fc->info->nSets; i++)
       {  fc->set = &fc->info->set[i];
