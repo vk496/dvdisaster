@@ -488,11 +488,14 @@ int ImageReadSectors(Image* image, void *buf, guint64 first, int n)
 	}
 	else return 0;
 	break;
-      case IMAGE_MEDIUM:
-	if(!ReadSectorsFast(image->dh, buf, first, n))
-	     return n;
-	else return 0;
-	break;
+      case IMAGE_MEDIUM:  /* drives take at most a cluster per command */
+      {  int i, chunk = MAX(image->dh->clusterSize, 1);
+
+	 for(i=0; i<n; i+=chunk)
+	   if(ReadSectorsFast(image->dh, (unsigned char*)buf+2048*(gint64)i, first+i, MIN(chunk, n-i)))
+	     return 0;
+	 return n;
+      }
    }
 
    return 0;

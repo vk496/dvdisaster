@@ -558,22 +558,36 @@ guint64 RS04MediumSectors(Image *image)
    return MAX(dh->readCapacity+1, dh->userAreaSize);
 }
 
+/* Read cluster by cluster. On DVD and BD the cluster is the drive's ECC
+   block, which fails as a whole, so an unreadable cluster is not retried
+   sector by sector there: the drive retries each sector itself, which takes
+   very long on damaged media. CD sectors fail one by one. */
+
 static int read_medium(Image *image, gint64 pos, int n, unsigned char *buf, guint8 *present)
 {  guint64 first = pos/2048;
    guint64 sectors = RS04MediumSectors(image);
-   int i, count = 0;
+   int chunk = MAX(image->dh->clusterSize, 1);
+   int i, j, m, count = 0;
 
-   for(i=0; i<n; i++)
-     present[i] = first+i < sectors;
+   for(i=0; i<n; i+=m)
+   {  m = MIN(chunk, n-i);
+      if(first+i+m > sectors)
+	m = first+i < sectors ? sectors-first-i : n-i;
 
-   if(present[n-1] && ImageReadSectors(image, buf, first, n) == n)
-     count = n;
-   else for(i=0; i<n; i++)
-	  if(present[i])
-	  {  present[i] = ImageReadSectors(image, buf+2048*i, first+i, 1) == 1;
-	     if(!present[i]) memset(buf+2048*i, 0, 2048);
-	     else count++;
-	  }
+      if(first+i < sectors && ImageReadSectors(image, buf+2048*i, first+i, m) == m)
+      {  memset(present+i, 1, m);
+	 count += m;
+	 continue;
+      }
+
+      memset(buf+2048*i, 0, (size_t)2048*m);
+      for(j=i; j<i+m; j++)
+      {  present[j] =    image->dh->mainType == CD && first+j < sectors
+		      && ImageReadSectors(image, buf+2048*j, first+j, 1) == 1;
+	 if(present[j]) count++;
+	 else memset(buf+2048*j, 0, 2048);
+      }
+   }
 
    return count;
 }
