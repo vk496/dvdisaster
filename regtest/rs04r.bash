@@ -350,6 +350,18 @@ if try "fixing the image from adaptive reading with ecc file" ecc_file_adaptive_
   run_regtest ecc_file_adaptive_fix "-f" $TMPISO $PLAINECC
 ) & limit_jobs; fi
 
+# TAO disc: the 2 unreadable run-out sectors at the end of the disc are
+# not covered by the ecc file and must not count as missing data.
+
+if try "adaptive reading with ecc file, TAO run-out" ecc_file_adaptive_tao; then (
+  cp $PLAIN $SIMISO
+  head -c 4096 /dev/zero >>$SIMISO
+  $NEWVER --debug -i$SIMISO --erase 5000-5001 >>$LOGFILE 2>&1
+  extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
+  replace_config ignore-iso-size 1
+  run_regtest ecc_file_adaptive_tao "--ignore-iso-size --spinup-delay=0 -r --adaptive-read" $TMPISO $PLAINECC EXITCODE
+) & limit_jobs; fi
+
 ### Audio CDs
 
 REGTEST_SECTION="Audio CDs"

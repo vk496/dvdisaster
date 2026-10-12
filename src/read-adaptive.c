@@ -1705,24 +1705,38 @@ static void rs04_sector_read(read_closure *rc, gint64 s, unsigned char *buf)
 }
 
 /*
- * The last 2 sectors of a session (TAO run-out, unreadable then)
- * are not needed if they are not part of an RS04 set; see read-linear.c.
+ * The last 2 sectors of a session and of the disc (TAO run-out,
+ * unreadable then) are not needed if they are not part of an RS04 set;
+ * see read-linear.c.
  * Without ecc data, unreadable ones are not counted as missing.
  */
 
-static void mark_rs04_run_out(read_closure *rc)
+static void mark_run_out(read_closure *rc, gint64 end)
 {  guint64 idx;
    gint64 s;
-   int i, kind;
+   int kind;
 
-   for(i=0; rc->rs04 && i+1<rc->dh->nTracks; i++)
+   for(s=end-2; s<end; s++)
+     if(   s >= 0 && s < rc->map->size && !GetBit(rc->map, s)
+	&& !rs04_locate(rc, s, &kind, &idx))
+     {  SetBit(rc->map, s);
+	rc->expectedSectors--;
+     }
+}
+
+static void mark_rs04_run_out(read_closure *rc)
+{  int i;
+
+   if(!rc->rs04)
+     return;
+
+   for(i=0; i+1<rc->dh->nTracks; i++)
      if(rc->dh->track[i].session != rc->dh->track[i+1].session)
-       for(s=rc->dh->track[i].end-2; s<rc->dh->track[i].end; s++)
-	 if(   s >= 0 && s < rc->map->size && !GetBit(rc->map, s)
-	    && !rs04_locate(rc, s, &kind, &idx))
-	 {  SetBit(rc->map, s);
-	    rc->expectedSectors--;
-	 }
+       mark_run_out(rc, rc->dh->track[i].end);
+
+   /* the end of the disc; single session discs have no track table */
+
+   mark_run_out(rc, rc->dh->sectors);
 }
 
 static int is_session_tail(read_closure *rc, gint64 s)

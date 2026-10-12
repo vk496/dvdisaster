@@ -854,6 +854,7 @@ RS04r_ms_adaptive_parity_crc yes
 RS04r_ms_adaptive_parity_crc_fix yes
 RS04r_ecc_file_adaptive yes
 RS04r_ecc_file_adaptive_fix yes
+RS04r_ecc_file_adaptive_tao yes
 RS04r_audio_read yes
 RS04r_audio_ecc_create yes
 RS04r_audio_read_offset yes
