@@ -1,0 +1,29 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+rs04f-xorriso-md5.iso present.
+rs04f-xorriso-md5.ecc present.
+
+Error correction properties:
+- type             : Error correction file
+- method           : RS04, 223+31 layers of 36 sectors, 13.9% redundancy.
+- sector size      : 2048 bytes
+- created by       : dvdisaster-0.80
+- data md5sum      : e8125af287e6dcdc6d9add3d751ddd7a
+
+Data integrity:
+- sectors          : 8000 in image; 1150 in ecc file
+- good image/file  : all sectors present
+- data md5sum      : e8125af287e6dcdc6d9add3d751ddd7a
+
+xorriso MD5 checksum tags:
+- superblock tag   : good (sector 20, covering sectors 0-19)
+- tree tag         : good (sector 40, covering sectors 0-39)
+- session tag      : good (sector 7900, covering sectors 0-7899)
+- all xorriso checksums are good.
+Exit status: 0
+Detailed exit status: 0

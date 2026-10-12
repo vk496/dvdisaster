@@ -126,7 +126,7 @@ enum  /* per-set fields of the verify window */
 {  RS04_V_TYPE, RS04_V_METHOD, RS04_V_CREATOR, RS04_V_ECCMD5, RS04_V_ECCRESULT,
    RS04_V_SECTORS, RS04_V_IMGMD5, RS04_V_DATA, RS04_V_CRC, RS04_V_ECC, RS04_V_TAGS,
    RS04_V_OFFSET_KEY, RS04_V_OFFSET, RS04_V_ERASURE_KEY, RS04_V_ERASURE,
-   RS04_V_MARGIN_KEY, RS04_V_MARGIN, RS04_V_PROGNOSIS_KEY, RS04_V_PROGNOSIS, RS04_V_RESULT, RS04_V_FIELDS
+   RS04_V_MARGIN_KEY, RS04_V_MARGIN, RS04_V_PROGNOSIS_KEY, RS04_V_PROGNOSIS, RS04_V_RESULT, RS04_V_XORRISO, RS04_V_FIELDS
 };
 
 typedef struct
@@ -223,7 +223,9 @@ EccHeader* RS04CreateEccHeader(RS04Set*, int);
 RS04Info* RS04GetSets(Image*);
 guint64 RS04ExpectedImageSize(Image*);
 guint64 RS04MediumSectors(Image*);
+int RS04ReadMedium(Image*, gint64, int, unsigned char*, guint8*);
 CrcBuf* RS04GetCrcBuf(Image*);
+void RS04TagToCrcBuf(CrcBuf*, gint64, unsigned char*);
 
 void RS04InitIO(RS04IO*, Image*, RS04Set*);
 int  RS04ReadData(RS04IO*, guint64, int, unsigned char*, guint8*);
@@ -263,6 +265,7 @@ typedef struct _RS04State   /* results of RS04ScanZone() */
    guint64 crcMissing, crcErrors, eccMissing, eccErrors;
 } RS04State;
 
+int  RS04OwnTag(RS04Set*, unsigned char*, guint64, guint32*);
 void RS04InitState(RS04State*, Image*, RS04Set*);
 void RS04FreeState(RS04State*);
 void RS04ScanZone(RS04State*, GString*);

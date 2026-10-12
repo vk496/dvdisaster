@@ -109,6 +109,19 @@ static void range_add(ranges *r, gint64 s)
    r->first = r->last = s;
 }
 
+/* TRUE if buf is a valid tag of set at added zone sector a;
+   crc receives the Crc32 of the payload sectors behind it. */
+
+int RS04OwnTag(RS04Set *set, unsigned char *buf, guint64 a, guint32 *crc)
+{  RS04Set tag;
+   guint64 own;
+
+   return    RS04ParseTag(buf, &tag, &own, crc) == RS04_TAG_VALID
+	  && own == set->S + a && !memcmp(tag.setID, set->setID, 8)
+	  && tag.dataBytes == set->dataBytes && tag.B == set->B && tag.T == set->T
+	  && tag.L == set->L && tag.k == set->k && tag.m == set->m;
+}
+
 /***
  *** Read the added zone: tags, CRC sectors and parity sectors.
  *** Missing ranges and CRC errors are appended to report (if not NULL).
@@ -146,15 +159,10 @@ void RS04ScanZonePart(RS04State *st, GString *report, guint64 zone_sectors)
 	   range_add(&r, base+a);
 
 	 if(!(a % set->T))   /* tag */
-	 {  guint64 g = a/set->T, own;
-	    RS04Set tag;
+	 {  guint64 g = a/set->T;
 	    int u;
 
-	    if(   present[i]
-	       && RS04ParseTag(sector, &tag, &own, crc) == RS04_TAG_VALID
-	       && own == set->S + a && !memcmp(tag.setID, set->setID, 8)
-	       && tag.dataBytes == set->dataBytes && tag.B == set->B && tag.T == set->T
-	       && tag.L == set->L && tag.k == set->k && tag.m == set->m)
+	    if(present[i] && RS04OwnTag(set, sector, a, crc))
 	    {  for(u=0; u<set->T-1 && g*(set->T-1)+u < set->Q; u++)
 	       {  guint64 q = g*(set->T-1)+u;
 
@@ -315,6 +323,7 @@ typedef struct
    Bitmap *imgBad;          /* combined sets: erased image sectors */
    Bitmap **zoneBad;        /* combined sets: erased payload of ecc file sets */
    int scanned;             /* sets whose erasures are complete */
+   XorrisoCheck *xorriso;   /* xorriso MD5 tags, fed while reading the data sectors */
 } verify_closure;
 
 static void print_properties(Image *image, RS04Set *set, int idx, int n)
@@ -577,6 +586,13 @@ static void verify_set(verify_closure *vc, int idx)
       if(t0+cnt == set->S)
 	   MD5Update(&md5, buf, set->dataBytes - t0*set->B);
       else MD5Update(&md5, buf, (size_t)cnt*set->B);
+
+      /* The tags cover the ISO data which starts at sector 0 of the image;
+	 all sets read the same data, so the first one is enough. */
+
+      if(vc->xorriso && idx == 0 && base == 0 && set->B == 2048)
+	for(k=0; k<cnt; k++)
+	  XorrisoCheckSector(vc->xorriso, (gint64)(t0+k), buf+(size_t)k*set->B, present[k]);
 
       for(k=0; k<cnt; k++)
       {  guint64 t = t0+k;
@@ -852,6 +868,7 @@ static void cleanup(gpointer data)
       g_free(vc->zoneBad);
    }
    if(vc->imgBad) FreeBitmap(vc->imgBad);
+   XorrisoCheckFree(vc->xorriso);
    RS04FreeSets(vc->image, vc->info);
    if(vc->image) CloseImage(vc->image);
    g_free(vc);
@@ -892,6 +909,8 @@ void RS04Verify(Image *image)
    RS04VerifyInit(vc->info, image);
 
    verify_defects = FALSE;
+   if(image->file && !Closure->quickVerify)
+     vc->xorriso = XorrisoCheckNew();
 
    for(i=0; i<vc->info->nSets && !Closure->stopActions; i++)
    {  RS04VerifyShowSet(i);
@@ -900,6 +919,29 @@ void RS04Verify(Image *image)
 
    if(vc->imgBad && vc->scanned == vc->info->nSets)
      combined_prognosis(vc);
+
+   /* Bad xorriso tags alone can not be repaired; see XorrisoCheckReportText() */
+
+   if(vc->xorriso && !Closure->stopActions)
+   {  char *text = XorrisoCheckReportText(vc->xorriso, verify_defects, Closure->guiMode);
+
+      if(text)
+      {  for(i=0; i<vc->info->nSets; i++)
+	 {  RS04VerifyField(i, RS04_V_XORRISO, "%s", text);
+	 }
+	 g_free(text);
+      }
+
+      if(XorrisoCheckBad(vc->xorriso))
+      {  if(!verify_defects)
+	 {  for(i=0; i<vc->info->nSets; i++)
+	    {  RS04VerifyField(i, RS04_V_RESULT, _("<span %s>Image does not match its xorriso MD5 checksums.</span>"),
+			       Closure->redMarkup);
+	    }
+	 }
+	 verify_defects = TRUE;
+      }
+   }
 
    if(image->file && !Closure->stopActions)
      RS04VerifyResult(!verify_defects);

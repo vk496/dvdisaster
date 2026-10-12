@@ -656,6 +656,7 @@ RS03: try number = 492, reading sector 347776
 ** All layers tested -> no RS03 data found
 RS03RecognizeImage: no RS03 data found
 ...trying RS04
+RS04: looking for tags in sectors 359001 - 359294
 ...no augmented image detected.
 # Calling query_size()
 # *** query_size(Simulated CD drive 1.00) ***

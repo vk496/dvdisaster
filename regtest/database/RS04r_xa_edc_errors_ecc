@@ -1,0 +1,29 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ CD.
+Medium: CD-R XA, 1200 sectors.
+
+This CD contains Mode 2 Form 2 sectors (e.g. VCD, PlayStation or CD-i)
+which do not fit into 2048 byte sectors; reading it as a CD-DA image (see --cdda).
+Reading CD-DA image: 1200 sectors of 2352 bytes, using C2 error pointers.
+  Session 1, track  1: sectors 0 - 299, data, mode 2
+  Session 1, track  2: sectors 300 - 1199, data, mode 2
+
+Creating new rip.bin image.
+Reading CRC information from ecc data (RS04) ... done.
+Sectors 96 - 111: Raw Reader: EDC failure in RAW sector.
+Sector 100, try 1: Raw Reader: EDC failure in RAW sector.
+Sector 100: Raw Reader: EDC failure in RAW sector.
+Sectors 496 - 511: Raw Reader: EDC failure in RAW sector.
+Sector 500, try 1: Raw Reader: EDC failure in RAW sector.
+Sector 500: Raw Reader: EDC failure in RAW sector.
+* CRC error, sector: 504
+
+1 CRC errors, 2 unreadable sectors.
+Cue sheet written to rip.cue.

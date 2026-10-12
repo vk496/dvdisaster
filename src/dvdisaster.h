@@ -648,6 +648,8 @@ typedef struct _CrcBuf
    guint64 crcSize;
    Bitmap *valid;
    Bitmap *covered;             /* if not NULL: sectors which have a CRC at all */
+   void *rs04;                  /* RS04Info: augmented sets whose tags hold more CRCs */
+   int sectorBytes;             /* 2048, or 2352 for CD-DA */
    gint32 crcCached;            /* CRC has been retrieved from ECC or previous run */
   
    /* MD5 sum of image sectors */
@@ -1655,6 +1657,7 @@ typedef struct _XorrisoCheck XorrisoCheck;
 XorrisoCheck* XorrisoCheckNew(void);
 void XorrisoCheckSector(XorrisoCheck*, gint64, unsigned char*, int);
 void XorrisoCheckReport(XorrisoCheck*, int, GtkWidget*);
+char* XorrisoCheckReportText(XorrisoCheck*, int, int);
 int XorrisoCheckBad(XorrisoCheck*);
 void XorrisoCheckFree(XorrisoCheck*);
 

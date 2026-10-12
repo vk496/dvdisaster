@@ -39,6 +39,16 @@ dd if=$PLAINISO of=$MSDIR/gap.iso bs=2048 skip=100 count=300 >>$LOGFILE 2>&1
 cat $MSDIR/s1.iso $MSDIR/gap.iso $MSDIR/s2.iso >$MSISO
 rm -rf $MSDIR
 
+# Augmented image with xorriso MD5 checksum tags (sectors 0-7900); see common.bash.
+# Created here, not next to the tests: after the last try() the main shell's LOGFILE
+# lives in a test directory which may already be gone.
+
+XORRISOISO=$ISODIR/rs04i-xorriso-md5.iso
+rm -f $XORRISOISO
+$NEWVER --regtest --debug -i$XORRISOISO --random-image $ISOSIZE >>$LOGFILE 2>&1
+write_xorriso_session $XORRISOISO 0 7900
+$NEWVER --regtest --debug --set-version $SETVERSION -i$XORRISOISO -mRS04 -n 25% -c >>$LOGFILE 2>&1
+
 # See rs04f.bash
 
 function reference_check()
@@ -354,6 +364,21 @@ if try "reading augmented image" read_good; then (
   rm -f $TMPISO
   extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
   run_regtest read_good "--spinup-delay=0 -r" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+### xorriso MD5 checksum tags
+
+REGTEST_SECTION="xorriso MD5 tags"
+
+if try "xorriso md5 tags, good" xorriso_md5_good; then (
+  run_regtest xorriso_md5_good "-t" $XORRISOISO $NO_FILE EXITCODES
+) & limit_jobs; fi
+
+if try "xorriso md5 tags, altered data" xorriso_md5_altered; then (
+  cp $XORRISOISO $TMPISO
+  $NEWVER -i$TMPISO --debug --byteset 3000,0,154 >>$LOGFILE 2>&1
+
+  run_regtest xorriso_md5_altered "-t" $TMPISO $NO_FILE EXITCODES
 ) & limit_jobs; fi
 
 collect_results

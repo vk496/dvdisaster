@@ -285,12 +285,20 @@ static void read_bytes(Image *image, gint64 lo, gint64 len, unsigned char *buf)
       if(LargeSeek(image->file, lo))
 	RS04ReadAll(image->file, buf, len);
    }
-   else
-   {  gint64 s;
+   else  /* cluster by cluster: unreadable DVD/BD clusters cost minutes each */
+   {  int n = len/2048, s, bad = -1;
+      guint8 *present = g_malloc(n+1);
 
-      for(s=0; s<len/2048; s++)
-	if(ImageReadSectors(image, buf+2048*s, lo/2048+s, 1) != 1)
-	  memset(buf+2048*s, 0, 2048);
+      RS04ReadMedium(image, lo, n, buf, present);
+      present[n] = TRUE;
+      for(s=0; s<=n; s++)
+	if(!present[s] && bad < 0)
+	  bad = s;
+	else if(present[s] && bad >= 0)
+	{  Verbose("RS04: sectors %" PRId64 " - %" PRId64 " unreadable\n", lo/2048+bad, lo/2048+s-1);
+	   bad = -1;
+	}
+      g_free(present);
    }
 }
 
@@ -303,6 +311,8 @@ static void scan_region(image_scan *is, gint64 lo, gint64 hi)
    lo = lo & ~2047;
    hi = MIN((hi + 2047) & ~2047, image_bytes(is->image));
    limit = hi;
+   if(hi > lo && is->image->type == IMAGE_MEDIUM)  /* slow on damaged media */
+     Verbose("RS04: looking for tags in sectors %" PRId64 " - %" PRId64 "\n", lo/2048, hi/2048-1);
 
    while(hi > lo)
    {  gint64 start = MAX(lo, hi - SCAN_CHUNK);

@@ -384,10 +384,11 @@ RS04Info* RS04GetSets(Image *image)
    return NULL;
 }
 
-/* Expected image size in 2048 byte sectors */
+/* Expected image size in 2048 byte sectors (2352 when reading CD-DA) */
 
 guint64 RS04ExpectedImageSize(Image *image)
 {  RS04Info *info = RS04GetSets(image);
+   int unit = image->type == IMAGE_MEDIUM ? image->dh->sectorBytes : 2048;
    guint64 bytes = 0;
    int i;
 
@@ -403,18 +404,21 @@ guint64 RS04ExpectedImageSize(Image *image)
    }
 
    g_free(info);
-   return (bytes+2047)/2048;
+   return (bytes+unit-1)/unit;
 }
 
 /***
  *** CRC buffer for checking sectors while reading a medium
  ***
- * Covers the data sectors of all sets with 2048 byte sectors at their
- * image positions, and the CRC sectors of augmented sets (from the tags).
- * Only the beginning of each added zone up to the last CRC sector is read.
- * Sectors without a CRC (tags, parity, gaps between sets) are not covered;
- * their CRC is taken from the image while reading, so that the buffer
- * can be used for creating other ecc data from the image afterwards.
+ * Covers the data sectors of all sets with the sector size of the medium
+ * (2048 bytes, or 2352 for CD-DA) at their image positions, and the CRC
+ * sectors of augmented sets (from the tags). Only the beginning of each
+ * added zone up to the last CRC sector is read;
+ * the Crc32 of the other parity sectors are entered by RS04TagToCrcBuf()
+ * when their tag is read. Sectors without a CRC (tags, parity with lost
+ * tags, gaps between sets) are not covered; their CRC is taken from the
+ * image while reading, so that the buffer can be used for creating other
+ * ecc data from the image afterwards.
  */
 
 static void set_crc(CrcBuf *cb, guint64 idx, int known, guint32 crc)
@@ -430,10 +434,12 @@ static void set_crc(CrcBuf *cb, guint64 idx, int known, guint32 crc)
 CrcBuf* RS04GetCrcBuf(Image *image)
 {  RS04Info *info = RS04GetSets(image);
    CrcBuf *cb = CreateCrcBuf(image);
-   int i;
+   int i, augmented = FALSE;
 
    cb->covered = CreateBitmap0(cb->crcSize);
    cb->coveredSectors = cb->crcSize;
+   if(image->type == IMAGE_MEDIUM)
+     cb->sectorBytes = image->dh->sectorBytes;
 
    for(i=0; info && i<info->nSets; i++)
    {  RS04Set *set = &info->set[i];
@@ -441,8 +447,8 @@ CrcBuf* RS04GetCrcBuf(Image *image)
       guint64 t, q, S = set->S;
       RS04State st;
 
-      if(set->B != 2048) continue;
-      if(set->dataBytes % 2048) S--;  /* partial last sector of an ecc file set */
+      if(set->B != cb->sectorBytes) continue;
+      if(set->dataBytes % set->B) S--;  /* partial last sector of an ecc file set */
 
       RS04InitState(&st, image, set);
       RS04ScanZonePart(&st, NULL, RS04ZoneIndex(set, set->c-1)+1);
@@ -451,15 +457,46 @@ CrcBuf* RS04GetCrcBuf(Image *image)
 	set_crc(cb, base+t, GetBit(st.dataKnown, t), st.dataCrc[t]);
 
       if(set->target == ECC_IMAGE)
-	for(q=0; q<set->c; q++)
-	  set_crc(cb, base+set->S+RS04ZoneIndex(set, q),
-		  GetBit(st.payloadKnown, q), st.payloadCrc[q]);
+      {  for(q=0; q<set->Q; q++)
+	   if(q < set->c || GetBit(st.payloadKnown, q))
+	     set_crc(cb, base+set->S+RS04ZoneIndex(set, q),
+		     GetBit(st.payloadKnown, q), st.payloadCrc[q]);
+	 augmented = TRUE;
+      }
 
       RS04FreeState(&st);
    }
 
-   g_free(info);
+   if(augmented)
+        cb->rs04 = info;
+   else g_free(info);
    return cb;
+}
+
+/* Sector s with contents buf is checked while reading: a tag of an
+   augmented set provides the Crc32 of the payload sectors behind it. */
+
+void RS04TagToCrcBuf(CrcBuf *cb, gint64 s, unsigned char *buf)
+{  RS04Info *info = cb->rs04;
+   guint32 crc[RS04_MAX_TAG_INTERVAL-1];
+   int i;
+
+   for(i=0; i<info->nSets; i++)
+   {  RS04Set *set = &info->set[i];
+      gint64 a = s - set->start - (gint64)set->S;
+      guint64 q0, u;
+
+      if(   set->target != ECC_IMAGE || set->B != 2048
+	 || a < 0 || a >= (gint64)set->A || a % set->T)
+	continue;
+
+      if(RS04OwnTag(set, buf, a, crc))
+      {  q0 = a/set->T*(set->T-1);
+	 for(u=0; u<(guint64)set->T-1 && q0+u < set->Q; u++)
+	   set_crc(cb, s+1+u, TRUE, crc[u]);
+      }
+      return;
+   }
 }
 
 /***
@@ -521,22 +558,36 @@ guint64 RS04MediumSectors(Image *image)
    return MAX(dh->readCapacity+1, dh->userAreaSize);
 }
 
-static int read_medium(Image *image, gint64 pos, int n, unsigned char *buf, guint8 *present)
+/* Read cluster by cluster. On DVD and BD the cluster is the drive's ECC
+   block, which fails as a whole, so an unreadable cluster is not retried
+   sector by sector there: the drive retries each sector itself, which takes
+   very long on damaged media. CD sectors fail one by one. */
+
+int RS04ReadMedium(Image *image, gint64 pos, int n, unsigned char *buf, guint8 *present)
 {  guint64 first = pos/2048;
    guint64 sectors = RS04MediumSectors(image);
-   int i, count = 0;
+   int chunk = MAX(image->dh->clusterSize, 1);
+   int i, j, m, count = 0;
 
-   for(i=0; i<n; i++)
-     present[i] = first+i < sectors;
+   for(i=0; i<n; i+=m)
+   {  m = MIN(chunk - (int)((first+i) % chunk), n-i);  /* aligned to the drive's ECC blocks */
+      if(first+i+m > sectors)
+	m = first+i < sectors ? sectors-first-i : n-i;
 
-   if(present[n-1] && ImageReadSectors(image, buf, first, n) == n)
-     count = n;
-   else for(i=0; i<n; i++)
-	  if(present[i])
-	  {  present[i] = ImageReadSectors(image, buf+2048*i, first+i, 1) == 1;
-	     if(!present[i]) memset(buf+2048*i, 0, 2048);
-	     else count++;
-	  }
+      if(first+i < sectors && ImageReadSectors(image, buf+2048*i, first+i, m) == m)
+      {  memset(present+i, 1, m);
+	 count += m;
+	 continue;
+      }
+
+      memset(buf+2048*i, 0, (size_t)2048*m);
+      for(j=i; j<i+m; j++)
+      {  present[j] =    image->dh->mainType == CD && first+j < sectors
+		      && ImageReadSectors(image, buf+2048*j, first+j, 1) == 1;
+	 if(present[j]) count++;
+	 else memset(buf+2048*j, 0, 2048);
+      }
+   }
 
    return count;
 }
@@ -551,7 +602,7 @@ static int read_range(RS04IO *io, LargeFile *file, gint64 pos, gint64 limit,
 
    if(!file)
    {  if(io->image->type == IMAGE_MEDIUM && B == 2048 && pos >= 0 && !(pos % 2048))
-	return read_medium(io->image, pos, n, buf, present);
+	return RS04ReadMedium(io->image, pos, n, buf, present);
       memset(present, 0, n);
       return 0;
    }

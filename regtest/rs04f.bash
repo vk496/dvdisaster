@@ -26,6 +26,15 @@ rm -f $MASTERISO $MASTERECC $MASTERRIP $MASTERRIPECC
 $NEWVER --regtest --debug -i$MASTERISO --random-image $ISOSIZE >>$LOGFILE 2>&1
 $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$MASTERECC -mRS04 -o file -c >>$LOGFILE 2>&1
 
+# Image with xorriso MD5 checksum tags (sectors 0-7900) and its ecc file; see common.bash
+
+XORRISOISO=$ISODIR/rs04f-xorriso-md5.iso
+XORRISOECC=$ISODIR/rs04f-xorriso-md5.ecc
+rm -f $XORRISOISO $XORRISOECC
+cp $MASTERISO $XORRISOISO
+write_xorriso_session $XORRISOISO 0 7900
+$NEWVER --regtest --debug --set-version $SETVERSION -i$XORRISOISO -e$XORRISOECC -mRS04 -o file -c >>$LOGFILE 2>&1
+
 # CD-DA rip: 2000 sectors of 2352 bytes taken from the random image
 
 dd if=$MASTERISO of=$MASTERRIP bs=2352 skip=100 count=$RIPSECTORS >>$LOGFILE 2>&1
@@ -544,6 +553,40 @@ if try "BIN/CUE image with 2048 byte sectors" bincue_mode1_2048; then (
   bincue $TEST_TMPDIR
   sed -i -e 's,MODE1/2352,MODE1/2048,' $TEST_TMPDIR/disc.cue
   run_regtest bincue_mode1_2048 "-mRS04 -o file -c" $TEST_TMPDIR/disc.cue $TMPECC
+) & limit_jobs; fi
+
+### xorriso MD5 checksum tags
+
+REGTEST_SECTION="xorriso MD5 tags"
+
+# The tags are checked in the same pass as the CRCs
+
+if try "xorriso md5 tags, good" xorriso_md5_good; then (
+  run_regtest xorriso_md5_good "-t" $XORRISOISO $XORRISOECC EXITCODES
+) & limit_jobs; fi
+
+if try "xorriso md5 tags, altered data" xorriso_md5_altered; then (
+  cp $XORRISOISO $TMPISO
+  $NEWVER -i$TMPISO --debug --byteset 3000,0,154 >>$LOGFILE 2>&1
+
+  run_regtest xorriso_md5_altered "-t" $TMPISO $XORRISOECC EXITCODES
+) & limit_jobs; fi
+
+# Ecc data made from the altered image: only the tags show the damage,
+# and the ecc data can not repair it
+
+if try "xorriso md5 tags, altered data covered by ecc" xorriso_md5_covered; then (
+  cp $XORRISOISO $TMPISO
+  $NEWVER -i$TMPISO --debug --byteset 3000,0,154 >>$LOGFILE 2>&1
+  $NEWVER --regtest --debug --set-version $SETVERSION -i$TMPISO -e$TMPECC -mRS04 -o file -c >>$LOGFILE 2>&1
+
+  run_regtest xorriso_md5_covered "-t" $TMPISO $TMPECC EXITCODES
+) & limit_jobs; fi
+
+# The quick test does not read the image, so the tags are not checked
+
+if try "xorriso md5 tags, quick test" xorriso_md5_quick; then (
+  run_regtest xorriso_md5_quick "-tq" $XORRISOISO $XORRISOECC EXITCODES
 ) & limit_jobs; fi
 
 collect_results

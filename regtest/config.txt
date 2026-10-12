@@ -877,6 +877,10 @@ RS04f_bincue_fix yes
 RS04f_bincue_fixed yes
 RS04f_bincue_rs01 yes
 RS04f_bincue_mode1_2048 yes
+RS04f_xorriso_md5_good yes
+RS04f_xorriso_md5_altered yes
+RS04f_xorriso_md5_covered yes
+RS04f_xorriso_md5_quick yes
 
 ### RS04i tests
 
@@ -921,6 +925,8 @@ RS04i_fix_multisession yes
 RS04i_fix_supplementary yes
 RS04i_strip_ecc yes
 RS04i_read_good yes
+RS04i_xorriso_md5_good yes
+RS04i_xorriso_md5_altered yes
 ### Reading tests (codec independent): multi-session media and audio CDs
 
 READ_multisession_read yes
@@ -962,11 +968,18 @@ RS04r_ms_read_tag0_lost yes
 RS04r_ms_adaptive yes
 RS04r_ms_adaptive_fix yes
 RS04r_ms_adaptive_run_out yes
+RS04r_ms_adaptive_run_out_verify yes
+RS04r_ms_parity_crc_errors yes
+RS04r_ms_adaptive_parity_crc yes
+RS04r_ms_adaptive_parity_crc_fix yes
 RS04r_ecc_file_adaptive yes
 RS04r_ecc_file_adaptive_fix yes
+RS04r_ecc_file_adaptive_tao yes
 RS04r_audio_read yes
 RS04r_audio_ecc_create yes
 RS04r_audio_read_offset yes
+RS04r_audio_read_ecc yes
+RS04r_audio_read_ecc_offset yes
 RS04r_audio_fix_offset yes
 RS04r_audio_fix_offset_negative yes
 RS04r_cdextra_read yes
@@ -976,4 +989,5 @@ RS04r_xa_read yes
 RS04r_xa_form1_only yes
 RS04r_cdi_read yes
 RS04r_xa_edc_errors yes
+RS04r_xa_edc_errors_ecc yes
 RS04r_xa_fix yes

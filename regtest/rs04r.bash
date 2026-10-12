@@ -286,6 +286,50 @@ if try "adaptive reading, unreadable session run-out" ms_adaptive_run_out; then 
   run_regtest ms_adaptive_run_out "--spinup-delay=0 -r --adaptive-read" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
+# When reading jumps over the skipped run-out sectors they become dead
+# sector markers; they belong to no set, so no damage is reported for them.
+
+if try "verifying the repaired image, skipped session run-out" ms_adaptive_run_out_verify; then (
+  cp $MSDISC $SIMISO
+  $NEWVER --debug -i$SIMISO --erase 5990-5997 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$SIMISO --erase 3000-3100 >>$LOGFILE 2>&1
+  read_disc $SIMISO --sim-toc=d0-5997/d6296-10212 $TMPISO --adaptive-read
+  step -i$TMPISO -e$NO_FILE -f
+  run_regtest ms_adaptive_run_out_verify "-t" $TMPISO $NO_FILE EXITCODE
+) & limit_jobs; fi
+
+# Parity sectors of set 1 which read fine but are corrupted (5100-5110)
+# are checked against their tags (adaptive reading reads a skipped tag
+# when needed); 800 lost data sectors make adaptive reading need parity.
+
+function damaged_parity()
+{  cp $MSDISC $1
+   $NEWVER --debug -i$1 --erase 100-899 >>$LOGFILE 2>&1
+   for s in $(seq 5100 5110); do
+      $NEWVER --debug -i$1 --byteset $s,1,1 >>$LOGFILE 2>&1
+   done
+}
+
+if try "CRC errors in parity sectors while reading" ms_parity_crc_errors; then (
+  cp $MSDISC $SIMISO
+  $NEWVER --debug -i$SIMISO --byteset 5100,1,1 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$SIMISO --byteset 5500,2000,1 >>$LOGFILE 2>&1
+  extra_args="--debug --sim-cd=$SIMISO $MSTOC --fixed-speed-values"
+  run_regtest ms_parity_crc_errors "--spinup-delay=0 -r" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+if try "adaptive reading, corrupted parity sectors" ms_adaptive_parity_crc; then (
+  damaged_parity $SIMISO
+  extra_args="--debug --sim-cd=$SIMISO $MSTOC --fixed-speed-values"
+  run_regtest ms_adaptive_parity_crc "--spinup-delay=0 -r --adaptive-read" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+if try "fixing the image from adaptive reading, corrupted parity sectors" ms_adaptive_parity_crc_fix; then (
+  damaged_parity $SIMISO
+  read_disc $SIMISO $MSTOC $TMPISO --adaptive-read
+  run_regtest ms_adaptive_parity_crc_fix "-f" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
 ### Data disc with an ecc file
 
 REGTEST_SECTION="Data disc with ecc file"
@@ -304,6 +348,18 @@ if try "fixing the image from adaptive reading with ecc file" ecc_file_adaptive_
   $NEWVER --debug -i$SIMISO --byteset 3000,0,1 >>$LOGFILE 2>&1
   step -i$TMPISO -e$PLAINECC --debug --sim-cd=$SIMISO --fixed-speed-values --spinup-delay=0 -r --adaptive-read
   run_regtest ecc_file_adaptive_fix "-f" $TMPISO $PLAINECC
+) & limit_jobs; fi
+
+# TAO disc: the 2 unreadable run-out sectors at the end of the disc are
+# not covered by the ecc file and must not count as missing data.
+
+if try "adaptive reading with ecc file, TAO run-out" ecc_file_adaptive_tao; then (
+  cp $PLAIN $SIMISO
+  head -c 4096 /dev/zero >>$SIMISO
+  $NEWVER --debug -i$SIMISO --erase 5000-5001 >>$LOGFILE 2>&1
+  extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
+  replace_config ignore-iso-size 1
+  run_regtest ecc_file_adaptive_tao "--ignore-iso-size --spinup-delay=0 -r --adaptive-read" $TMPISO $PLAINECC EXITCODES
 ) & limit_jobs; fi
 
 ### Audio CDs
@@ -329,6 +385,23 @@ if try "ripping the damaged CD with another drive" audio_read_offset; then (
   c2_errors $TEST_TMPDIR/sim.bin 500 501 1500
   extra_args="--debug --sim-cd=$TEST_TMPDIR/sim.bin $AUDIOTOC:offset=100 --fixed-speed-values"
   run_regtest audio_read_offset "--spinup-delay=0 -r -j 0" $TEST_TMPDIR/rip.bin $NO_FILE
+) & limit_jobs; fi
+
+# Ripping with the ecc file of the CD: a corrupted sample without
+# C2 error is found by the CRCs
+
+if try "ripping the audio CD with its ecc file" audio_read_ecc; then (
+  cp $AUDIO $TEST_TMPDIR/sim.bin
+  printf 'X' | dd of=$TEST_TMPDIR/sim.bin bs=1 seek=$((2352*1000+500)) conv=notrunc >>$LOGFILE 2>&1
+  extra_args="--debug --sim-cd=$TEST_TMPDIR/sim.bin $AUDIOTOC --fixed-speed-values"
+  run_regtest audio_read_ecc "--spinup-delay=0 -r" $TEST_TMPDIR/rip.bin $AUDIOECC
+) & limit_jobs; fi
+
+# With another read offset the CRCs can not be compared while ripping
+
+if try "ripping with the ecc file, other read offset" audio_read_ecc_offset; then (
+  extra_args="--debug --sim-cd=$AUDIO $AUDIOTOC:offset=100 --fixed-speed-values"
+  run_regtest audio_read_ecc_offset "--spinup-delay=0 -r" $TEST_TMPDIR/rip.bin $AUDIOECC
 ) & limit_jobs; fi
 
 if try "fixing the rip, read offset +100 samples" audio_fix_offset; then (
@@ -423,6 +496,16 @@ if try "reading sectors with EDC errors" xa_edc_errors; then (
   xa_damaged $TEST_TMPDIR/sim.bin
   extra_args="--debug --sim-cd=$TEST_TMPDIR/sim.bin $XATOC --fixed-speed-values"
   run_regtest xa_edc_errors "--spinup-delay=0 -r -j 0" $TEST_TMPDIR/rip.bin $NO_FILE
+) & limit_jobs; fi
+
+# With the ecc file the corrupted Form 2 sector without EDC is found
+
+if try "reading sectors with EDC errors and the ecc file" xa_edc_errors_ecc; then (
+  command -v python3 >/dev/null 2>&1 || exit 0
+  step -i$XA -e$TEST_TMPDIR/xa.ecc --debug --set-version $SETVERSION --sector-size 2352 -n 20% -mRS04 -o file -c
+  xa_damaged $TEST_TMPDIR/sim.bin
+  extra_args="--debug --sim-cd=$TEST_TMPDIR/sim.bin $XATOC --fixed-speed-values"
+  run_regtest xa_edc_errors_ecc "--spinup-delay=0 -r -j 0" $TEST_TMPDIR/rip.bin $TEST_TMPDIR/xa.ecc
 ) & limit_jobs; fi
 
 if try "fixing the rip of the damaged XA disc" xa_fix; then (
