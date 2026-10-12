@@ -823,10 +823,15 @@ the confirmation of candidates in section \ref{rs04-recognize}).
 
 While reading a medium, dvdisaster checks the data sectors of every set
 with $B = 2048$ (the augmented sets on the medium, or an ecc file given for
-it) against their Crc32 values, and the CRC sectors of augmented sets
-against their tags. Only the beginning of each added zone, up to the last
-CRC sector, is read in advance; parity sectors are checked when the image
-is verified or repaired.
+it) against their Crc32 values, and the CRC
+and parity sectors of augmented sets against their tags. Only the beginning
+of each added zone, up to the last CRC sector, is read in advance; a parity
+sector is checked with the tag in front of it, which is read just before it.
+Adaptive reading, which skips tags it does not need and may start reading
+behind a tag, reads that tag first. A parity sector whose tag is unreadable
+is assumed to be correct. Since a skipped tag is missing in the image, a
+parity sector which fails its check is stored as a missing sector, so that
+it is an erasure for the repair.
 
 \medskip
 

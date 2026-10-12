@@ -847,11 +847,17 @@ RS04r_ms_read_tag0_lost yes
 RS04r_ms_adaptive yes
 RS04r_ms_adaptive_fix yes
 RS04r_ms_adaptive_run_out yes
+RS04r_ms_adaptive_run_out_verify yes
+RS04r_ms_parity_crc_errors yes
+RS04r_ms_adaptive_parity_crc yes
+RS04r_ms_adaptive_parity_crc_fix yes
 RS04r_ecc_file_adaptive yes
 RS04r_ecc_file_adaptive_fix yes
 RS04r_audio_read yes
 RS04r_audio_ecc_create yes
 RS04r_audio_read_offset yes
+RS04r_audio_read_ecc yes
+RS04r_audio_read_ecc_offset yes
 RS04r_audio_fix_offset yes
 RS04r_audio_fix_offset_negative yes
 RS04r_cdextra_read yes

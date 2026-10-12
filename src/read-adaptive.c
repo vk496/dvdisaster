@@ -274,6 +274,7 @@ typedef struct
    Bitmap *zoneBad;             /* ecc file: unusable CRC and parity sectors */
    gint32 *missing;             /* symbols still missing per codeword */
    int tagSeen;                 /* a valid tag at the end of the set has been read */
+   Bitmap *tagTried;            /* augmented set: tags read for the CRCs of their payload */
 } RS04Reading;
 
 typedef struct
@@ -412,6 +413,7 @@ bail_out:
 
       for(i=0; i<rc->rs04->nSets; i++)
       {  if(rc->rs04Sets[i].zoneBad) FreeBitmap(rc->rs04Sets[i].zoneBad);
+	 if(rc->rs04Sets[i].tagTried) FreeBitmap(rc->rs04Sets[i].tagTried);
 	 g_free(rc->rs04Sets[i].missing);
       }
       g_free(rc->rs04Sets);
@@ -671,6 +673,7 @@ static void init_rs04(read_closure *rc)
 	 st.payloadBad = NULL;
 	 RS04FreeState(&st);
       }
+      else rs->tagTried = CreateBitmap0((set->Q + set->T - 2)/(set->T - 1));
    }
 
    first = &rc->rs04->set[0];
@@ -1045,6 +1048,8 @@ void check_image_size(read_closure *rc, gint64 image_file_sectors)
    else rc->highestWrittenSector = image_file_sectors-1;
 }
 
+static void rs04_need_tag(read_closure*, gint64, int);
+
 /***
  *** Load the crc buf from RS01/RS02 error correction data.
  ***/
@@ -1123,6 +1128,8 @@ static void build_interval_from_image(read_closure *rc)
 
       /* Compare checksums if available */
 
+      if(rc->readMode == ECC_RS04 && !current_missing)
+	rs04_need_tag(rc, s, TRUE);
       if(rc->crcBuf)
 	   crc_result = CheckAgainstCrcBuffer(rc->crcBuf, s, rc->buf);
       else crc_result = CRC_UNKNOWN;
@@ -1640,12 +1647,41 @@ static void rs04_prepare(read_closure *rc)
    }
 }
 
+/* Sector s is about to be checked, or could not be read (read = FALSE).
+   The tag in front of a payload sector of an augmented set holds its
+   Crc32. Normally the tag has been read just before it, but an interval
+   may begin behind the tag, or the tag was skipped as not needed;
+   it is then read now. */
+
+static void rs04_need_tag(read_closure *rc, gint64 s, int read)
+{  RS04Reading *rs;
+   AlignedBuffer *ab;
+   guint64 idx, g;
+   int kind;
+
+   if(   !rc->crcBuf || !rc->crcBuf->rs04
+      || !(rs = rs04_locate(rc, s, &kind, &idx)) || kind == RS04_DATA || !rs->tagTried)
+     return;
+
+   g = kind == RS04_TAG ? idx : idx/(rs->set->T-1);
+   if(GetBit(rs->tagTried, g) || (kind != RS04_TAG && !read))
+     return;
+   SetBit(rs->tagTried, g);
+   if(kind == RS04_TAG || (s < rc->crcBuf->crcSize && GetBit(rc->crcBuf->covered, s)))
+     return;
+
+   ab = CreateAlignedBuffer(2048);
+   if(!ReadSectors(rc->dh, ab->buf, rs->base + rs->set->S + g*rs->set->T, 1))
+     RS04TagToCrcBuf(rc->crcBuf, rs->base + rs->set->S + g*rs->set->T, ab->buf);
+   FreeAlignedBuffer(ab);
+}
+
 /* Sector s with contents buf has been read */
 
 static void rs04_sector_read(read_closure *rc, gint64 s, unsigned char *buf)
 {  RS04Reading *rs;
-   RS04Set *set, tag;
-   guint64 idx, own, i;
+   RS04Set *set;
+   guint64 idx, i;
    int kind;
 
    if(!(rs = rs04_locate(rc, s, &kind, &idx)))
@@ -1653,9 +1689,7 @@ static void rs04_sector_read(read_closure *rc, gint64 s, unsigned char *buf)
    set = rs->set;
 
    if(kind == RS04_TAG)
-   {  if(   !rs->tagSeen && RS04_END_TAG(set, idx*set->T)
-	 && RS04ParseTag(buf, &tag, &own, NULL) == RS04_TAG_VALID
-	 && own == set->S + idx*set->T && !memcmp(tag.setID, set->setID, 8))
+   {  if(!rs->tagSeen && RS04_END_TAG(set, idx*set->T) && RS04OwnTag(set, buf, idx*set->T, NULL))
 	rs04_mark_tags(rc, rs, TRUE);
       return;
    }
@@ -2026,23 +2060,31 @@ reread:
 		  Sectors with bad CRC sums are marked unvisited,
 		  but do not terminate the current interval. */
 
+	       if(rc->readMode == ECC_RS04)
+		  rs04_need_tag(rc, b, TRUE);
+
 	       if(rc->crcBuf) /* we have crc information */
 		    result = CheckAgainstCrcBuffer(rc->crcBuf, b, rc->buf+i*2048);
 	       else result = CRC_UNKNOWN;
 
 	       switch(result)
 	       {  case CRC_BAD:
-		  {  //unsigned char buf[2048];
+		  {  unsigned char *out = rc->buf+i*2048, dsm[2048];
+		     guint64 idx;
+		     int kind;
 
 		     PrintCLI("\n");
 		     PrintCLI(_("CRC error in sector %" PRId64 "\n"),b);
 		     print_progress(rc, TRUE);
 
-#if 0 // remark: Do we still need to mark CRC defects as completely missing?
-		     CreateMissingSector(buf, b, rc->fingerprint, FINGERPRINT_SECTOR, rc->volumeLabel);
-		     n = LargeWrite(rc->image, buf, 2048);
-#endif
-		     n = LargeWrite(rc->image, rc->buf+i*2048, 2048);
+		     /* RS04 tags are skipped when not needed, so the image may lack
+			the Crc32 of a payload sector: store it as missing instead. */
+
+		     if(rc->readMode == ECC_RS04 && rs04_locate(rc, b, &kind, &idx) && kind == RS04_PAYLOAD)
+		     {  CreateMissingSector(dsm, b, rc->fingerprint, FINGERPRINT_SECTOR, rc->volumeLabel);
+			out = dsm;
+		     }
+		     n = LargeWrite(rc->image, out, 2048);
 		     if(n != 2048)
 			Stop(_("Failed writing to sector %" PRId64 " in image [%s]: %s"),
 			     b, "unv", strerror(errno));
@@ -2214,6 +2256,8 @@ reread:
 					   s, GetLastSenseString(FALSE));  
 
 	    rc->unreadable += nsectors;
+	    if(rc->readMode == ECC_RS04 && nsectors == 1)
+	      rs04_need_tag(rc, s, FALSE);
 
 	    if(nsectors == 1 && is_session_tail(rc, s))
 	    {  rc->sessionTails++;

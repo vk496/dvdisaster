@@ -26,6 +26,7 @@
 
 #include "scsi-layer.h"
 #include "rs02-includes.h"
+#include "rs04-includes.h"
 
 /***
  *** Create a CRC buffer ready for accumulating CRC and MD5 sums
@@ -158,6 +159,9 @@ int CheckAgainstCrcBuffer(CrcBuf *cb, gint64 idx, unsigned char *buf)
    if(idx < 0 || idx >= cb->crcSize)
      return CRC_OUTSIDE_BOUND;
 
+   if(cb->rs04)
+     RS04TagToCrcBuf(cb, idx, buf);
+
    if(cb->covered && !GetBit(cb->covered, idx))
      return CRC_OUTSIDE_BOUND;
    
@@ -266,6 +270,7 @@ void FreeCrcBuf(CrcBuf *cb)
    FreeBitmap(cb->valid);
    if(cb->covered)
      FreeBitmap(cb->covered);
+   g_free(cb->rs04);
    if(cb->imageName)
      g_free(cb->imageName);
    if(cb->md5Ctxt)

@@ -103,6 +103,19 @@ static void range_add(ranges *r, gint64 s)
    r->first = r->last = s;
 }
 
+/* TRUE if buf is a valid tag of set at added zone sector a;
+   crc receives the Crc32 of the payload sectors behind it. */
+
+int RS04OwnTag(RS04Set *set, unsigned char *buf, guint64 a, guint32 *crc)
+{  RS04Set tag;
+   guint64 own;
+
+   return    RS04ParseTag(buf, &tag, &own, crc) == RS04_TAG_VALID
+	  && own == set->S + a && !memcmp(tag.setID, set->setID, 8)
+	  && tag.dataBytes == set->dataBytes && tag.B == set->B && tag.T == set->T
+	  && tag.L == set->L && tag.k == set->k && tag.m == set->m;
+}
+
 /***
  *** Read the added zone: tags, CRC sectors and parity sectors.
  *** Missing ranges and CRC errors are appended to report (if not NULL).
@@ -140,15 +153,10 @@ void RS04ScanZonePart(RS04State *st, GString *report, guint64 zone_sectors)
 	   range_add(&r, base+a);
 
 	 if(!(a % set->T))   /* tag */
-	 {  guint64 g = a/set->T, own;
-	    RS04Set tag;
+	 {  guint64 g = a/set->T;
 	    int u;
 
-	    if(   present[i]
-	       && RS04ParseTag(sector, &tag, &own, crc) == RS04_TAG_VALID
-	       && own == set->S + a && !memcmp(tag.setID, set->setID, 8)
-	       && tag.dataBytes == set->dataBytes && tag.B == set->B && tag.T == set->T
-	       && tag.L == set->L && tag.k == set->k && tag.m == set->m)
+	    if(present[i] && RS04OwnTag(set, sector, a, crc))
 	    {  for(u=0; u<set->T-1 && g*(set->T-1)+u < set->Q; u++)
 	       {  guint64 q = g*(set->T-1)+u;
 

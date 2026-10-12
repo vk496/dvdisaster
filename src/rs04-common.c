@@ -411,10 +411,12 @@ guint64 RS04ExpectedImageSize(Image *image)
  ***
  * Covers the data sectors of all sets with 2048 byte sectors at their
  * image positions, and the CRC sectors of augmented sets (from the tags).
- * Only the beginning of each added zone up to the last CRC sector is read.
- * Sectors without a CRC (tags, parity, gaps between sets) are not covered;
- * their CRC is taken from the image while reading, so that the buffer
- * can be used for creating other ecc data from the image afterwards.
+ * Only the beginning of each added zone up to the last CRC sector is read;
+ * the Crc32 of the other parity sectors are entered by RS04TagToCrcBuf()
+ * when their tag is read. Sectors without a CRC (tags, parity with lost
+ * tags, gaps between sets) are not covered; their CRC is taken from the
+ * image while reading, so that the buffer can be used for creating other
+ * ecc data from the image afterwards.
  */
 
 static void set_crc(CrcBuf *cb, guint64 idx, int known, guint32 crc)
@@ -430,7 +432,7 @@ static void set_crc(CrcBuf *cb, guint64 idx, int known, guint32 crc)
 CrcBuf* RS04GetCrcBuf(Image *image)
 {  RS04Info *info = RS04GetSets(image);
    CrcBuf *cb = CreateCrcBuf(image);
-   int i;
+   int i, augmented = FALSE;
 
    cb->covered = CreateBitmap0(cb->crcSize);
    cb->coveredSectors = cb->crcSize;
@@ -451,15 +453,46 @@ CrcBuf* RS04GetCrcBuf(Image *image)
 	set_crc(cb, base+t, GetBit(st.dataKnown, t), st.dataCrc[t]);
 
       if(set->target == ECC_IMAGE)
-	for(q=0; q<set->c; q++)
-	  set_crc(cb, base+set->S+RS04ZoneIndex(set, q),
-		  GetBit(st.payloadKnown, q), st.payloadCrc[q]);
+      {  for(q=0; q<set->Q; q++)
+	   if(q < set->c || GetBit(st.payloadKnown, q))
+	     set_crc(cb, base+set->S+RS04ZoneIndex(set, q),
+		     GetBit(st.payloadKnown, q), st.payloadCrc[q]);
+	 augmented = TRUE;
+      }
 
       RS04FreeState(&st);
    }
 
-   g_free(info);
+   if(augmented)
+        cb->rs04 = info;
+   else g_free(info);
    return cb;
+}
+
+/* Sector s with contents buf is checked while reading: a tag of an
+   augmented set provides the Crc32 of the payload sectors behind it. */
+
+void RS04TagToCrcBuf(CrcBuf *cb, gint64 s, unsigned char *buf)
+{  RS04Info *info = cb->rs04;
+   guint32 crc[RS04_MAX_TAG_INTERVAL-1];
+   int i;
+
+   for(i=0; i<info->nSets; i++)
+   {  RS04Set *set = &info->set[i];
+      gint64 a = s - set->start - (gint64)set->S;
+      guint64 q0, u;
+
+      if(   set->target != ECC_IMAGE || set->B != 2048
+	 || a < 0 || a >= (gint64)set->A || a % set->T)
+	continue;
+
+      if(RS04OwnTag(set, buf, a, crc))
+      {  q0 = a/set->T*(set->T-1);
+	 for(u=0; u<(guint64)set->T-1 && q0+u < set->Q; u++)
+	   set_crc(cb, s+1+u, TRUE, crc[u]);
+      }
+      return;
+   }
 }
 
 /***

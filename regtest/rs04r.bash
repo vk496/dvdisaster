@@ -286,6 +286,50 @@ if try "adaptive reading, unreadable session run-out" ms_adaptive_run_out; then 
   run_regtest ms_adaptive_run_out "--spinup-delay=0 -r --adaptive-read" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
+# When reading jumps over the skipped run-out sectors they become dead
+# sector markers; they belong to no set, so no damage is reported for them.
+
+if try "verifying the repaired image, skipped session run-out" ms_adaptive_run_out_verify; then (
+  cp $MSDISC $SIMISO
+  $NEWVER --debug -i$SIMISO --erase 5990-5997 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$SIMISO --erase 3000-3100 >>$LOGFILE 2>&1
+  read_disc $SIMISO --sim-toc=d0-5997/d6296-10212 $TMPISO --adaptive-read
+  step -i$TMPISO -e$NO_FILE -f
+  run_regtest ms_adaptive_run_out_verify "-t" $TMPISO $NO_FILE EXITCODE
+) & limit_jobs; fi
+
+# Parity sectors of set 1 which read fine but are corrupted (5100-5110)
+# are checked against their tags (adaptive reading reads a skipped tag
+# when needed); 800 lost data sectors make adaptive reading need parity.
+
+function damaged_parity()
+{  cp $MSDISC $1
+   $NEWVER --debug -i$1 --erase 100-899 >>$LOGFILE 2>&1
+   for s in $(seq 5100 5110); do
+      $NEWVER --debug -i$1 --byteset $s,1,1 >>$LOGFILE 2>&1
+   done
+}
+
+if try "CRC errors in parity sectors while reading" ms_parity_crc_errors; then (
+  cp $MSDISC $SIMISO
+  $NEWVER --debug -i$SIMISO --byteset 5100,1,1 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$SIMISO --byteset 5500,2000,1 >>$LOGFILE 2>&1
+  extra_args="--debug --sim-cd=$SIMISO $MSTOC --fixed-speed-values"
+  run_regtest ms_parity_crc_errors "--spinup-delay=0 -r" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+if try "adaptive reading, corrupted parity sectors" ms_adaptive_parity_crc; then (
+  damaged_parity $SIMISO
+  extra_args="--debug --sim-cd=$SIMISO $MSTOC --fixed-speed-values"
+  run_regtest ms_adaptive_parity_crc "--spinup-delay=0 -r --adaptive-read" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+if try "fixing the image from adaptive reading, corrupted parity sectors" ms_adaptive_parity_crc_fix; then (
+  damaged_parity $SIMISO
+  read_disc $SIMISO $MSTOC $TMPISO --adaptive-read
+  run_regtest ms_adaptive_parity_crc_fix "-f" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
 ### Data disc with an ecc file
 
 REGTEST_SECTION="Data disc with ecc file"
