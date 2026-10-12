@@ -144,7 +144,10 @@ jobs:
           Start-Process powershell -Wait -WorkingDirectory $PWD -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'probe.ps1'
           $t = Get-Content -Raw probe.txt
           Remove-Item probe.ps1, probe.txt
+          $t = $t -replace '\s+', ' '
           if ($t -notmatch '^0 .*dvdisaster.*dvdisaster') { throw "console: $t" }
+          Write-Host "console: $t"
+          exit 0
     - name: run regression tests
       if: matrix.printf == 'normal'
       env:
