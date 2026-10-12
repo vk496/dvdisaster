@@ -2879,7 +2879,7 @@ static int read_by_class(DeviceHandle *dh, unsigned char *buf, gint64 s, int nse
 	 n++;
 
       if(!class)
-	 memset(buf, 0, n*dh->sectorBytes);
+	 memset(buf, 0, (size_t)n*dh->sectorBytes);
       else
       {  int status = reader(dh, buf, s, n);
 	 if(status) return status;

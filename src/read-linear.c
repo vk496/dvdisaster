@@ -756,7 +756,7 @@ static gpointer worker_thread(read_closure *rc)
 	    goto update_mutex;
 	 }
 
-	 n = LargeWrite(rc->writerImage, rc->alignedBuf[rc->writePtr]->buf, rc->sectorBytes*nsectors);
+	 n = LargeWrite(rc->writerImage, rc->alignedBuf[rc->writePtr]->buf, (size_t)rc->sectorBytes*nsectors);
 	 if(n != rc->sectorBytes*nsectors)
 	 {  rc->workerError = g_strdup_printf(_("Failed writing to sector %" PRId64 " in image [%s]: %s"),
 	                                      s, "store", strerror(errno));
