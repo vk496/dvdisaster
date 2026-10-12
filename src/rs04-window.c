@@ -650,6 +650,7 @@ void CreateRS04VerifyWindow(Method *method, GtkWidget *parent)
    add_field(wl, grid2, 9, NULL, RS04_V_MARGIN_KEY, RS04_V_MARGIN);
    add_field(wl, grid2, 10, NULL, RS04_V_PROGNOSIS_KEY, RS04_V_PROGNOSIS);
    add_field(wl, grid2, 11, NULL, -1, RS04_V_RESULT);
+   add_field(wl, grid2, 12, NULL, -1, RS04_V_XORRISO);
 }
 
 #endif /* WITH_GUI_YES */

@@ -910,6 +910,19 @@ void RS04Verify(Image *image)
    if(vc->imgBad && vc->scanned == vc->info->nSets)
      combined_prognosis(vc);
 
+   if(Closure->guiMode && !Closure->quickVerify && image->file && !Closure->stopActions)
+   {  char *tags = CheckXorrisoTags(Closure->imageName);
+
+      if(tags)
+      {  char *escaped = g_markup_escape_text(tags, -1);
+
+	 for(i=0; i<vc->info->nSets; i++)
+	    RS04VerifyField(i, RS04_V_XORRISO, "%s", escaped);
+	 g_free(escaped);
+	 g_free(tags);
+      }
+   }
+
    if(image->file && !Closure->stopActions)
      RS04VerifyResult(exitCode == 0);
    if(!exitCode)
