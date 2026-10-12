@@ -132,10 +132,18 @@ jobs:
           ./dvdisaster.com --no-such-option | Out-Null
           if ($LASTEXITCODE -ne 1) { throw "bad option: rc=$LASTEXITCODE" }
           # same from a real console window, read back from its screen buffer
-          Set-Content con.ps1 '$v = ./dvdisaster.com --version; $c = $LASTEXITCODE; ./dvdisaster.com --version; $r = $Host.UI.RawUI; $b = $r.GetBufferContents((New-Object Management.Automation.Host.Rectangle 0, 0, ($r.BufferSize.Width - 1), $r.CursorPosition.Y)); "$c $v" + (-join $b.Character) | Set-Content con.txt'
-          Start-Process powershell -Wait -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'con.ps1'
-          $t = Get-Content -Raw con.txt
-          Remove-Item con.ps1, con.txt
+          Set-Content probe.ps1 @'
+          try {
+            $v = ./dvdisaster.com --version; $c = $LASTEXITCODE
+            ./dvdisaster.com --version
+            $r = $Host.UI.RawUI
+            $b = $r.GetBufferContents((New-Object Management.Automation.Host.Rectangle 0, 0, ($r.BufferSize.Width - 1), $r.CursorPosition.Y))
+            "$c $v " + (-join $b.Character) | Set-Content probe.txt
+          } catch { "error: $_" | Set-Content probe.txt }
+          '@
+          Start-Process powershell -Wait -WorkingDirectory $PWD -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'probe.ps1'
+          $t = Get-Content -Raw probe.txt
+          Remove-Item probe.ps1, probe.txt
           if ($t -notmatch '^0 .*dvdisaster.*dvdisaster') { throw "console: $t" }
     - name: run regression tests
       if: matrix.printf == 'normal'
