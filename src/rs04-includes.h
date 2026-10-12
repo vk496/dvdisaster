@@ -223,6 +223,7 @@ EccHeader* RS04CreateEccHeader(RS04Set*, int);
 RS04Info* RS04GetSets(Image*);
 guint64 RS04ExpectedImageSize(Image*);
 guint64 RS04MediumSectors(Image*);
+int RS04ReadMedium(Image*, gint64, int, unsigned char*, guint8*);
 CrcBuf* RS04GetCrcBuf(Image*);
 void RS04TagToCrcBuf(CrcBuf*, gint64, unsigned char*);
 

@@ -159,6 +159,7 @@ RS03: tries left = 0, reading sector 11782
 RS03: max tries reached, stopping search
 RS03RecognizeImage: no RS03 data found
 ...trying RS04
+RS04: looking for tags in sectors 29706 - 29999
 ...no augmented image detected.
 # Calling query_size()
 # *** query_size(Simulated CD drive 1.00) ***

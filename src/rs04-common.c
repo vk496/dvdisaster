@@ -563,14 +563,14 @@ guint64 RS04MediumSectors(Image *image)
    sector by sector there: the drive retries each sector itself, which takes
    very long on damaged media. CD sectors fail one by one. */
 
-static int read_medium(Image *image, gint64 pos, int n, unsigned char *buf, guint8 *present)
+int RS04ReadMedium(Image *image, gint64 pos, int n, unsigned char *buf, guint8 *present)
 {  guint64 first = pos/2048;
    guint64 sectors = RS04MediumSectors(image);
    int chunk = MAX(image->dh->clusterSize, 1);
    int i, j, m, count = 0;
 
    for(i=0; i<n; i+=m)
-   {  m = MIN(chunk, n-i);
+   {  m = MIN(chunk - (int)((first+i) % chunk), n-i);  /* aligned to the drive's ECC blocks */
       if(first+i+m > sectors)
 	m = first+i < sectors ? sectors-first-i : n-i;
 
@@ -602,7 +602,7 @@ static int read_range(RS04IO *io, LargeFile *file, gint64 pos, gint64 limit,
 
    if(!file)
    {  if(io->image->type == IMAGE_MEDIUM && B == 2048 && pos >= 0 && !(pos % 2048))
-	return read_medium(io->image, pos, n, buf, present);
+	return RS04ReadMedium(io->image, pos, n, buf, present);
       memset(present, 0, n);
       return 0;
    }
