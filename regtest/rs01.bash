@@ -45,6 +45,30 @@ if ! file_exists $ECC_PLUS56; then
     FILE_MSG=""
 fi
 
+# Image with xorriso style MD5 checksum tags ("xorriso -md5 on"). Written by
+# script so that the test does not depend on xorriso and its version;
+# tag format see doc/checksums.txt in libisofs.
+
+function write_xorriso_tag()
+{  local iso=$1 id=$2 pos=$3 start=$4 next=$5
+   local md5=$(dd if=$iso bs=2048 skip=$start count=$((pos-start)) 2>/dev/null | $MD5SUM | cut -d\  -f 1)
+   local text="$id pos=$pos range_start=$start range_size=$((pos-start))${next:+ next=$next} md5=$md5"
+   local self=$(printf "%s" "$text" | $MD5SUM | cut -d\  -f 1)
+
+   { printf "%s self=%s\n" "$text" "$self"; head -c 2048 /dev/zero; } | head -c 2048 \
+     | dd of=$iso bs=2048 seek=$pos conv=notrunc 2>/dev/null
+}
+
+XORRISOISO=$ISODIR/rs01-xorriso-md5.iso
+if ! file_exists $XORRISOISO; then
+    cp $MASTERISO $XORRISOISO
+    write_xorriso_tag $XORRISOISO libisofs_sb_checksum_tag_v1 20 0 40
+    write_xorriso_tag $XORRISOISO libisofs_tree_checksum_tag_v1 40 0 20000
+    write_xorriso_tag $XORRISOISO libisofs_checksum_tag_v1 20000 0
+    echo -e "$FILE_MSG"
+    FILE_MSG=""
+fi
+
 ### Verification tests
 
 REGTEST_SECTION="Verify tests"
@@ -52,7 +76,7 @@ REGTEST_SECTION="Verify tests"
 # Test good files
 if try "good image" good; then (
 
-   run_regtest good "-t" $MASTERISO $MASTERECC
+   run_regtest good "-t" $MASTERISO $MASTERECC EXITCODE
 ) & limit_jobs; fi
 
 # Test good files
@@ -60,9 +84,55 @@ if try "good image, quick test" good_quick; then (
   run_regtest good_quick "-tq" $MASTERISO $MASTERECC
 ) & limit_jobs; fi
 
+# Export a ddrescue mapfile of an image with missing sectors
+if try "exporting a ddrescue mapfile" mapfile_export; then (
+   cp $MASTERISO $TMPISO
+   $NEWVER --debug -i$TMPISO --erase 1000-1099 >>$LOGFILE 2>&1
+   $NEWVER --debug -i$TMPISO --erase 20999 >>$LOGFILE 2>&1
+   run_regtest mapfile_export "--mapfile $TMPECC" $TMPISO $TMPECC
+) & limit_jobs; fi
+
+# List the files containing missing sectors
+if try "listing damaged files" list_damaged_files; then (
+   cp $MASTERISO $TMPISO
+   $NEWVER --debug -i$TMPISO --erase 1000-1099 >>$LOGFILE 2>&1
+   $NEWVER --debug -i$TMPISO --erase 5 >>$LOGFILE 2>&1
+   run_regtest list_damaged_files "--list-damaged-files" $TMPISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
+# Multi-session image: the files are taken from the last session,
+# which also lists the files of the first one. Needs xorriso.
+if try "listing damaged files, multi-session image" list_damaged_files_ms; then (
+   command -v xorriso >/dev/null 2>&1 || exit 0
+   mkdir -p $TEST_TMPDIR/s1 $TEST_TMPDIR/s2
+   head -c 1000000 $MASTERISO >$TEST_TMPDIR/s1/one.bin
+   tail -c 2000000 $MASTERISO >$TEST_TMPDIR/s2/two.bin
+   xorriso -as mkisofs -quiet -V S1 -o $TEST_TMPDIR/s1.iso $TEST_TMPDIR/s1 >>$LOGFILE 2>&1
+   xorriso -as mkisofs -quiet -V S2 -C 0,1000 -M $TEST_TMPDIR/s1.iso -o $TEST_TMPDIR/s2.iso $TEST_TMPDIR/s2 >>$LOGFILE 2>&1
+   truncate -s $((1000*2048)) $TEST_TMPDIR/s1.iso
+   cat $TEST_TMPDIR/s1.iso $TEST_TMPDIR/s2.iso >$TMPISO
+   $NEWVER --debug -i$TMPISO --erase 1300-1399 >>$LOGFILE 2>&1
+   run_regtest list_damaged_files_ms "--list-damaged-files" $TMPISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
 # Test with neither image nor ecc file
 if try "missing files" no_files; then (
-   run_regtest no_files "-t" $ISODIR/no.iso  $ISODIR/no.ecc
+   run_regtest no_files "-t" $ISODIR/no.iso  $ISODIR/no.ecc EXITCODE
+) & limit_jobs; fi
+
+# JSON report of a good image and ecc file
+
+if try "good image, json report" good_json; then (
+   IGNORE_LOG_LINE='^  "(version|time)": '
+   run_regtest good_json "-t --json -" $MASTERISO $MASTERECC
+) & limit_jobs; fi
+
+# JSON report and quiet mode when the image is missing;
+# the error goes to stderr, followed by the report.
+
+if try "missing files, quiet json report" no_files_quiet_json; then (
+   IGNORE_LOG_LINE='^  "(version|time)": '
+   run_regtest no_files_quiet_json "-f -q --json -" $ISODIR/no.iso  $ISODIR/no.ecc EXITCODE
 ) & limit_jobs; fi
 
 # Test with missing image, ecc file
@@ -83,7 +153,20 @@ if try "defective image, no ecc" defective_image_no_ecc; then (
    $NEWVER -i$TMPISO --debug --erase 12450-12457 >>$LOGFILE 2>&1
    $NEWVER -i$TMPISO --debug --byteset 13444,0,154 >>$LOGFILE 2>&1
 
-  run_regtest defective_image_no_ecc "-t" $TMPISO $ISODIR/no.ecc
+  run_regtest defective_image_no_ecc "-t" $TMPISO $ISODIR/no.ecc EXITCODE
+) & limit_jobs; fi
+
+# Test image with good xorriso MD5 checksum tags, no ecc file
+if try "xorriso md5 tags, good" xorriso_md5_good; then (
+  run_regtest xorriso_md5_good "-t" $XORRISOISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
+# Test image with xorriso MD5 checksum tags and altered payload
+if try "xorriso md5 tags, altered data" xorriso_md5_altered; then (
+  cp $XORRISOISO $TMPISO
+  $NEWVER -i$TMPISO --debug --byteset 13444,0,154 >>$LOGFILE 2>&1
+
+  run_regtest xorriso_md5_altered "-t" $TMPISO $ISODIR/no.ecc
 ) & limit_jobs; fi
 
 # Test with good image and ecc file, both not multiple of 2048
@@ -197,6 +280,51 @@ if try "image with crc errors" crc_errors_with_ecc; then (
   $NEWVER -i$TMPISO --debug --byteset 13444,0,154 >>$LOGFILE 2>&1
 
   run_regtest crc_errors_with_ecc "-t" $TMPISO $MASTERECC
+) & limit_jobs; fi
+
+# More erasures per ecc block than roots: ecc margin exceeded
+if try "image with ecc margin exceeded" ecc_margin_exceeded; then (
+  cp $MASTERISO $TMPISO
+  $NEWVER -i$TMPISO --debug --erase 1000-4199 >>$LOGFILE 2>&1
+  $NEWVER -i$TMPISO --debug --byteset 13444,0,154 >>$LOGFILE 2>&1
+
+  run_regtest ecc_margin_exceeded "-t" $TMPISO $MASTERECC
+) & limit_jobs; fi
+
+# Ecc file given as a directory: the file matching the image
+# fingerprint is picked, a decoy for another image is ignored
+
+if try "ecc file found in directory" find_ecc_in_dir; then (
+  mkdir -p $TEST_TMPDIR/eccdir
+  cp $MASTERISO $TMPISO
+  $NEWVER -i$TMPISO --debug --byteset 16,1,0 >>$LOGFILE 2>&1
+  $NEWVER -i$TMPISO -e$TEST_TMPDIR/eccdir/decoy.ecc -c $REDUNDANCY >>$LOGFILE 2>&1
+  ln -sf $MASTERECC $TEST_TMPDIR/eccdir/master.ecc
+  cp $MASTERISO $TMPISO
+  $NEWVER -i$TMPISO --debug --byteset 13444,0,154 >>$LOGFILE 2>&1
+
+  run_regtest find_ecc_in_dir "-t" $TMPISO $TEST_TMPDIR/eccdir
+) & limit_jobs; fi
+
+# Ecc file given as a directory, but no file in it matches the image
+
+if try "no matching ecc file in directory" find_ecc_in_dir_no_match; then (
+  mkdir -p $TEST_TMPDIR/eccdir
+  ln -sf $MASTERECC $TEST_TMPDIR/eccdir/master.ecc
+  cp $MASTERISO $TMPISO
+  $NEWVER -i$TMPISO --debug --byteset 16,1,0 >>$LOGFILE 2>&1
+
+  run_regtest find_ecc_in_dir_no_match "-t" $TMPISO $TEST_TMPDIR/eccdir
+) & limit_jobs; fi
+
+# Ecc file given as a directory, but two files in it match the image
+
+if try "two matching ecc files in directory" find_ecc_in_dir_ambiguous; then (
+  mkdir -p $TEST_TMPDIR/eccdir
+  ln -sf $MASTERECC $TEST_TMPDIR/eccdir/master.ecc
+  ln -sf $ECC_PLUS56 $TEST_TMPDIR/eccdir/plus56.ecc
+
+  run_regtest find_ecc_in_dir_ambiguous "-t" $MASTERISO $TEST_TMPDIR/eccdir
 ) & limit_jobs; fi
 
 # CRC error in fingerprint sector
@@ -689,7 +817,7 @@ REGTEST_SECTION="Scanning tests"
 if try "scanning image, no ecc data" scan_no_ecc; then (
 
   extra_args="--debug -d sim-cd --sim-cd=$MASTERISO --fixed-speed-values"
-  run_regtest scan_no_ecc "--spinup-delay=0 -s" $ISODIR/no.iso $ISODIR/no.ecc
+  run_regtest scan_no_ecc "--spinup-delay=0 -s" $ISODIR/no.iso $ISODIR/no.ecc EXITCODE
 ) & limit_jobs; fi
 
 # Scan image from non-existant device
@@ -723,7 +851,7 @@ if try "scanning image, defective media, no ecc data" scan_defective_no_ecc; the
   $NEWVER --debug -i$SIMISO --erase 2410 >>$LOGFILE 2>&1
 
   extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-  run_regtest scan_defective_no_ecc "--spinup-delay=0 -s" $ISODIR/no.iso  $ISODIR/no.ecc
+  run_regtest scan_defective_no_ecc "--spinup-delay=0 -s" $ISODIR/no.iso  $ISODIR/no.ecc EXITCODE
 ) & limit_jobs; fi
 
 # Scan image from above test again, this time with a 1 sector skip size
@@ -782,7 +910,7 @@ if try "scanning new image with invalid range, no ecc data" scan_new_with_invali
 if try "scanning image, ecc data" scan_with_ecc; then (
 
   extra_args="--debug --sim-cd=$MASTERISO --fixed-speed-values"
-  run_regtest scan_with_ecc "--spinup-delay=0 -s" $ISODIR/no.iso  $MASTERECC
+  run_regtest scan_with_ecc "--spinup-delay=0 -s" $ISODIR/no.iso  $MASTERECC EXITCODE
 ) & limit_jobs; fi
 
 # Scan image with non existing error correction file given
@@ -819,7 +947,7 @@ if try "scanning image, crc errors, ecc data" scan_crc_errors_with_ecc; then (
   $NEWVER --debug -i$SIMISO --byteset 20999,55,123 >>$LOGFILE 2>&1
     
   extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-  run_regtest scan_crc_errors_with_ecc "--spinup-delay=0 -s" $ISODIR/no.iso  $MASTERECC
+  run_regtest scan_crc_errors_with_ecc "--spinup-delay=0 -s" $ISODIR/no.iso  $MASTERECC EXITCODE
 ) & limit_jobs; fi
 
 # Scan image with error correction data available
@@ -845,7 +973,7 @@ if try "scanning image, more sectors than expected, ecc data" scan_longer_with_e
     
   replace_config ignore-iso-size 1
   extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-  run_regtest scan_longer_with_ecc "--ignore-iso-size --spinup-delay=0 -s" $ISODIR/no.iso  $MASTERECC
+  run_regtest scan_longer_with_ecc "--ignore-iso-size --spinup-delay=0 -s" $ISODIR/no.iso  $MASTERECC EXITCODE
 ) & limit_jobs; fi
 
 # Scan image with error correction data available
@@ -859,7 +987,21 @@ if try "scanning image, tao tail case, ecc data" scan_tao_tail_with_ecc; then (
     
   replace_config ignore-iso-size 1
   extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-  run_regtest scan_tao_tail_with_ecc "--ignore-iso-size --spinup-delay=0 -s" $ISODIR/no.iso  $MASTERECC
+  run_regtest scan_tao_tail_with_ecc "--ignore-iso-size --spinup-delay=0 -s" $ISODIR/no.iso  $MASTERECC EXITCODE
+) & limit_jobs; fi
+
+# Same, with a json report: the run-out sectors are not counted as unreadable
+
+if try "scanning image, tao tail case, json report" scan_tao_tail_json; then (
+
+  cp $MASTERISO $SIMISO
+  cat fixed-random-sequence >>$SIMISO
+  $NEWVER --debug -i$SIMISO --erase 21000-21001 >>$LOGFILE 2>&1
+
+  replace_config ignore-iso-size 1
+  extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
+  IGNORE_LOG_LINE='^  "(version|time)": '
+  run_regtest scan_tao_tail_json "--ignore-iso-size --spinup-delay=0 -s --json -" $ISODIR/no.iso  $MASTERECC EXITCODE
 ) & limit_jobs; fi
 
 # Scan image with error correction data available
@@ -969,6 +1111,34 @@ if try "reading image, no ecc data" read_no_ecc; then (
 
   extra_args="--debug --sim-cd=$MASTERISO --fixed-speed-values"
   run_regtest read_no_ecc "--spinup-delay=0 -r" $TMPISO  $ISODIR/no.ecc
+) & limit_jobs; fi
+
+# Copy protected sectors are not re-read, and explained once
+
+if try "reading medium with copy protected sectors" read_copy_protected; then (
+  cp $MASTERISO $SIMISO
+  $NEWVER --debug -i$SIMISO --erase "1000-1099:scrambled sector" >>$LOGFILE 2>&1
+
+  extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
+  run_regtest read_copy_protected "--spinup-delay=0 --read-attempts=1-3 -r" $TMPISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
+# Reading stops before the first sector when the abort file exists
+
+if try "reading with existing abort file" read_abort_file; then (
+  touch $TMPISO.abort
+  extra_args="--debug --sim-cd=$MASTERISO --fixed-speed-values"
+  run_regtest read_abort_file "--spinup-delay=0 --abort-file=$TMPISO.abort -r" $TMPISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
+# Catalog of scan results and history report
+
+if try "catalog of scan results" catalog_report; then (
+  cp $MASTERISO $SIMISO
+  $NEWVER --regtest --debug --sim-cd=$SIMISO --fixed-speed-values --spinup-delay=0 -s --catalog=$TMPISO.cat >>$LOGFILE 2>&1
+  $NEWVER --debug -i$SIMISO --erase 1000-1049 >>$LOGFILE 2>&1
+  $NEWVER --regtest --debug --sim-cd=$SIMISO --fixed-speed-values --spinup-delay=0 -s --catalog=$TMPISO.cat >>$LOGFILE 2>&1
+  run_regtest catalog_report "--catalog-report=$TMPISO.cat" $TMPISO $ISODIR/no.ecc
 ) & limit_jobs; fi
 
 # Read into existing and complete image file
@@ -1149,6 +1319,17 @@ if try "reading image, ecc data" read_with_ecc; then (
   run_regtest read_with_ecc "--spinup-delay=0 -r" $TMPISO  $MASTERECC
 ) & limit_jobs; fi
 
+# Read image with the ecc file picked from a directory
+
+if try "reading image, ecc file found in directory" read_find_ecc_in_dir; then (
+  mkdir -p $TEST_TMPDIR/eccdir
+  ln -sf $MASTERECC $TEST_TMPDIR/eccdir/master.ecc
+  ln -sf $ECC_PLUS56 $TEST_TMPDIR/eccdir/plus56.ecc.old
+
+  extra_args="--debug --sim-cd=$MASTERISO --fixed-speed-values"
+  run_regtest read_find_ecc_in_dir "--spinup-delay=0 -r" $TMPISO $TEST_TMPDIR/eccdir
+) & limit_jobs; fi
+
 # Read with ecc into existing and complete image file
 
 if try "reading image, ecc data, good file" read_with_ecc_good_file; then (
@@ -1193,7 +1374,7 @@ if try "reading image, crc errors, ecc data" read_crc_errors_with_ecc; then (
   $NEWVER --debug -i$SIMISO --byteset 20999,55,123 >>$LOGFILE 2>&1
     
   extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-  run_regtest read_crc_errors_with_ecc "--spinup-delay=0 -r" $TMPISO  $MASTERECC
+  run_regtest read_crc_errors_with_ecc "--spinup-delay=0 -r" $TMPISO  $MASTERECC EXITCODE
 ) & limit_jobs; fi
 
 # Read image with error correction data available

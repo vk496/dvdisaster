@@ -1,0 +1,27 @@
+3fecabce63f66e2eb70b440060096eaa
+09b6b2aca4d0928169399dd8287cf5d0
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ CD.
+Medium: CD-R Audio, 2560 sectors.
+
+Reading CD-DA image: 2560 sectors of 2352 bytes.
+* Warning: The drive does not report C2 errors for audio sectors.
+*          Damaged audio sectors may be interpolated silently by the drive.
+  Session 1, track  1: sectors 0 - 1279, audio
+  Session 1, track  2: sectors 1280 - 2559, audio
+
+Creating new audio.bin image.
+
+All sectors successfully read.
+
+AccurateRip checksums (no read offset correction; see --audio-offset):
+  Track  1: v1 59f1a8d8, v2 47edaefd, CRC32 5b07c575
+  Track  2: v1 0fa9c7ce, v2 c553912f, CRC32 70e9c288
+AccurateRip disc id: 002-00000f00-00002801-0c002202
+CTDB TOC id: jMITwptWUXZfy4sfzMMsQhQp0YA-, CRC32 08973b05
+Cue sheet written to audio.cue.

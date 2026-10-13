@@ -78,7 +78,7 @@ REGTEST_SECTION="Verify tests"
 # Test good files
 
 if try "good image" good; then (
-  run_regtest good "-t" $MASTERISO $NO_FILE
+  run_regtest good "-t" $MASTERISO $NO_FILE EXITCODE
 ) & limit_jobs; fi
 
 # Test good files, quick test
@@ -173,7 +173,30 @@ if try "several missing data sectors" missing_data_sectors; then (
    $NEWVER -i$TMPISO --debug --erase 13420-14109 >>$LOGFILE 2>&1
    $NEWVER -i$TMPISO --debug --erase 17812 >>$LOGFILE 2>&1
 
-   run_regtest missing_data_sectors "-t" $TMPISO $NO_FILE
+   run_regtest missing_data_sectors "-t" $TMPISO $NO_FILE EXITCODE
+) & limit_jobs; fi
+
+# One ecc block has more missing sectors than it can correct
+
+if try "uncorrectable ecc block" uncorrectable_block; then (
+   cp $MASTERISO $TMPISO
+   for i in $(seq 0 49); do
+      $NEWVER -i$TMPISO --debug --erase $((1000+i*98)) >>$LOGFILE 2>&1
+   done
+
+   run_regtest uncorrectable_block "-t" $TMPISO $NO_FILE EXITCODE
+) & limit_jobs; fi
+
+# Same, with JSON report
+
+if try "uncorrectable ecc block, json report" uncorrectable_block_json; then (
+   cp $MASTERISO $TMPISO
+   for i in $(seq 0 49); do
+      $NEWVER -i$TMPISO --debug --erase $((1000+i*98)) >>$LOGFILE 2>&1
+   done
+
+   IGNORE_LOG_LINE='^  "(version|time)": '
+   run_regtest uncorrectable_block_json "-t --json -" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
 # Image contains several missing ecc sectors
@@ -420,6 +443,64 @@ if try "image with missing ecc header / both sectors missing" missing_header6; t
   $NEWVER --debug -i$TMPISO --erase $((LMI_HEADER+1)) >>$LOGFILE 2>&1
 
   run_regtest missing_header6 "-t -v" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+# Ecc header with zero sectorsPerLayer, but valid CRC (crashed with SIGFPE)
+
+if try "ecc header with zero layer size" header_zero_layer_size; then (
+
+  cp $MASTERISO $TMPISO
+  $NEWVER --debug -i$TMPISO --byteset 21000,120,0 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21000,96,186 >>$LOGFILE 2>&1 # recomputed header CRC
+  $NEWVER --debug -i$TMPISO --byteset 21000,97,5 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21000,98,245 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21000,99,55 >>$LOGFILE 2>&1
+
+  run_regtest header_zero_layer_size "-t" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+# Ecc header with a huge sector count, but valid CRC (garbage results)
+
+if try "ecc header with huge sector count" header_huge_sectors; then (
+
+  cp $MASTERISO $TMPISO
+  $NEWVER --debug -i$TMPISO --byteset 21000,73,1 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21000,96,199 >>$LOGFILE 2>&1 # recomputed header CRC
+  $NEWVER --debug -i$TMPISO --byteset 21000,97,42 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21000,98,82 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21000,99,189 >>$LOGFILE 2>&1
+
+  run_regtest header_huge_sectors "-t" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+# Ecc header with an invalid inLast, but valid CRC (crashed)
+
+if try "ecc header with invalid inLast" header_invalid_inlast; then (
+
+  cp $MASTERISO $TMPISO
+  $NEWVER --debug -i$TMPISO --byteset 21000,118,1 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21000,96,22 >>$LOGFILE 2>&1 # recomputed header CRC
+  $NEWVER --debug -i$TMPISO --byteset 21000,97,86 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21000,98,243 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21000,99,211 >>$LOGFILE 2>&1
+
+  run_regtest header_invalid_inlast "-t" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+# Missing ecc header and a CRC block with zero sectorsPerLayer,
+# but valid CRC (crashed with SIGFPE)
+
+if try "missing ecc header, CRC block with zero layer size" crc_block_zero_layer_size; then (
+
+  cp $MASTERISO $TMPISO
+  $NEWVER --debug -i$TMPISO --erase 21000 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21146,1112,0 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21146,1120,221 >>$LOGFILE 2>&1 # recomputed CRC block CRC
+  $NEWVER --debug -i$TMPISO --byteset 21146,1121,191 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21146,1122,114 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 21146,1123,40 >>$LOGFILE 2>&1
+
+  run_regtest crc_block_zero_layer_size "-t" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
 # Normal sized image with missing ecc header; with exhaustive search.
@@ -711,6 +792,18 @@ REGTEST_SECTION="Creation tests"
 
 # Create ecc file
 
+# Small image with an incomplete last sector
+# (failed with "Failed reading sector 400 in image")
+
+if try "augmented image creation, small image with incomplete last sector" ecc_create_small_partial; then (
+  $NEWVER --debug -i$TMPISO --random-image 400 >>$LOGFILE 2>&1
+  dd if="$RNDSEQ" count=1 bs=56 >>$TMPISO 2>/dev/null
+
+  IGNORE_LOG_LINE="^Avg performance|^Augmenting image with Method RS03"
+  extra_args="--debug --set-version $SETVERSION"
+  run_regtest ecc_create_small_partial "-mRS03 -c" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
 if try "augmented image creation" ecc_create; then (
    $NEWVER --debug -i$TMPISO --random-image $ISOSIZE >>$LOGFILE 2>&1
 
@@ -719,6 +812,20 @@ if try "augmented image creation" ecc_create; then (
    replace_config ecc-target 1
    extra_args="--debug --set-version $SETVERSION"
    run_regtest ecc_create "-mRS03 -n$ECCSIZE -c" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+# Create from an image with trailing padding behind the ISO file system
+# (like xorriso's default 300 KiB); a warning is expected.
+
+if try "augmented image creation from padded image" ecc_create_padded; then (
+   $NEWVER --debug -i$TMPISO --random-image $ISOSIZE >>$LOGFILE 2>&1
+   dd if=/dev/zero bs=2048 count=150 >>$TMPISO 2>>$LOGFILE
+
+   IGNORE_LOG_LINE="^Avg performance|^Augmenting image with Method RS03"
+   replace_config method-name RS03
+   replace_config ecc-target 1
+   extra_args="--debug --set-version $SETVERSION"
+   run_regtest ecc_create_padded "-mRS03 -n$ECCSIZE -c" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
 # Create with missing image
@@ -1008,7 +1115,7 @@ if try "trying fix with no write permission" fix_no_write_perm; then (
 if try "trying fix with good image" fix_good_image; then (
   cp $MASTERISO $TMPISO
 
-  run_regtest fix_good_image "-f" $TMPISO $NO_FILE
+  run_regtest fix_good_image "-f" $TMPISO $NO_FILE EXITCODE
 ) & limit_jobs; fi
 
 # Fix a truncated image
@@ -1065,7 +1172,30 @@ if try "trying to fix correctable image" fix_correctable; then (
   $NEWVER --debug -i$TMPISO --erase 1000 >>$LOGFILE 2>&1
   $NEWVER --debug -i$TMPISO --byteset 2000,0,111 >>$LOGFILE 2>&1
 
-  run_regtest fix_correctable "-f" $TMPISO  $NO_FILE
+  run_regtest fix_correctable "-f" $TMPISO  $NO_FILE EXITCODE
+) & limit_jobs; fi
+
+# Same, with JSON report
+
+if try "trying to fix correctable image, json report" fix_correctable_json; then (
+  cp $MASTERISO $TMPISO
+  $NEWVER --debug -i$TMPISO --erase 500-524 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --erase 1000 >>$LOGFILE 2>&1
+  $NEWVER --debug -i$TMPISO --byteset 2000,0,111 >>$LOGFILE 2>&1
+
+  IGNORE_LOG_LINE='^  "(version|time)": '
+  run_regtest fix_correctable_json "-f --json -" $TMPISO  $NO_FILE
+) & limit_jobs; fi
+
+# Fix image with one uncorrectable ecc block
+
+if try "trying to fix image with uncorrectable ecc block" fix_uncorrectable_block; then (
+  cp $MASTERISO $TMPISO
+  for i in $(seq 0 49); do
+     $NEWVER -i$TMPISO --debug --erase $((1000+i*98)) >>$LOGFILE 2>&1
+  done
+
+  run_regtest fix_uncorrectable_block "-f" $TMPISO  $NO_FILE EXITCODE
 ) & limit_jobs; fi
 
 # Fix image with missing sectors in several border locations
@@ -1337,6 +1467,19 @@ if try "fix custom-n truncated image, bad header, bruteforce" fix_custom_n_trunc
    run_regtest fix_custom_n_truncated_bruteforce "--bruteforce-rs03-search -f" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
+# Fix image read back from an overwritable medium (e.g. BD-RE) which reports
+# its formatted size, so the augmented image is followed by unused sectors;
+# the ecc header is missing. Works by trying the smaller standard medium sizes.
+# With 75225 trailing sectors the image-derived layer sizes miss the CRC layer.
+
+if try "fix image followed by unused medium sectors, missing header" fix_trailing_medium_space; then (
+   cp $LARGEMASTERISO $TMPISO
+   $NEWVER --debug -i$TMPISO --erase $LMI_HEADER >>$LOGFILE 2>&1
+   dd if=/dev/zero bs=2048 count=75225 >>$TMPISO 2>>$LOGFILE
+
+   run_regtest fix_trailing_medium_space "-f --truncate" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
 ### Scanning tests
 
 REGTEST_SECTION="Scanning tests"
@@ -1347,7 +1490,7 @@ if try "scanning good image" scan_good; then (
   cp $MASTERISO $SIMISO
 
   extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-  run_regtest scan_good "--spinup-delay=0 -s" $TMPISO $NO_FILE
+  run_regtest scan_good "--spinup-delay=0 -s" $TMPISO $NO_FILE EXITCODE
 ) & limit_jobs; fi
 
 # Scan complete / optimal image, verbose output
@@ -1458,7 +1601,21 @@ if try "scanning image with missing data sectors" scan_missing_data_sectors; the
    $NEWVER -i$SIMISO --debug --erase 22450-22457 >>$LOGFILE 2>&1
 
    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-   run_regtest scan_missing_data_sectors "--spinup-delay=0 -s " $TMPISO  $NO_FILE
+   run_regtest scan_missing_data_sectors "--spinup-delay=0 -s " $TMPISO  $NO_FILE EXITCODE
+) & limit_jobs; fi
+
+# Same in quiet mode with JSON report on stdout.
+# Note that run_regtest drops the first three lines ("{", program, version).
+
+if try "scanning image with missing data sectors, quiet json report" scan_missing_data_sectors_quiet_json; then (
+   cp $MASTERISO $SIMISO
+   $NEWVER -i$SIMISO --debug --erase 1000-1049 >>$LOGFILE 2>&1
+   $NEWVER -i$SIMISO --debug --erase 21230 >>$LOGFILE 2>&1
+   $NEWVER -i$SIMISO --debug --erase 22450-22457 >>$LOGFILE 2>&1
+
+   IGNORE_LOG_LINE='^  "(version|time)": '
+   extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
+   run_regtest scan_missing_data_sectors_quiet_json "--spinup-delay=0 -s -q --json -" $TMPISO  $NO_FILE EXITCODE
 ) & limit_jobs; fi
 
 # Image contains 1 row of missing sectors and a single one
@@ -1492,7 +1649,7 @@ if try "scanning image with bad data byte" scan_data_bad_byte; then (
    $NEWVER -i$SIMISO --debug --byteset 1235,50,10 >>$LOGFILE 2>&1
 
    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-   run_regtest scan_data_bad_byte "--spinup-delay=0 -s " $TMPISO  $NO_FILE
+   run_regtest scan_data_bad_byte "--spinup-delay=0 -s " $TMPISO  $NO_FILE EXITCODE
 ) & limit_jobs; fi
 
 # Image contains bad byte in the crc section
@@ -1502,7 +1659,7 @@ if try "scanning image with bad crc byte" scan_crc_bad_byte; then (
    $NEWVER -i$SIMISO --debug --byteset 21077,50,10 >>$LOGFILE 2>&1
 
    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-   run_regtest scan_crc_bad_byte "--spinup-delay=0 -s " $TMPISO  $NO_FILE
+   run_regtest scan_crc_bad_byte "--spinup-delay=0 -s " $TMPISO  $NO_FILE EXITCODE
 ) & limit_jobs; fi
 
 # Image contains bad byte in the ecc section
@@ -2001,7 +2158,7 @@ if try "reading image with missing data sectors" read_missing_data_sectors; then
    $NEWVER -i$SIMISO --debug --erase 22450-22457 >>$LOGFILE 2>&1
 
    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-   run_regtest read_missing_data_sectors "--spinup-delay=0 -r " $TMPISO  $NO_FILE
+   run_regtest read_missing_data_sectors "--spinup-delay=0 -r " $TMPISO  $NO_FILE EXITCODE
 ) & limit_jobs; fi
 
 # Image contains 1 row of missing sectors and a single one
@@ -2148,6 +2305,20 @@ if try "crc section with uncorrectable dead sector markers" read_crc_section_wit
 
   extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
   run_regtest read_crc_section_with_uncorrectable_dsm  "--spinup-delay=0 -r " $TMPISO  $NO_FILE
+) & limit_jobs; fi
+
+# Read an image with the ecc data behind 150 zero sectors of padding,
+# as xorriso appends them by default. The quick search must find the
+# header behind the padding.
+
+if try "reading image with ecc behind 150 sectors padding" read_padded; then (
+
+  $NEWVER --debug -i$SIMISO --random-image $ISOSIZE >>$LOGFILE 2>&1
+  dd if=/dev/zero bs=2048 count=150 >>$SIMISO 2>/dev/null
+  $NEWVER --regtest --debug --set-version $SETVERSION -i$SIMISO -mRS03 -n$ECCSIZE -c >>$LOGFILE 2>&1
+
+  extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
+  run_regtest read_padded "--spinup-delay=0 -r" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
 # Normal sized image with missing ecc header; without exhaustive search.

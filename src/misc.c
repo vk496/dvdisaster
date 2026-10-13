@@ -251,6 +251,10 @@ void PrintCLI(char *format, ...)
       return;
    }
 
+   if(Closure->quiet)
+      return;
+
+   ClearProgress();
    va_start(argp, format);
    g_vprintf(format, argp);
    va_end(argp);
@@ -270,7 +274,7 @@ void PrintProgress(char *format, ...)
    va_list argp;
    int n;
 
-   if(Closure->guiMode)
+   if(Closure->guiMode || Closure->quiet)
      return;
   
    print_greetings(stdout);
@@ -287,19 +291,46 @@ void PrintProgress(char *format, ...)
    {  n = 255;
       msg[255] = 0;
    }
-   Closure->progressLength = n;
 
    if(strchr(msg, '\n'))
+   {  if(*msg != '\n')
+	 ClearProgress();
       g_printf("%s", msg);
+   }
    else
    {  g_mutex_lock(&Closure->progressLock);
       Closure->bs[n] = 0;
       g_printf("%s%s", msg, Closure->bs);
       Closure->bs[n] = '\b';
       g_mutex_unlock(&Closure->progressLock);
+      Closure->progressLength = n;
    }
 
    fflush(stdout);
+}
+
+/*
+ * Print progress with the estimated remaining time appended.
+ * The timer must have been started at the beginning of the operation.
+ */
+
+void PrintProgressETA(GTimer *timer, int permille, char *format, ...)
+{  char msg[256];
+   va_list argp;
+   double elapsed = g_timer_elapsed(timer, NULL);
+   int eta;
+
+   va_start(argp, format);
+   g_vsnprintf(msg, 256, format, argp);
+   va_end(argp);
+
+   if(elapsed < 5.0 || permille <= 0)
+   {  PrintProgress("%s", msg);
+      return;
+   }
+
+   eta = elapsed * (1000 - permille) / permille;
+   PrintProgress("%s (ETA %02d:%02d:%02d)", msg, eta/3600, (eta/60)%60, eta%60);
 }
 
 /*
@@ -309,10 +340,11 @@ void PrintProgress(char *format, ...)
 void ClearProgress(void)
 {  int n = Closure->progressLength;
 
-   if(Closure->noProgress)
+   if(Closure->noProgress || Closure->quiet || !n)
      return;
   
    g_mutex_lock(&Closure->progressLock);
+   Closure->progressLength = 0;
    Closure->bs[n] = Closure->sp[n] = 0;
    g_printf("%s%s", Closure->sp, Closure->bs);
    Closure->bs[n] = '\b';
@@ -337,7 +369,7 @@ void PrintLog(char *format, ...)
 
    if(Closure->guiMode)
       log_window_vprintf(format, argp);
-   else 
+   else if(!Closure->quiet)
    {
       print_greetings(stdout);
       g_vprintf(format, argp);
@@ -386,7 +418,7 @@ void PrintLogWithAsterisks(char *format, ...)
 
    if(Closure->guiMode)
       log_window_vprintf(new_format, argp);
-   else 
+   else if(!Closure->quiet)
    {
       print_greetings(stdout);
       g_vprintf(new_format, argp);
@@ -418,7 +450,7 @@ void Verbose(char *format, ...)
 
    if(Closure->guiMode)
       log_window_vprintf(format, argp);
-   else 
+   else if(!Closure->quiet)
    {
       print_greetings(stdout);
       g_vprintf(format, argp);
@@ -454,7 +486,7 @@ void PrintTimeToLog(GTimer *timer, char *format, ...)
    { 
       log_window_append(tmp2);
    }
-   else
+   else if(!Closure->quiet)
    {  g_printf("%s", tmp2);
 
       fflush(stdout);
@@ -499,6 +531,7 @@ void PrintCLIorLabel(GtkWidget *label, char *format, ...)
    }
    else
 #endif
+   if(!Closure->quiet)
    {  g_vprintf(format, argp);
 
       fflush(stdout);
@@ -566,6 +599,8 @@ void vLogWarning(char *format, va_list argp)
    if(Closure->guiMode)
    {  log_window_append(str->str);
    }
+   else if(Closure->quiet)
+      g_fprintf(stderr, "%s", str->str);
    else
    {  print_greetings(stdout);
       g_printf("%s", str->str);
@@ -615,13 +650,27 @@ void Stop(char *format, ...)
    /*** CLI mode */
    
    if(!Closure->guiMode) 
-   {  print_greetings(stdout);
-      g_printf("%s", _("\n*\n* dvdisaster - can not continue:\n*\n"));
+   {  FILE *out = Closure->quiet ? stderr : stdout;  /* -q: errors only, to stderr */
+
+      if(!Closure->quiet)
+	 print_greetings(stdout);
+      g_fprintf(out, "%s", _("\n*\n* dvdisaster - can not continue:\n*\n"));
       va_start(argp, format);
-      g_vprintf(format, argp);
+      g_vfprintf(out, format, argp);
       va_end(argp);
-      g_printf("\n\n");
-      fflush(stdout);
+      g_fprintf(out, "\n\n");
+      fflush(out);
+
+      if(Closure->jsonFile)
+      {  char *msg;
+
+	 va_start(argp, format);
+	 msg = g_strdup_vprintf(format, argp);
+	 va_end(argp);
+	 exitCode = EXIT_FAILURE;
+	 WriteReport(g_strstrip(msg));
+	 g_free(msg);
+      }
    }
 
    /*** GUI mode */

@@ -1,0 +1,30 @@
+e12ae2b7daa6f665063cce20edd7a9a9
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+rs04i-tmp.iso present.
+
+Error correction properties:
+- type             : Augmented image
+- method           : RS04, 191+47 layers of 42 sectors, 24.6% redundancy.
+- sector size      : 2048 bytes
+- created by       : dvdisaster-0.80
+- data md5sum      : 85a24eb529119e79c540b623f47fc2a3
+
+Data integrity:
+- medium sectors   : 10022 total / 8000 data
+* missing sector   : 8000 
+* missing sector   : 8005 
+* missing sectors  : 8060 - 8070 
+* CRC error, sector: 9000 
+* BAD image        : 13 sectors missing, 1 CRC errors
+  ... data section   : 0 sectors missing; 0 CRC errors
+  ... crc section    : 1 sectors missing; 0 CRC errors
+  ... ecc section    : 10 sectors missing; 1 CRC errors
+  ... tags           : 2 of 32 missing
+- erasure counts   :  avg =  1.1; worst = 2 per ecc block.
+- ecc margin       : worst block uses 2 of 47 roots (4%)
+- prognosis        : 10022 of 10022 sectors recoverable (100.0%)

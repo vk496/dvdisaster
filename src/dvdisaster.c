@@ -24,6 +24,10 @@
 
 #include "dvdisaster.h"
 
+#if defined(SYS_MINGW) && defined(WITH_GUI_YES)
+#include <windows.h>
+#endif
+
 
 /*
  * Those are now declared as extern in dvdisaster.h,
@@ -56,6 +60,7 @@ typedef enum
    MODE_COPY_SECTOR,
    MODE_CMP_IMAGES,
    MODE_DEBUG_MAINT1,
+   MODE_DRIVE_TEST,
    MODE_ERASE, 
    MODE_MARKED_IMAGE,
    MODE_MEDIUM_INFO,
@@ -73,11 +78,16 @@ typedef enum
 
    /* don't use the ascii range 32-127 so that we
       avoid collision with the single-char options */
-   MODIFIER_ADAPTIVE_READ = 128,
+   MODIFIER_ABORT_FILE = 128,
+   MODIFIER_ADAPTIVE_READ,
+   MODIFIER_AUDIO_OFFSET,
    MODIFIER_AUTO_SUFFIX,
    MODIFIER_CACHE_SIZE, 
+   MODIFIER_CATALOG,
+   MODIFIER_CATALOG_REPORT,
    MODIFIER_CLV_SPEED,    /* unused */ 
    MODIFIER_CAV_SPEED,    /* unused */
+   MODIFIER_CDDA,
    MODIFIER_CDUMP, 
    MODIFIER_DAO, 
    MODIFIER_DEBUG,
@@ -95,9 +105,13 @@ typedef enum
    MODIFIER_IGNORE_ISO_SIZE,
    MODIFIER_IGNORE_RS03_HEADER,
    MODIFIER_INTERNAL_REREADS,
+   MODIFIER_JSON,
+   MODIFIER_MAPFILE,
+   MODIFIER_LIST_DAMAGED_FILES,
    MODIFIER_NO_BDR_DEFECT_MANAGEMENT,
    MODIFIER_NO_PROGRESS,
    MODIFIER_OLD_DS_MARKER,
+   MODIFIER_PAUSE_AFTER_ERRORS,
    MODIFIER_PERMISSIVE_MEDIUM_TYPE,
    MODIFIER_PREFETCH_SECTORS,
    MODIFIER_RANDOM_SEED,
@@ -107,19 +121,69 @@ typedef enum
    MODIFIER_READ_RAW,
    MODIFIER_REGTEST,
    MODIFIER_RESOURCE_FILE,
+   MODIFIER_RS04_MEMORY,
    MODIFIER_SCREEN_SHOT,
+   MODIFIER_SECTOR_SIZE,
    MODIFIER_SET_VERSION,
    MODIFIER_SIMULATE_CD,
    MODIFIER_SIMULATE_DEFECTS,
+   MODIFIER_SIMULATE_TOC,
    MODIFIER_SPEED_WARNING, 
    MODIFIER_SPINUP_DELAY, 
+   MODIFIER_TIME_LIMIT,
+   MODIFIER_TEST_AND_COPY,
    MODIFIER_TRUNCATE,
    MODIFIER_VERSION,
 } run_mode;
 
+/*
+ * Stop the current action (like the GUI Stop button) when
+ * the time limit is reached or the abort file appears.
+ */
+
+static volatile int watchdog_done = FALSE;
+
+static int stop_requested(GTimer *timer)
+{  if(Closure->abortFile && g_file_test(Closure->abortFile, G_FILE_TEST_EXISTS))
+   {  PrintLog(_("\nAbort file found, stopping.\n"));
+      return TRUE;
+   }
+
+   if(Closure->timeLimit > 0 && g_timer_elapsed(timer, NULL) >= Closure->timeLimit)
+   {  PrintLog(_("\nTime limit of %d seconds reached, stopping.\n"), Closure->timeLimit);
+      return TRUE;
+   }
+
+   return FALSE;
+}
+
+static gpointer watchdog_thread(gpointer data)
+{  GTimer *timer = (GTimer*)data;
+
+   while(!watchdog_done && !Closure->stopActions)
+   {  if(stop_requested(timer))
+	 Closure->stopActions = STOP_CURRENT_ACTION;
+      else g_usleep(G_USEC_PER_SEC/10);
+   }
+
+   g_timer_destroy(timer);
+   return NULL;
+}
+
+static GThread* start_watchdog(void)
+{  GTimer *timer = g_timer_new();
+
+   if(stop_requested(timer))  /* before starting, so that nothing is done at all */
+      Closure->stopActions = STOP_CURRENT_ACTION;
+
+   return g_thread_new("stop_watchdog", watchdog_thread, timer);
+}
+
 int main(int argc, char *argv[])
-{  int mode = MODE_NONE; 
+{  GThread *watchdog = NULL;
+   int mode = MODE_NONE; 
    int sequence = MODE_NONE;
+   int ecc_given = FALSE;
    char *debug_arg = NULL;
    char *read_range = NULL;
    int debug_mode_required=FALSE;
@@ -133,6 +197,21 @@ int main(int argc, char *argv[])
    int devices_queried = FALSE;
 #endif
    
+#if defined(SYS_MINGW) && defined(WITH_GUI_YES)
+   /* We're a GUI subsystem program, so Windows doesn't hand us console
+      std handles. When used from a console (e.g. through dvdisaster.com),
+      write to it unless output has been redirected. */
+   if(argc > 1)
+   {  int out = GetFileType(GetStdHandle(STD_OUTPUT_HANDLE)) == FILE_TYPE_UNKNOWN;
+      int err = GetFileType(GetStdHandle(STD_ERROR_HANDLE)) == FILE_TYPE_UNKNOWN;
+
+      if((out || err) && AttachConsole(ATTACH_PARENT_PROCESS))
+      {  if(out) freopen("CONOUT$", "w", stdout);
+	 if(err) freopen("CONOUT$", "w", stderr);
+      }
+   }
+#endif
+
 #ifdef WITH_MEMDEBUG_YES
     atexit(check_memleaks);
 #endif
@@ -208,6 +287,7 @@ int main(int argc, char *argv[])
         as some may be CPU-related. */
 
    Closure->useSSE2 = ProbeSSE2();
+   Closure->useAVX2 = ProbeAVX2();
    Closure->useAltiVec = ProbeAltiVec();
    Closure->clSize = ProbeCacheLineSize();
 
@@ -216,15 +296,20 @@ int main(int argc, char *argv[])
    for(;;)
    {  int option_index,c;
       static struct option long_options[] =
-      { {"adaptive-read", 0, 0, MODIFIER_ADAPTIVE_READ},
+      { {"abort-file", 1, 0, MODIFIER_ABORT_FILE},
+	{"adaptive-read", 0, 0, MODIFIER_ADAPTIVE_READ},
 	{"auto-suffix", 0, 0,  MODIFIER_AUTO_SUFFIX},
 	{"assume", 1, 0, 'a'},
+	{"audio-offset", 1, 0, MODIFIER_AUDIO_OFFSET},
 	{"byteset", 1, 0, MODE_BYTESET },
 	{"copy-sector", 1, 0, MODE_COPY_SECTOR },
 	{"compare-images", 1, 0, MODE_CMP_IMAGES },
 	{"bruteforce-rs03-search", 0, 0, MODIFIER_BRUTEFORCE_RS03_SEARCH },
 	{"cache-size", 1, 0, MODIFIER_CACHE_SIZE },
+	{"catalog", 1, 0, MODIFIER_CATALOG },
+	{"catalog-report", 1, 0, MODIFIER_CATALOG_REPORT },
 	{"cav", 1, 0, MODIFIER_CAV_SPEED },
+	{"cdda", 0, 0, MODIFIER_CDDA },
 	{"cdump", 0, 0, MODIFIER_CDUMP },
 	{"clv", 1, 0, MODIFIER_CLV_SPEED },
 	{"create", 0, 0, 'c'},
@@ -233,6 +318,7 @@ int main(int argc, char *argv[])
 	{"debug1", 1, 0, MODE_DEBUG_MAINT1 },
 	{"defective-dump", 1, 0, MODIFIER_DEFECTIVE_DUMP },
 	{"device", 0, 0, 'd'},
+	{"drive-test", 0, 0, MODE_DRIVE_TEST },
 	{"driver", 1, 0, MODIFIER_DRIVER },
         {"ecc", 1, 0, 'e'},
 	{"ecc-target", 1, 0, 'o'},
@@ -251,7 +337,10 @@ int main(int argc, char *argv[])
 	{"ignore-rs03-header", 0, 0, MODIFIER_IGNORE_RS03_HEADER },
 	{"internal-rereads", 1, 0, MODIFIER_INTERNAL_REREADS },
         {"image", 1, 0, 'i'},
+	{"json", 1, 0, MODIFIER_JSON },
 	{"jump", 1, 0, 'j'},
+	{"mapfile", 1, 0, MODIFIER_MAPFILE },
+	{"list-damaged-files", 0, 0, MODIFIER_LIST_DAMAGED_FILES },
 	{"marked-image", 1, 0, MODE_MARKED_IMAGE },
 	{"medium-info", 0, 0, MODE_MEDIUM_INFO },
 	{"merge-images", 1, 0, MODE_MERGE_IMAGES },
@@ -259,12 +348,14 @@ int main(int argc, char *argv[])
 	{"no-bdr-defect-management", 0, 0, MODIFIER_NO_BDR_DEFECT_MANAGEMENT },
 	{"no-progress", 0, 0, MODIFIER_NO_PROGRESS },
 	{"old-ds-marker", 0, 0, MODIFIER_OLD_DS_MARKER },
+	{"pause-after-errors", 1, 0, MODIFIER_PAUSE_AFTER_ERRORS },
 	{"permissive-medium-type", 0, 0, MODIFIER_PERMISSIVE_MEDIUM_TYPE },
 	{"prefetch-sectors", 1, 0, MODIFIER_PREFETCH_SECTORS },
         {"prefix", 1, 0, 'p'},
 	{"random-errors", 1, 0, MODE_RANDOM_ERR },
 	{"random-image", 1, 0, MODE_RANDOM_IMAGE },
 	{"random-seed", 1, 0, MODIFIER_RANDOM_SEED },
+	{"quiet", 0, 0, 'q'},
 	{"raw-mode", 1, 0, MODIFIER_RAW_MODE },
 	{"raw-sector", 1, 0, MODE_RAW_SECTOR},
 	{"read", 2, 0,'r'},
@@ -275,19 +366,24 @@ int main(int argc, char *argv[])
 	{"regtest", 0, 0, MODIFIER_REGTEST},
 	{"redundancy", 1, 0, 'n'},
 	{"resource-file", 1, 0, MODIFIER_RESOURCE_FILE},
+	{"rs04-memory", 1, 0, MODIFIER_RS04_MEMORY},
 	{"scan", 2, 0,'s'},
 	{"screen-shot", 0, 0, MODIFIER_SCREEN_SHOT },
+	{"sector-size", 1, 0, MODIFIER_SECTOR_SIZE },
 	{"set-version", 1, 0, MODIFIER_SET_VERSION},
 	{"send-cdb", 1, 0, MODE_SEND_CDB},
 	{"show-header", 1, 0, MODE_SHOW_HEADER},
 	{"show-sector", 1, 0, MODE_SHOW_SECTOR},
 	{"sim-cd", 2, 0, MODIFIER_SIMULATE_CD},
 	{"sim-defects", 1, 0, MODIFIER_SIMULATE_DEFECTS},
+	{"sim-toc", 1, 0, MODIFIER_SIMULATE_TOC},
 	{"speed-warning", 2, 0, MODIFIER_SPEED_WARNING},
 	{"spinup-delay", 1, 0, MODIFIER_SPINUP_DELAY},
 	{"strip", 0, 0, 'z'},
 	{"test", 2, 0, 't'},
+	{"test-and-copy", 0, 0, MODIFIER_TEST_AND_COPY},
         {"threads", 1, 0, 'x'},
+	{"time-limit", 1, 0, MODIFIER_TIME_LIMIT},
 	{"truncate", 2, 0, MODIFIER_TRUNCATE},
 	{"unlink", 0, 0, 'u'},
        	{"verbose", 0, 0, 'v'},
@@ -297,7 +393,7 @@ int main(int argc, char *argv[])
       };
 
       c = getopt_long(argc, argv, 
-		      "a:cd:e:fhi:j:lm::n:o:p:r::s::t::uvx:z",
+		      "a:cd:e:fhi:j:lm::n:o:p:qr::s::t::uvx:z",
 		      long_options, &option_index);
 
       if(c == -1) break;
@@ -308,6 +404,8 @@ int main(int argc, char *argv[])
 		      Closure->examineRS02 = TRUE; 
 	           if(strstr(optarg, "rs03") || strstr(optarg, "RS03"))
 		      Closure->examineRS03 = TRUE; 
+	           if(strstr(optarg, "rs04") || strstr(optarg, "RS04"))
+		      Closure->examineRS04 = TRUE; 
 		   break;	       
          case 'c': mode = MODE_SEQUENCE; sequence |= 1<<MODE_CREATE; break;
          case 'd': if(optarg) 
@@ -316,10 +414,16 @@ int main(int argc, char *argv[])
 	              Closure->device = g_strdup(optarg); 
 	              break;
                    }
-         case 'e': if(optarg) 
+         case 'e': if(optarg && ecc_given)  /* RS04 supplementary sets */
+		   {  if(!Closure->moreEccNames)
+			 Closure->moreEccNames = g_ptr_array_new_with_free_func(g_free);
+		      g_ptr_array_add(Closure->moreEccNames, g_strdup(optarg));
+		   }
+		   else if(optarg) 
 		   {  if(Closure->eccName)
 		         g_free(Closure->eccName);
 		      Closure->eccName = g_strdup(optarg);
+		      ecc_given = TRUE;
 		   }
 	           break;
          case 'f': mode = MODE_SEQUENCE; sequence |= 1<<MODE_FIX; break;
@@ -387,6 +491,7 @@ int main(int argc, char *argv[])
 		      g_sprintf(Closure->imageName,"%s.iso",optarg);
 		   }
 	           break;
+         case 'q': Closure->quiet = TRUE; break;
          case 'r': mode = MODE_SEQUENCE; sequence |= 1<<MODE_READ; 
 	           if(optarg) read_range = g_strdup(optarg);
 		   break;
@@ -410,8 +515,16 @@ int main(int argc, char *argv[])
 
          case  0 : break; /* flag argument */
 
+         case MODIFIER_ABORT_FILE:
+	   g_free(Closure->abortFile);
+	   Closure->abortFile = g_strdup(optarg);
+	   break;
          case MODIFIER_ADAPTIVE_READ:
 	   Closure->adaptiveRead = TRUE;
+	   break;
+         case MODIFIER_AUDIO_OFFSET:
+	   Closure->audioOffset = atoi(optarg);
+	   Closure->audioOffsetGiven = TRUE;
 	   break;
          case MODIFIER_AUTO_SUFFIX:
 	   Closure->autoSuffix = TRUE;
@@ -542,14 +655,42 @@ int main(int argc, char *argv[])
 	    }
 	 }
 	   break;
+	 case MODIFIER_MAPFILE:
+	    g_free(Closure->mapFile);
+	    Closure->mapFile = g_strdup(optarg);
+	    if(mode == MODE_NONE)
+	       mode = MODE_SEQUENCE;
+	    break;
+	 case MODIFIER_LIST_DAMAGED_FILES:
+	    Closure->listDamagedFiles = TRUE;
+	    if(mode == MODE_NONE)
+	       mode = MODE_SEQUENCE;
+	    break;
+	 case MODIFIER_CATALOG:
+	    g_free(Closure->catalogFile);
+	    Closure->catalogFile = g_strdup(optarg);
+	    break;
+	 case MODIFIER_CATALOG_REPORT:
+	    g_free(Closure->catalogReport);
+	    Closure->catalogReport = g_strdup(optarg);
+	    if(mode == MODE_NONE)
+	       mode = MODE_SEQUENCE;
+	    break;
 	 case MODIFIER_NO_BDR_DEFECT_MANAGEMENT:
 	    Closure->noBdrDefectManagement = TRUE;
+	    break;
+	 case MODIFIER_JSON:
+	    g_free(Closure->jsonFile);
+	    Closure->jsonFile = g_strdup(optarg);
 	    break;
 	 case MODIFIER_NO_PROGRESS:
 	    Closure->noProgress = 1;
 	    break;
 	 case MODIFIER_OLD_DS_MARKER:
 	    Closure->dsmVersion = 0;
+	    break;
+	 case MODIFIER_PAUSE_AFTER_ERRORS:
+	    sscanf(optarg, "%d:%d", &Closure->pauseAfterErrors, &Closure->pauseDuration);
 	    break;
 	 case MODIFIER_PERMISSIVE_MEDIUM_TYPE:
 	    Closure->permissiveMediumType = TRUE;
@@ -598,8 +739,16 @@ int main(int argc, char *argv[])
          case MODIFIER_READ_RAW:
 	   Closure->readRaw = TRUE;
 	   break;
+         case MODIFIER_CDDA:
+	   Closure->cdda = TRUE;
+	   break;
          case MODIFIER_REGTEST:
 	   Closure->regtestMode = TRUE;
+	   break;
+         case MODIFIER_RS04_MEMORY:
+	   Closure->rs04MemoryMiB = atoi(optarg);
+	   if(Closure->rs04MemoryMiB < 1 || Closure->rs04MemoryMiB > 1024*1024)
+	     Stop(_("--rs04-memory must be in range 1...%d"), 1024*1024);
 	   break;
          case MODIFIER_RESOURCE_FILE:
 	   if(Closure->dotFile)
@@ -621,8 +770,18 @@ int main(int argc, char *argv[])
  	    debug_mode_required = TRUE;
 	 } 
 	    break;
+         case MODIFIER_SECTOR_SIZE:
+	   Closure->sectorBytes = atoi(optarg);
+	   if(Closure->sectorBytes != 2048 && Closure->sectorBytes != 2324 && Closure->sectorBytes != 2352)
+	     Stop(_("--sector-size must be 2048, 2324 or 2352"));
+	   break;
         case MODIFIER_SIMULATE_CD:
 	   if(optarg) Closure->simulateCD = g_strdup(optarg);
+	   debug_mode_required = TRUE;
+	   break;
+        case MODIFIER_SIMULATE_TOC:
+	   g_free(Closure->simulateTOC);
+	   Closure->simulateTOC = g_strdup(optarg);
 	   debug_mode_required = TRUE;
 	   break;
         case MODIFIER_SIMULATE_DEFECTS:
@@ -633,9 +792,15 @@ int main(int argc, char *argv[])
          case MODIFIER_SPINUP_DELAY:
 	   if(optarg) Closure->spinupDelay = atoi(optarg);
 	   break;
+         case MODIFIER_TIME_LIMIT:
+	   Closure->timeLimit = atoi(optarg);
+	   break;
          case MODIFIER_SPEED_WARNING:
 	   if(optarg) Closure->speedWarning = atoi(optarg);
 	   else Closure->speedWarning=10;
+	   break;
+         case MODIFIER_TEST_AND_COPY:
+	   Closure->testAndCopy = TRUE;
 	   break;
          case MODIFIER_TRUNCATE: 
 	   if(optarg)                  /* debugging truncate mode */
@@ -679,6 +844,9 @@ int main(int argc, char *argv[])
          case MODE_MARKED_IMAGE:
 	   mode = MODE_MARKED_IMAGE;
 	   debug_arg = g_strdup(optarg);
+	   break;
+         case MODE_DRIVE_TEST:
+	   mode = MODE_DRIVE_TEST;
 	   break;
          case MODE_MEDIUM_INFO:
 	   mode = MODE_MEDIUM_INFO;
@@ -797,13 +965,22 @@ int main(int argc, char *argv[])
         The major modes can be executed in sequence, 
 	but not all combinations may be really useful. */
 
+   if(mode != MODE_NONE && (Closure->timeLimit > 0 || Closure->abortFile))
+      watchdog = start_watchdog();
+
    switch(mode)
    {  case MODE_SEQUENCE:
+	if(sequence & ~(1<<MODE_SCAN))  /* scanning does not use the image */
+	   ReportString("image", "path", Closure->imageName);
+
 	if(sequence & 1<<MODE_SCAN)
-	  ReadMediumLinear((gpointer)1);
+	{  ReportAction("scan");
+	   ReadMediumLinear((gpointer)1);
+	}
 
 	if(sequence & 1<<MODE_READ)
-	{  if(sequence & 1<<MODE_CREATE) 
+	{  ReportAction("read");
+	   if(sequence & 1<<MODE_CREATE) 
 	      Closure->readAndCreate = TRUE;
 	   if(Closure->adaptiveRead) 
 	        ReadMediumAdaptive((gpointer)0);
@@ -812,6 +989,9 @@ int main(int argc, char *argv[])
 
 	if(sequence & 1<<MODE_CREATE)
 	{  Method *method = FindMethod(Closure->methodName); 
+
+	   ReportAction("create");
+	   ReportString("ecc", "codec", Closure->methodName);
 
 	   if(!method) Stop(_("\nMethod %s not available.\n"
 			      "Use -m without parameters for a method list.\n"), 
@@ -824,6 +1004,7 @@ int main(int argc, char *argv[])
 	{  Method *method = NULL;
 	   Image *image;
 
+	   ReportAction("fix");
 	   PrintLog(_("\nOpening %s"), Closure->imageName);
 	   image = OpenImageFromFile(Closure->imageName, O_RDWR, IMG_PERMS);
 	   if(!image)
@@ -844,6 +1025,7 @@ int main(int argc, char *argv[])
 	   else if(image && image->eccMethod) method = image->eccMethod;
 	   else Stop("Internal error: No suitable method for repairing image.");
 
+	   ReportEccHeader(image->eccFileMethod ? image->eccFileHeader : image->eccHeader);
 	   method->fix(image);
 	}
 
@@ -851,6 +1033,7 @@ int main(int argc, char *argv[])
 	{  Method *method;
 	   Image *image;
 
+	   ReportAction("verify");
 	   image = OpenImageFromFile(Closure->imageName, O_RDONLY, IMG_PERMS);
 	   image = OpenEccFileForImage(image, Closure->eccName, O_RDONLY, IMG_PERMS);
 
@@ -860,8 +1043,13 @@ int main(int argc, char *argv[])
 	   else if(image && image->eccMethod) method = image->eccMethod;
 	   else if(!(method = FindMethod("RS01")))
 	           Stop(_("RS01 method not available for comparing files."));
-	     
+
+	   if(image)
+	     ReportEccHeader(image->eccFileMethod ? image->eccFileHeader : image->eccHeader);
 	   method->verify(image);
+
+	   if(!Closure->quickVerify)
+	      g_free(CheckXorrisoTags(Closure->imageName));
 	}
 	break;
 
@@ -916,6 +1104,11 @@ int main(int argc, char *argv[])
 	 RandomImage(Closure->imageName, debug_arg, 1);
 	 break;
 
+      case MODE_DRIVE_TEST:
+         if(!Closure->device) Closure->device = DefaultDevice();
+	 DriveTest(Closure->device);
+	 break;
+
       case MODE_MEDIUM_INFO:
          if(!Closure->device) Closure->device = DefaultDevice();
 	 PrintMediumInfo(NULL);
@@ -945,6 +1138,21 @@ int main(int argc, char *argv[])
 	break;
    }
 
+   /*** Write a ddrescue mapfile of the image if requested */
+
+   if(Closure->mapFile && mode == MODE_SEQUENCE)
+      WriteMapfile(Closure->imageName, Closure->mapFile);
+
+   /*** List the files containing missing sectors if requested */
+
+   if(Closure->listDamagedFiles && mode == MODE_SEQUENCE)
+      ListDamagedFiles(Closure->imageName);
+
+   /*** Print the medium history from a catalog file if requested */
+
+   if(Closure->catalogReport && mode == MODE_SEQUENCE)
+      CatalogReport(Closure->catalogReport);
+
    if(debug_arg) g_free(debug_arg);
 
    /*** If no mode was selected, print the help screen. */
@@ -966,34 +1174,42 @@ int main(int argc, char *argv[])
 	     "  dvdisaster -t, --test   # Test integrity of the .iso and .ecc files.\n"
 	     "  dvdisaster -z, --strip  # Strip ECC data from an augmented .iso.\n"
 	     "  dvdisaster -u, --unlink # Delete .iso files (when other actions complete)\n\n"));
+      PrintCLI(_("Exit codes: 0 ok, 1 error, 2 defects found, 3 not fully repairable (see man page).\n\n"));
 
       PrintCLI(_("Drive and file specification:\n"
 	     "  -d, --device device         - read from given device   (default: %s)\n"
 	     "  -p, --prefix prefix         - prefix of .iso/.ecc file (default: medium.*  )\n"
 	     "  -i, --image imagefile       - name of image file       (default: medium.iso)\n"
 	     "  -e, --ecc eccfile           - name of parity file      (default: medium.ecc)\n"
-	     "  -o, --ecc-target imagefile  - where to put ecc data in RS03\n"),
+	     "  -o, --ecc-target file|image - where to put ecc data in RS03/RS04\n"),
 	       Closure->device);
 
       PrintCLI("\n");
 
       PrintCLI(_("Tweaking options (see manual before using!)\n"));
-      PrintCLI(_("  -a, --assume x             - assume image is augmented with given codec (RS02 or RS03)\n"));
+      PrintCLI(_("  -a, --assume x             - assume image is augmented with given codec (RS02, RS03 or RS04)\n"));
       PrintCLI(_("  -j, --jump n               - jump n sectors forward after a read error (default: 16)\n"));
       PrintCLI(_("  -m, --method x             - list/select error correction methods (default: RS01)\n"));
       PrintCLI(_("  -n, --redundancy x         - error correction data redundancy\n"
 		 "                               e.g. 20%%, 32r (roots), 200m (MiB), normal, high\n"
-		 "                               for RS02/RS03 augmented images, also accepts a medium size:\n"
+		 "                               for RS02/RS03/RS04 augmented images, also accepts a medium size:\n"
 		 "                               CD, DVD, DVD9, BD, BD2, BDXL3, BDXL4,\n"
 		 "                               BDNODM, BD2NODM, BDXL3NODM, BDXL4NODM,\n"
 		 "                               or a raw sector count\n"));
+      PrintCLI(_("  -q, --quiet                - print only errors and warnings (to stderr)\n"));
       PrintCLI(_("  -v, --verbose              - more logs, set env VERBOSE=1 for pre-options parsing logs\n"));
       PrintCLI(_("  -x, --threads n            - use n threads for en-/decoding (if supported by codec)\n"));
+      PrintCLI(_("  --abort-file f             - stop the current action when file f appears\n"));
       PrintCLI(_("  --adaptive-read            - use optimized strategy for reading damaged media\n"));
+      PrintCLI(_("  --audio-offset n           - RS04: read offset of a CD-DA rip in samples (default: detect)\n"));
       PrintCLI(_("  --auto-suffix              - automatically add .iso and .ecc file suffixes\n"));
       PrintCLI(_("  --cache-size n             - image cache size in MiB during -c mode (default: 32MiB)\n"));
+      PrintCLI(_("  --catalog f                - append the result of each scan/read to catalog file f\n"));
+      PrintCLI(_("  --catalog-report f         - print the history of each medium in catalog file f\n"));
+      PrintCLI(_("  --cdda                     - read CD as 2352 byte sectors (.bin + .cue; automatic for audio CDs)\n"));
       PrintCLI(_("  --dao                      - assume DAO disc; do not trim image end\n"));
       PrintCLI(_("  --defective-dump d         - directory for saving incomplete raw sectors\n"));
+      PrintCLI(_("  --drive-test               - print what the drive can do (read-only queries)\n"));
 #ifdef SYS_LINUX
       PrintCLI(_("  --driver=sg/cdrom          - use sg(default) or alternative cdrom driver (see man page!)\n"));
 #endif
@@ -1005,10 +1221,14 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --ignore-fatal-sense       - continue reading after potentially fatal error conditon\n"));
       PrintCLI(_("  --ignore-iso-size          - ignore image size from ISO/UDF data (dangerous - see man page!)\n"));
       PrintCLI(_("  --internal-rereads n       - drive may attempt n rereads before reporting an error\n"));
+      PrintCLI(_("  --json f                   - write a JSON report of the results to file f (- for stdout)\n"));
+      PrintCLI(_("  --mapfile f                - write a GNU ddrescue mapfile of the image to file f\n"));
+      PrintCLI(_("  --list-damaged-files       - list the files of an ISO image containing missing sectors\n"));
       PrintCLI(_("  --medium-info              - print info about medium in drive\n"));
-      PrintCLI(_("  --no-bdr-defect-management - use bigger RS03 images for BD-R (see man page!)\n"));
+      PrintCLI(_("  --no-bdr-defect-management - use bigger RS03/RS04 images for BD-R (see man page!)\n"));
       PrintCLI(_("  --no-progress              - do not print progress information\n"));
       PrintCLI(_("  --old-ds-marker            - mark missing sectors compatible with dvdisaster <= 0.70\n"));
+      PrintCLI(_("  --pause-after-errors n[:s] - pause s seconds (default: 60) after every n read errors\n"));
       PrintCLI(_("  --prefetch-sectors n       - prefetch n sectors for RS03 encoding (uses ~nMiB)\n"));
       PrintCLI(_("  --raw-mode n               - mode for raw reading CD media (20 or 21)\n"));
       PrintCLI(_("  --read-attempts n-m        - attempts n up to m reads of a defective sector\n"));
@@ -1016,8 +1236,12 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --read-raw                 - performs read in raw mode if possible\n"));
       PrintCLI(_("  --regtest                  - tweaks output for compatibility with regtests\n"));
       PrintCLI(_("  --resource-file p          - get resource file from given path\n"));
+      PrintCLI(_("  --rs04-memory n            - RS04: memory budget in MiB for en-/decoding (default: 4096)\n"));
+      PrintCLI(_("  --sector-size n            - RS04: sector size of the data, 2048, 2324 or 2352 (ecc files)\n"));
       PrintCLI(_("  --speed-warning n          - print warning if speed changes by more than n percent\n"));
       PrintCLI(_("  --spinup-delay n           - wait n seconds for drive to spin up\n"));
+      PrintCLI(_("  --time-limit n             - stop the current action after n seconds\n"));
+      PrintCLI(_("  --test-and-copy            - audio CDs: read the tracks twice and compare their CRC32\n"));
       PrintCLI(_("  --version                  - print version and some configuration info\n"));
       PrintCLI(_("  --debug                    - allow advanced dangerous options (use with --help for a list)\n"));
 
@@ -1093,6 +1317,22 @@ int main(int argc, char *argv[])
    }
 #endif
    
+   if(mode == MODE_SEQUENCE)
+   {  guint64 size;
+
+      if((sequence & ~(1<<MODE_SCAN)) && LargeStat(Closure->imageName, &size))
+	ReportNumber("image", "size", size);
+      if(LargeStat(Closure->eccName, &size))
+      {  ReportString("ecc_file", "path", Closure->eccName);
+	 ReportNumber("ecc_file", "size", size);
+      }
+   }
+   WriteReport(NULL);
+   if(watchdog)
+   {  watchdog_done = TRUE;
+      g_thread_join(watchdog);
+   }
+
    FreeClosure();
    exit(exitCode);
 }

@@ -1,0 +1,55 @@
+9b5c6ccc5364b4658e853486d3fd29fb
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04i-tmp.iso: 10022 medium sectors.
+
+Fix mode(RS04i): Repairable sectors will be fixed in the image.
+    2 repaired sectors: 1008d 1050d 
+    1 repaired sectors: 1009d 
+    1 repaired sectors: 1010d 
+    1 repaired sectors: 1011d 
+    1 repaired sectors: 1012d 
+    1 repaired sectors: 1013d 
+    2 repaired sectors: 300c 1014d 
+    1 repaired sectors: 1015d 
+    1 repaired sectors: 1016d 
+    1 repaired sectors: 1017d 
+    1 repaired sectors: 1018d 
+    1 repaired sectors: 1019d 
+    1 repaired sectors: 1020d 
+    1 repaired sectors: 1021d 
+    1 repaired sectors: 1022d 
+    1 repaired sectors: 1023d 
+    1 repaired sectors: 1024d 
+    1 repaired sectors: 1025d 
+    1 repaired sectors: 1026d 
+    2 repaired sectors: 1027d 7999d 
+    1 repaired sectors: 1028d 
+    1 repaired sectors: 1029d 
+    1 repaired sectors: 1030d 
+    1 repaired sectors: 1031d 
+    1 repaired sectors: 1032d 
+    1 repaired sectors: 1033d 
+    1 repaired sectors: 1034d 
+    1 repaired sectors: 1035d 
+    1 repaired sectors: 1036d 
+    1 repaired sectors: 1037d 
+    1 repaired sectors: 1038d 
+    1 repaired sectors: 1039d 
+    1 repaired sectors: 1040d 
+    1 repaired sectors: 1041d 
+    2 repaired sectors: 1000d 1042d 
+    2 repaired sectors: 1001d 1043d 
+    2 repaired sectors: 1002d 1044d 
+    2 repaired sectors: 1003d 1045d 
+    2 repaired sectors: 1004d 1046d 
+    2 repaired sectors: 1005d 1047d 
+    2 repaired sectors: 1006d 1048d 
+    2 repaired sectors: 1007d 1049d 
+Repaired sectors: 53 (53 data, 0 crc, 0 ecc, 0 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  1.3; worst = 2.

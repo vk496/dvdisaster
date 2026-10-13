@@ -1,0 +1,20 @@
+54bfd0992385bac7820e26c5bca337ec
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening damaged.bin: 2940 medium sectors.
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+- read offset      : -1234 samples (64 of 64 probe sectors match)
+Image has been shifted by -1234 samples.
+    1 repaired sectors: 1999c 
+    1 repaired sectors: 2000c 
+    1 repaired sectors: 2001c 
+    1 repaired sectors: 9c 
+    1 repaired sectors: 10c 
+Repaired sectors: 5 (5 data, 0 crc, 0 ecc, 0 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  1.0; worst = 1.

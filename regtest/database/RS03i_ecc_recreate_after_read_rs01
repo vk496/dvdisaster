@@ -84,6 +84,8 @@ try_sector: trying sector 21000
 try_sector: read error, trying next header
 try_sector: trying sector 20850
 try_sector: no cookie, skipping current modulo
+try_sector: trying sector 21150
+try_sector: read error, trying next header
 RS02Recognize: quick RS02 search, attempting up to 3 sector reads max
 Medium rewriteable: FALSE
 FindHeaderInMedium: Trying modulo 4611686018427387904
@@ -162,6 +164,8 @@ RS03: tries left = 1, reading sector 8330
 RS03: tries left = 0, reading sector 8428
 RS03: max tries reached, stopping search
 RS03RecognizeImage: no RS03 data found
+...trying RS04
+RS04: looking for tags in sectors 20706 - 20999
 ...no augmented image detected.
 # Calling query_size()
 # *** query_size(Simulated CD drive 1.00) ***
@@ -229,6 +233,8 @@ try_sector: trying sector 21000
 try_sector: read error, trying next header
 try_sector: trying sector 20850
 try_sector: no cookie, skipping current modulo
+try_sector: trying sector 21150
+try_sector: read error, trying next header
 RS02Recognize: No EH, entering exhaustive search
 FindHeaderInMedium: Trying modulo 4611686018427387904
 FindHeaderInMedium: Trying modulo 2305843009213693952
@@ -947,6 +953,7 @@ RS03: try number = 622, reading sector 20418
 RS03: try number = 623, reading sector 20501
 ** All layers tested -> no RS03 data found
 RS03RecognizeImage: no RS03 data found
+...trying RS04
 ...no augmented image detected.
 GetImageFingerprint(16): read & cached
 : 21000 medium sectors.

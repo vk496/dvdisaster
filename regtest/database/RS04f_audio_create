@@ -1,0 +1,14 @@
+c419d9ae1f2a59f2a843294fdaac1329
+e2ce47584228ebbdb4cfaa143d669ca3
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04f-master.bin: 2296 medium sectors and 1792 bytes.
+Creating the error correction file with Method RS04:
+2000 data sectors of 2352 bytes, 408 ecc sectors (48+9 layers of 42 sectors; 18.9% redundancy).
+* Warning: Using redundancies below 20% may not give
+*          the expected data loss protection.
+Error correction file "rs04f-tmp.ecc" created.
+Make sure to keep this file on a reliable medium.

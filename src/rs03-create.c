@@ -1124,7 +1124,7 @@ static gpointer encoder_thread(ecc_closure *ec)
 	}
 	else
 #endif /* WITH_GUI_YES */
-	  PrintProgress(_("Ecc generation: %3d.%1d%%"), percent/10, percent%10);
+	  PrintProgressETA(ec->avgTimer, percent, _("Ecc generation: %3d.%1d%%"), percent/10, percent%10);
       }
       else g_mutex_unlock(ec->lock);
 
@@ -1292,6 +1292,7 @@ void RS03Create(void)
    }
 
    ec->image = image;
+   RefuseMultiFileImage(image);
 
    if(image->inLast == 2048)
         PrintLog(_(": %" PRId64 " medium sectors.\n"), image->sectorSize);
@@ -1301,6 +1302,8 @@ void RS03Create(void)
    /*** If the image already contains error correction information, remove it. */
 
    remove_old_ecc(ec);
+   if(Closure->eccTarget == ECC_IMAGE)
+     WarnAboutImagePadding(image);
 
    /*** Need to open ecc file too */ 
 
@@ -1398,7 +1401,9 @@ void RS03Create(void)
 
       answer = ModalWarning(GTK_MESSAGE_WARNING, GTK_BUTTONS_OK_CANCEL, NULL,
 			    "%s", _("BD-R size with no defect management enabled,\n"
-			      "remember it should you need to repair this image later!\n"));
+			      "remember it should you need to repair this image later!\n"
+			      "The image fills the medium completely, so make sure that your\n"
+			      "burning software does not add padding (e.g. xorriso -padding 0).\n"));
 
       if(!answer)
 	abort_encoding(ec, FALSE);

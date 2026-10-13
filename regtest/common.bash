@@ -365,6 +365,10 @@ function run_regtest()
 
       echo "LANG=en_EN.UTF-8 $NEWVER --regtest --no-progress -i${testiso} ${testeccopt} ${extra_args} ${testparms}" >>$LOGFILE
       LANG=en_EN.UTF-8 $NEWVER --regtest --no-progress -i${testiso} ${testeccopt} ${extra_args} ${testparms} 2>&1 | tail -n +4  >>$NEWLOG
+      local exit_status=${PIPESTATUS[0]}
+      if echo "$options" | grep -qw EXITCODE; then
+         echo "Exit status: $exit_status" >>$NEWLOG
+      fi
 
       if ! test -r $REFLOG; then
           pass="false"
@@ -386,7 +390,10 @@ function run_regtest()
          filter=cat
          echo "$options" | grep -qw SORTED && filter=sort
 
-         # for Windows, just remove any path we find:
+         # for Windows, remove the per-test temp dir first (keeps its subdirectories), then any path we find:
+         if test -n "$TEST_TMPDIR" && command -v cygpath >/dev/null; then
+             sed -i -e "s=$(cygpath -m "$TEST_TMPDIR")/==g" $NEWLOG
+         fi
          sed -i -re "s=[A-Z]:/[A-Za-z0-9_/-]+/==g" $NEWLOG
 
          # remove per-test temp dir, then general temp/iso dirs for reproducible output:

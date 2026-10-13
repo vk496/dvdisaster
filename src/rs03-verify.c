@@ -26,14 +26,6 @@
 
 #include "rs03-includes.h"
 
-#define EXIT_CODE_SIZE_MISMATCH 1
-#define EXIT_CODE_VERSION_MISMATCH 2
-
-#define EXIT_CODE_UNEXPECTED_EOF 10
-#define EXIT_CODE_MISSING_SECTOR 11
-#define EXIT_CODE_CHECKSUM_ERROR 12
-#define EXIT_CODE_SYNDROME_ERROR 13
-
 #ifdef WITH_GUI_YES
 
 /***
@@ -51,8 +43,11 @@ void ResetRS03VerifyWindow(Method *self)
    GuiSetLabelText(wl->cmpImageErasure, "");
    GuiSetLabelText(wl->cmpImagePrognosis, "");
    GuiSetLabelText(wl->cmpImageErasureCnt, "");
+   GuiSetLabelText(wl->cmpImageMargin, "");
+   GuiSetLabelText(wl->cmpImageMarginMsg, "");
    GuiSetLabelText(wl->cmpImagePrognosisMsg, "");
    GuiSetLabelText(wl->cmpImageResult, "");
+   GuiSetLabelText(wl->cmpXorrisoTags, "");
    GuiSwitchAndSetFootline(wl->cmpImageNotebook, 1, NULL, NULL);
 
    GuiSetLabelText(wl->cmpEccCreatedBy, "dvdisaster");
@@ -377,18 +372,30 @@ void CreateRS03VerifyWindow(Method *self, GtkWidget *parent)
    gtk_grid_attach(GTK_GRID(grid2), lab, 2, 7, 1, 1);
    y1++; y2++;
 
-   lab = wl->cmpImagePrognosis = gtk_label_new(NULL);
+   lab = wl->cmpImageMargin = gtk_label_new(NULL);
    gtk_label_set_xalign(GTK_LABEL(lab), 0.0);
    gtk_grid_attach(GTK_GRID(grid2), lab, 1, 8, 1, 1);
-   lab = wl->cmpImagePrognosisMsg = gtk_label_new(NULL);
+   lab = wl->cmpImageMarginMsg = gtk_label_new(NULL);
    gtk_label_set_xalign(GTK_LABEL(lab), 0.0);
    gtk_grid_attach(GTK_GRID(grid2), lab, 2, 8, 1, 1);
+   y1++; y2++;
+
+   lab = wl->cmpImagePrognosis = gtk_label_new(NULL);
+   gtk_label_set_xalign(GTK_LABEL(lab), 0.0);
+   gtk_grid_attach(GTK_GRID(grid2), lab, 1, 9, 1, 1);
+   lab = wl->cmpImagePrognosisMsg = gtk_label_new(NULL);
+   gtk_label_set_xalign(GTK_LABEL(lab), 0.0);
+   gtk_grid_attach(GTK_GRID(grid2), lab, 2, 9, 1, 1);
    y1++; y2++;
 
    lab = wl->cmpImageResult = gtk_label_new(NULL);
    gtk_label_set_xalign(GTK_LABEL(lab), 0.0);
    gtk_widget_set_margin_top(lab, 2);
-   gtk_grid_attach(GTK_GRID(grid2), lab, 1, 9, 2, 1);
+   gtk_grid_attach(GTK_GRID(grid2), lab, 1, 10, 2, 1);
+
+   lab = wl->cmpXorrisoTags = gtk_label_new(NULL);
+   gtk_label_set_xalign(GTK_LABEL(lab), 0.0);
+   gtk_grid_attach(GTK_GRID(grid2), lab, 1, 11, 2, 1);
 }
 
 #endif /* WITH_GUI_YES */
@@ -410,6 +417,7 @@ typedef struct
    Bitmap *map;
    unsigned char crcSum[16];
    unsigned char *eccBlock[256];
+   guint8 synBlock[GF_FIELDMAX*2048];
    GaloisTables *gt;
    ReedSolomonTables *rt;
 } verify_closure;
@@ -476,6 +484,8 @@ static int prognosis(verify_closure *vc, gint64 missing, gint64 expected)
    /* now see what is correctable */
    
    recoverable = expected - missing + correctable;
+   ReportNumber("verify", "recoverable_sectors", recoverable);
+   ReportNumber("verify", "worst_ecc_block_erasures", worst_ecc);
 
    if(damaged_sectors > 0)
    {  int percentage  = (1000*recoverable) / expected;
@@ -483,16 +493,27 @@ static int prognosis(verify_closure *vc, gint64 missing, gint64 expected)
       PrintLog(_("- erasure counts   :  avg =  %.1f; worst = %d per ecc block.\n"),
 	      (double)damaged_sectors/(double)damaged_eccsecs,worst_ecc);
 
+      PrintLog(_("- ecc margin       : worst block uses %d of %d roots (%d%%)\n"),
+	       worst_ecc, lay->nroots, (100*worst_ecc)/lay->nroots);
+
       PrintLog(_("- prognosis        : %" PRId64 " of %" PRId64 " sectors recoverable (%d.%d%%)\n"),
 	       recoverable, expected, percentage/10, percentage%10);
+      SetExitCode(worst_ecc <= lay->nroots && recoverable >= expected
+		  ? EXIT_CODE_DEFECTS : EXIT_CODE_DATA_LOSS);
 
       GuiSetLabelText(vc->wl->cmpImageErasure, _("Erasure counts:"));
+      GuiSetLabelText(vc->wl->cmpImageMargin, _("Ecc margin:"));
       GuiSetLabelText(vc->wl->cmpImagePrognosis, _("Prognosis:"));
 
       GuiSetLabelText(vc->wl->cmpImageErasureCnt,
 		      _("<span %s>avg =  %.1f; worst = %d per ecc block.</span>"),
 		      worst_ecc <= lay->nroots ? Closure->greenMarkup : Closure->redMarkup,
 		      (double)damaged_sectors/(double)damaged_eccsecs,worst_ecc);
+
+      GuiSetLabelText(vc->wl->cmpImageMarginMsg,
+		      _("<span %s>worst block uses %d of %d roots (%d%%)</span>"),
+		      worst_ecc <= lay->nroots ? Closure->greenMarkup : Closure->redMarkup,
+		      worst_ecc, lay->nroots, (100*worst_ecc)/lay->nroots);
 
       GuiSetLabelText(vc->wl->cmpImagePrognosisMsg,
 		      _("<span %s>%" PRId64 " of %" PRId64 " sectors recoverable (%d.%d%%)</span>"),
@@ -553,7 +574,6 @@ static int check_syndromes(verify_closure *vc)
 
    for(ecc_block=0; ecc_block<lay->sectorsPerLayer; ecc_block++)
    {  gint64 num_sectors = 0; 
-      unsigned char data[GF_FIELDMAX];
 
       /* Check for user interruption */
 
@@ -590,13 +610,13 @@ static int check_syndromes(verify_closure *vc)
 
       bad_counted = FALSE;
 
-      for(i=0; i<2048; i++) 
-      {  int result;
+      CalcSyndromes(vc->rt, vc->eccBlock, 2048*cache_idx, vc->synBlock);
 
-	 for(j=0; j<GF_FIELDMAX; j++)
-	   data[j] = vc->eccBlock[j][2048*cache_idx+i];
+      for(i=0; i<2048; i++)
+      {  int result = 0;
 
-	 result = TestErrorSyndromes(vc->rt, data);
+	 for(j=0; j<lay->nroots; j++)
+	   result |= vc->synBlock[2048*j+i];
 
 	 if(result)
 	 {  ecc_bad_sub++;
@@ -647,7 +667,7 @@ static int check_syndromes(verify_closure *vc)
       PrintLog(_("* Ecc block test   : %" PRId64 " good, %" PRId64 " bad; %" PRId64 " bad sub blocks\n"),
 	       ecc_good, ecc_bad, ecc_bad_sub);
 
-      exitCode = EXIT_CODE_SYNDROME_ERROR;
+      SetExitCode(EXIT_CODE_DEFECTS);
    }
    return ecc_bad;
 }
@@ -763,7 +783,7 @@ void RS03Verify(Image *image)
 
 	 PrintLog(_("* Warning          : %s\n"), msg);
 	 g_free(msg);
-	 exitCode = EXIT_CODE_SIZE_MISMATCH;
+	 SetExitCode(EXIT_CODE_DEFECTS);
       }
    }
    
@@ -848,7 +868,7 @@ void RS03Verify(Image *image)
       if(!ecc_advice) 
 	ecc_advice = g_strdup_printf(_("<span %s>Please upgrade your version of dvdisaster!</span>"), Closure->redMarkup);
 
-      exitCode = EXIT_CODE_VERSION_MISMATCH;
+      SetExitCode(EXIT_FAILURE);
    }
 
    g_free(version);
@@ -876,6 +896,7 @@ void RS03Verify(Image *image)
 	 { 
 	   if(memcmp(image->imageFP, eh->mediumFP, 16)) 
 	   {  PrintLog(_("* fingerprint match: MISMATCH - .iso and .ecc don't belong together!\n"));
+	      SetExitCode(EXIT_CODE_DEFECTS);
 
 	      GuiSetLabelText(wl->cmpEccFingerprint, 
 			      _("<span %s>mismatch</span>"), Closure->redMarkup);
@@ -990,6 +1011,7 @@ void RS03Verify(Image *image)
       else
 	PrintLog(_("* medium sectors   : %s (%s expected)\n"),
 		 image_size, expected_size);
+      SetExitCode(EXIT_CODE_DEFECTS);
       g_free(image_size);
       g_free(expected_size);
    }
@@ -1102,7 +1124,7 @@ void RS03Verify(Image *image)
 	    else ecc_missing++;
 	 }
 	 defective = TRUE;
-	 exitCode = EXIT_CODE_MISSING_SECTOR;
+	 SetExitCode(EXIT_CODE_DEFECTS);
       }
 
       /* Report dead sectors. Combine subsequent missing sectors into one report. */
@@ -1144,7 +1166,7 @@ void RS03Verify(Image *image)
 	    data_crc_errors++;
 	    new_crc_errors++;
 	    defective = TRUE;
-	    exitCode = EXIT_CODE_CHECKSUM_ERROR;
+	    SetExitCode(EXIT_CODE_DEFECTS);
 	 }
       }
       crc_idx++;
@@ -1251,6 +1273,11 @@ void RS03Verify(Image *image)
    AsciiDigest(data_digest, medium_sum);
 
    /* Do a resume of our findings */ 
+
+   ReportNumber("verify", "missing_sectors", total_missing);
+   ReportNumber("verify", "crc_errors", data_crc_errors);
+   if(!data_missing)
+      ReportString("verify", "data_md5", data_digest);
 
    if(!total_missing && !data_crc_errors && !csc->signatureErrors)
       PrintLog(_("- good image/file  : all sectors present\n"
@@ -1360,5 +1387,12 @@ void RS03Verify(Image *image)
    /*** Close and clean up */
 
 terminate:
+   if(Closure->guiMode && !Closure->quickVerify)
+   {  char *tags = CheckXorrisoTags(Closure->imageName);
+
+      GuiSetLabelText(wl->cmpXorrisoTags, "%s", tags ? tags : "");
+      g_free(tags);
+   }
+
    cleanup((gpointer)vc);
 }

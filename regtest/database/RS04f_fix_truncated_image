@@ -1,0 +1,49 @@
+85a24eb529119e79c540b623f47fc2a3
+210c7a5b81e68f8dbc978010cfb9eceb
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04f-tmp.iso: 7900 medium sectors.
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+    3 repaired sectors: 7920d 7956d 7992d 
+    3 repaired sectors: 7921d 7957d 7993d 
+    3 repaired sectors: 7922d 7958d 7994d 
+    3 repaired sectors: 7923d 7959d 7995d 
+    3 repaired sectors: 7924d 7960d 7996d 
+    3 repaired sectors: 7925d 7961d 7997d 
+    3 repaired sectors: 7926d 7962d 7998d 
+    3 repaired sectors: 7927d 7963d 7999d 
+    2 repaired sectors: 7928d 7964d 
+    2 repaired sectors: 7929d 7965d 
+    2 repaired sectors: 7930d 7966d 
+    2 repaired sectors: 7931d 7967d 
+    2 repaired sectors: 7932d 7968d 
+    2 repaired sectors: 7933d 7969d 
+    2 repaired sectors: 7934d 7970d 
+    2 repaired sectors: 7935d 7971d 
+    3 repaired sectors: 7900d 7936d 7972d 
+    3 repaired sectors: 7901d 7937d 7973d 
+    3 repaired sectors: 7902d 7938d 7974d 
+    3 repaired sectors: 7903d 7939d 7975d 
+    3 repaired sectors: 7904d 7940d 7976d 
+    3 repaired sectors: 7905d 7941d 7977d 
+    3 repaired sectors: 7906d 7942d 7978d 
+    3 repaired sectors: 7907d 7943d 7979d 
+    3 repaired sectors: 7908d 7944d 7980d 
+    3 repaired sectors: 7909d 7945d 7981d 
+    3 repaired sectors: 7910d 7946d 7982d 
+    3 repaired sectors: 7911d 7947d 7983d 
+    3 repaired sectors: 7912d 7948d 7984d 
+    3 repaired sectors: 7913d 7949d 7985d 
+    3 repaired sectors: 7914d 7950d 7986d 
+    3 repaired sectors: 7915d 7951d 7987d 
+    3 repaired sectors: 7916d 7952d 7988d 
+    3 repaired sectors: 7917d 7953d 7989d 
+    3 repaired sectors: 7918d 7954d 7990d 
+    3 repaired sectors: 7919d 7955d 7991d 
+Repaired sectors: 100 (100 data, 0 crc, 0 ecc, 0 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  2.8; worst = 3.

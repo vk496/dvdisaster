@@ -18,10 +18,21 @@ This version is built on top of the latest upstream version, with the following 
 - Added an option to use more space for ECC on BD-R when using RS03 (`--no-bdr-defect-management`)
 - Re-enabled adaptive reading for RS01 and RS02, and optionally for RS03 on user request (more on that below)
 - Ability to strip an augmented image from its additional ECC-data
+- New experimental RS04 codec with long codewords and self-describing layout (more on that below)
+- List which files of an ISO image are affected by unreadable sectors (`--list-damaged-files`)
+- Reading of multi-session discs (all sessions in one image) and of audio CDs (2352-byte `.bin` + `.cue`, with C2 error pointers);
+  Video CD, PlayStation and CD-i discs (Mode 2 Form 2 sectors) are read the same way, with EDC checks of the data sectors
+- Audio CD rips get AccurateRip v1/v2 and CTDB checksums and CD-TEXT in the `.cue`, and an optional test & copy pass (`--test-and-copy`)
+- Optional pause after a given number of read errors, to let drives that overheat on damaged media cool down (`--pause-after-errors`)
+- Drive capability report (`--drive-test`): profiles, raw/C2/CD-DA reading support and what the drive is suitable for, using read-only commands
+- A helper script that turns a folder into a protected disc in one step: it builds the ISO image with xorriso, augments it,
+  burns it (also as a further session of a multi-session disc) and verifies it by reading it back ([contrib/dvdisaster-burn.sh](contrib/dvdisaster-burn.sh))
 - A new CLI-only version, not depending on gtk (`./configure --with-gui=no && make clean && make -j4`)
+- Scripting support: documented exit codes, a machine-readable JSON report (`--json`) and a quiet mode (`-q`)
 - GUI codebase ported from gtk2 to gtk3 to ensure future-proofness
 - Windows and macOS builds are supported again, those were dropped upstream a few versions back
-- Non-regression tests on each code change, along with prebuilt binaries for Linux64, Windows32/64 and macOS, for both CLI and GUI versions
+- The Windows GUI build can also be used from the command line: run `dvdisaster` (not `dvdisaster.exe`) from cmd or PowerShell, this picks the bundled `dvdisaster.com` console launcher, which waits for completion and returns the exit code
+- Non-regression tests on each code change (also run under AddressSanitizer/UBSan), along with prebuilt binaries for Linux64, Windows32/64 and macOS, for both CLI and GUI versions
 - Fixed a bunch of other (minor) quirks, a few (minor) bugs, added a couple other (minor) features
 
 Please refer to the [CHANGELOG](CHANGELOG) for all the details.
@@ -30,7 +41,7 @@ This version will never break compatibility with upstream versions,
 the goal is to ensure an optical media protected by upstream dvdisaster will still be able to be repaired
 with this version, decades from now. Regression tests are here to ensure this is the case.
 
-# :twisted_rightwards_arrows: 3 available protection modes ("codecs")
+# :twisted_rightwards_arrows: 4 available protection modes ("codecs")
 
 For a more detailed explanation of the algorithms, please refer to the [codecs specification PDF](documentation/codecs.pdf).
 
@@ -65,26 +76,62 @@ There are, however, a few cons that must be noted for RS03:
   correction data has slighly less (around -3%) error correction capacity than RS02 on images with equal size. This is
   usually considered a cheap price to pay for the added robustness against corruption.
 
+:arrow_forward: **RS04** (experimental, only available in this fork for now) is a further development of RS03. It can create
+both error correction files and augmented images, keeps the RS03 layout idea (the image is split into layers, each codeword
+takes one sector of every layer) and the robustness of the recovery data itself, with the following added features:
+
+- It uses Reed-Solomon over GF(2^16), so a codeword can span thousands of layers instead of 255. This makes a big
+  difference when the damage is scattered over the disc (worn dye, many small scratches): with ~14% redundancy on a
+  BD-25, RS03 reliably survives about 5% of such losses, RS04 about 11.6% (the theoretical maximum being 12.5%).
+  Against one contiguous damaged area, e.g. the outer edge going bad, both are equally good.
+- Small self-describing tags are stored all over the error correction data, so RS04 never needs to know the medium size:
+  augmented images can have any size, and you don't have to remember any setting to repair them.
+- Multi-session discs: each session is augmented on its own, and reading the disc then verifies/repairs all sessions at once.
+- Error correction files for other sector formats: CD-DA audio rips (2352 bytes, drive read offsets are detected
+  automatically; ripping again with the ecc file checks every sector) and Mode 2 Form 2 tracks (VCD/SVCD, 2324 bytes).
+- BIN/CUE and GDI sets as written by redumper, DiscImageCreator or Aaru (one `.bin` per track) can be protected by
+  a single error correction file: pass the `.cue` or `.gdi` file as the image (`-i disc.cue -mRS04 -o file -c`).
+- Intelligent adaptive reading is available, as for RS02.
+- More error correction can be added later: create another RS04 ecc file for the (augmented) image, possibly with a
+  different redundancy, and give all of them with `-e` (or a directory with `-e`). Verify and fix combine all sets,
+  so damage which neither set could repair alone may still be recoverable.
+
+There are, however, a few cons that must be noted for RS04:
+
+- It's new. The format is fully specified and covered by regression tests, but it hasn't seen real-world use yet:
+  keep using RS02/RS03 for anything important until RS04 had more testing, or use both.
+- Long codewords need more memory: by default RS04 sizes its codewords for a 4 GiB memory budget (`--rs04-memory`).
+  Any RS04 data can be repaired with less memory, it's just slower, especially for images stored on a hard disk.
+- Error correction data created by RS04 can't be used by upstream dvdisaster versions.
+
+The format is described in the [codecs specification PDF](documentation/codecs.pdf), and the layout choices are justified by
+the damage simulator in [contrib/rs04-layout-sim.py](contrib/rs04-layout-sim.py).
+
 # :mag: Comparison table
 
 This attempts to summarize the differences, pros and cons of each codec:
 
-| Codecs                               | RS01 (separate file, obsolete) | RS02 (augmented image)         | RS03 (in separate file mode)   | RS03 (in augmented image mode) |
-|--------------------------------------|--------------------------------|--------------------------------|--------------------------------|--------------------------------|
-| Robustness :one:                     | :star:                         | :star::star::star:             | :star::star::star::star::star: | :star::star::star::star::star: |
-| Space efficiency                     | :star::star:                   | :star::star::star::star::star: | :star::star::star::star:       | :star::star::star::star:       |
-| Computational generation speed :two: | :star::star:                   | :star::star:                   | :star::star::star::star::star: | :star::star::star::star::star: |
-| Computational repair speed :two:     | :star::star::star:             | :star::star::star:             | :star::star::star:             | :star::star::star:             |
-| Damaged media recovery speed :three: | :star:                         | :star::star::star:             | :star:                         | :star:                         |
-| Supports customizing redundancy size | :heavy_check_mark:             | :heavy_check_mark:             | :heavy_check_mark:             | :x: :four:                     |
+| Codecs                               | RS01 (separate file, obsolete) | RS02 (augmented image)         | RS03 (in separate file mode)   | RS03 (in augmented image mode) | RS04 (file or augmented image) |
+|--------------------------------------|--------------------------------|--------------------------------|--------------------------------|--------------------------------|--------------------------------|
+| Robustness :one:                     | :star:                         | :star::star::star:             | :star::star::star::star::star: | :star::star::star::star::star: | :star::star::star::star::star: |
+| Space efficiency                     | :star::star:                   | :star::star::star::star::star: | :star::star::star::star:       | :star::star::star::star:       | :star::star::star::star:       |
+| Computational generation speed :two: | :star::star::star:             | :star::star::star:             | :star::star::star::star::star: | :star::star::star::star::star: | :star::star::star::star:       |
+| Computational repair speed :two:     | :star::star::star::star:       | :star::star::star::star:       | :star::star::star::star:       | :star::star::star::star:       | :star::star::star::star:       |
+| Damaged media recovery speed :three: | :star:                         | :star::star::star:             | :star:                         | :star:                         | :star::star::star:             |
+| Supports customizing redundancy size | :heavy_check_mark:             | :heavy_check_mark:             | :heavy_check_mark:             | :x: :four:                     | :heavy_check_mark:             |
+| Tolerance to scattered damage :five: | :star::star:                   | :star::star:                   | :star::star:                   | :star::star:                   | :star::star::star::star::star: |
+| Multi-session discs                  | :x:                            | :x:                            | :x:                            | :x:                            | :heavy_check_mark:             |
+| Audio CD / VCD rips                  | :x:                            | :x:                            | :x:                            | :x:                            | :heavy_check_mark:             |
 
 :one: Here we're talking about the robustness against corruption of the dvdisaster-added ECC parts _themselves_. The higher the ranking, the less it is likely than a few badly located damaged sectors render the whole correction impossible because they affect dvdisaster metadata on-disc. For example, corruption of the first dozens of sectors of an image can make RS02 entirely unusable regardless of the redundancy data originally stored on it.
 
 :two: When algorithm is CPU-bound, i.e. generating or repairing an image stored on a SSD/NVMe drive where the storage i/o speed is not an issue.
 
-:three: Using adaptive reading when supported (RS02), limiting the number of damaged sectors that need to be read to what is strictly necessary for repair. Using linear reading otherwise (RS03 and separate file codecs), assuming a badly damaged media, taking into account the time the drive takes to try to read damaged sectors.
+:three: Using adaptive reading when supported (RS02, RS04), limiting the number of damaged sectors that need to be read to what is strictly necessary for repair. Using linear reading otherwise (RS03 and separate file codecs), assuming a badly damaged media, taking into account the time the drive takes to try to read damaged sectors.
 
 :four: The robustness of RS03 comes at the cost of having to augment images strictly to well-known media sizes, as explained in the previous section above. This usually doesn't make much difference as long as you intend to burn the augmented image to a classic medium (CD-R, DVD-R, BD-R, ...).
+
+:five: Sectors lost at random places all over the disc (e.g. worn dye or many small scratches), as opposed to one contiguous damaged area. With ~14% redundancy on a BD-25, RS01-RS03 reliably survive about 5% of such losses and RS04 about 11.6%; see the RS04 description above.
 
 # :bulb: Rationale
 

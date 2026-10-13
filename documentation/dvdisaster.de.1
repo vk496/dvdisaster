@@ -25,16 +25,27 @@ oder Kratzer
 .IR n% \|]
 .RB [\| -m
 .IR n \|]
+.RB [\| -q \|]
 .RB [\| -v \|]
 .RB [\| -x
 .IR n \|]
+.RB [\| \-\-abort-file
+.IR f \|]
 .RB [\| \-\-adaptive-read \|]
+.RB [\| \-\-audio-offset
+.IR n \|]
 .RB [\| \-\-auto-suffix \|]
 .RB [\| \-\-cache-size
 .IR n \|]
+.RB [\| \-\-cdda \|]
+.RB [\| \-\-catalog
+.IR f \|]
+.RB [\| \-\-catalog-report
+.IR f \|]
 .RB [\| \-\-dao \|]
 .RB [\| \-\-defective-dump \|
 .IR d \|]
+.RB [\| \-\-drive-test \|]
 .RB [\| \-\-driver \|
 .IR d \|]
 .RB [\| \-\-eject \|]
@@ -48,9 +59,16 @@ oder Kratzer
 .RB [\| \-\-ignore-iso-size \|]
 .RB [\| \-\-internal-rereads
 .IR n \|]
+.RB [\| \-\-json
+.IR file \|]
+.RB [\| \-\-mapfile
+.IR f \|]
+.RB [\| \-\-list-damaged-files \|]
 .RB [\| \-\-medium-info \|]
 .RB [\| \-\-no-progress \|]
 .RB [\| \-\-old-ds-marker \|]
+.RB [\| \-\-pause-after-errors
+.IR n[:s] \|]
 .RB [\| \-\-prefetch-sectors
 .IR n \|]
 .RB [\| \-\-raw-mode
@@ -63,10 +81,17 @@ oder Kratzer
 .RB [\| \-\-regtest \|]
 .RB [\| \-\-resource-file
 .IR n \|]
+.RB [\| \-\-rs04-memory
+.IR n \|]
+.RB [\| \-\-sector-size
+.IR n \|]
 .RB [\| \-\-speed-warning
 .IR n \|]
 .RB [\| \-\-spinup\-delay
 .IR n \|]
+.RB [\| \-\-time-limit
+.IR n \|]
+.RB [\| \-\-test-and-copy \|]
 .RB [\| \-\-version \|]
 
 .SH BESCHREIBUNG
@@ -82,6 +107,13 @@ Sektoren zu rekonstruieren.
 \fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-s\fP
 \[:U]berpr\[:u]ft den Datentr\[:a]ger in Laufwerk \fI/dev/hdc\fP auf Fehler.
 .TP
+\fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-e\fP \fIkorr.ecc\fP \fB-s\fP
+\[:U]berpr\[:u]ft den Datentr\[:a]ger in Laufwerk \fI/dev/hdc\fP mit Hilfe der
+Fehlerkorrektur-Datei \fIkorr.ecc\fP, ohne ein Abbild zu erstellen: alle Sektoren
+m\[:u]ssen lesbar sein und zu ihren CRC-Pr\[:u]fsummen aus \fIkorr.ecc\fP passen.
+Bei erweiterten Datentr\[:a]gern wird \fB-e\fP weggelassen.
+Der R\[:u]ckgabewert ist nur dann 0, wenn keine Fehler gefunden wurden.
+.TP
 \fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-i\fP \fIabbild.iso\fP \fB-r\fP
 Erstellt ein Abbild vom Datentr\[:a]ger in Laufwerk \fI/dev/hdc\fP als Datei \fIabbild.iso\fP.
 .TP
@@ -96,6 +128,10 @@ Erstellt ein Abbild wie oben beschrieben. F\[:u]r besch\[:a]digte Sektoren werde
 mindestens \fIn\fP und h\[:o]chstens \fIm\fP Leseversuche unternommen. Die
 Lesbarkeit von besch\[:a]digten CD-Datentr\[:a]gern kann in Verbindung mit
 \fB--read-raw\fI besser werden.
+.TP
+\fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-i\fP \fIaudio.bin\fP \fB-r\fP
+Liest eine Audio-CD in die Datei \fIaudio.bin\fP (2352 Bytes pro Sektor)
+und schreibt das Cue-Sheet \fIaudio.cue\fP; siehe \fB--cdda\fP.
 .TP
 \fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-i\fP \fIabbild.iso\fP \fB-e\fP \fIkorr.ecc\fP \fB-r\fP \fB--adaptive-read\fP
 Verwendet die angepasste Lesestrategie, um ein Abbild vom 
@@ -140,12 +176,24 @@ Erzeugt Fehlerkorrektur-Daten f\[:u]r das Abbild.
 Versucht das Abbild mit Hilfe der Fehlerkorrektur-Daten zu reparieren.
 .TP
 .B \-s, \-\-scan
-Untersucht den Datentr\[:a]ger auf Lesefehler.
+Untersucht den Datentr\[:a]ger auf Lesefehler. Wenn Fehlerkorrektur-Daten
+vorhanden sind (eine mit \-e angegebene Fehlerkorrektur-Datei oder ein
+erweiterter Datentr\[:a]ger), werden die Sektoren zus\[:a]tzlich mit deren
+CRC-Pr\[:u]fsummen verglichen. Es wird kein Abbild geschrieben.
+Die letzte Zeile fasst das Ergebnis zusammen. Der R\[:u]ckgabewert ist 0, wenn
+alle Sektoren lesbar waren und ihre CRC-Pr\[:u]fsummen stimmen, sonst ungleich 0.
+Ob ein besch\[:a]digter Datentr\[:a]ger noch wiederhergestellt werden kann, zeigt
+\-t, nachdem ein Abbild mit \-r eingelesen wurde.
 .TP
 .B \-t, \-\-test, \-tq, \-test=q
 Pr\[:u]ft die Struktur der .iso und .ecc \- Dateien.
 Bei Angabe der "q"-Option werden nur die Informationen ausgegeben,
 die ohne vollst\[:a]ndiges Lesen der Dateien ermittelt werden k\[:o]nnen.
+Enth\[:a]lt das Abbild MD5-Pr\[:u]fsummen, wie sie
+.B xorriso \-md5 on
+schreibt (Superblock-, Verzeichnisbaum- und Sitzungs-Pr\[:u]fsummen),
+so pr\[:u]ft der vollst\[:a]ndige Test die Sektoren des Abbilds auch damit.
+Dies funktioniert auch ohne Fehlerkorrektur-Daten.
 .TP
 .B \-u, \-\-unlink
 L\[:o]scht .iso - Dateien nach Beenden der vorherigen Aktionen.
@@ -161,12 +209,27 @@ Anfang der .iso/.ecc - Dateien (Standard: medium.* ).
 .TP
 .B \-i, \-\-image imagefile
 Name der Abbild - Datei (Standard: medium.iso).
+Zum Erzeugen, Pr\[:u]fen und Reparieren von RS04-Fehlerkorrektur-Dateien (\-o file)
+kann stattdessen ein Cue-Sheet (.cue) oder eine Dreamcast-.gdi-Datei angegeben
+werden, z.B. ein mit redumper erstellter Abzug mit einer .bin-Datei pro Spur.
+Deren Dateien werden in der Reihenfolge des Sheets als ein Abbild mit
+2352-Byte-Sektoren verwendet; Pregaps, die nicht in den Dateien gespeichert sind,
+geh\[:o]ren nicht zum Abbild. Eine Reparatur schreibt in die .bin-Dateien zur\[:u]ck.
+Unterst\[:u]tzt werden nur BINARY-Dateien mit 2352-Byte-Sektoren (AUDIO, MODE1/2352,
+MODE2/2352, CDI/2352). Nur die Gr\[:o]\[ss]e der letzten Datei kann bei der Reparatur
+korrigiert werden; eine fehlende oder verk\[:u]rzte Datei dazwischen kann nicht
+wiederhergestellt werden.
 .TP
 .B \-e, \-\-ecc eccfile
 Name der Fehlerkorrektur-Datei (Standard: medium.ecc).
+Beim Lesen, Reparieren und Pr\[:u]fen darf \fIeccfile\fP auch ein Verzeichnis sein;
+dann wird die .ecc-Datei darin verwendet, deren Fingerabdruck zum Datentr\[:a]ger oder Abbild passt.
+Bei RS04 darf \fB-e\fP mehrfach angegeben werden (oder ein Verzeichnis mehrere
+passende .ecc-Dateien enthalten): Reparieren und Pr\[:u]fen verwenden dann alle
+RS04-Datens\[:a]tze des Abbilds gemeinsam, auch die eines erweiterten Abbilds.
 .TP
 .B \-o, \-\-ecc-target file|image
-Gibt an ob mit RS03 Fehlerkorrektur-Dateien oder erweiterte
+Gibt an ob mit RS03 und RS04 Fehlerkorrektur-Dateien oder erweiterte
 Abbilder erzeugt werden sollen (Standard: erweiterte Abbilder).
 .PP
 
@@ -256,20 +319,38 @@ Es wird automatisch die n\[:a]chste passende Datentr\[:a]gergr\[:o]\[ss]e ausgew
 .B \-m, \-\-method n
 Fehlerkorrektur-Methoden anzeigen/ausw\[:a]hlen (Standard: RS01).
 .RS
-M\[:o]gliche Werte sind RS01 und RS02.
+M\[:o]gliche Werte sind RS01, RS02, RS03 und RS04.
 .RE
+.TP
+.B \-q, \-\-quiet
+gibt nur Fehlermeldungen und Warnungen aus, und zwar auf stderr.
+N\[:u]tzlich zusammen mit \-\-json und dem Exit-Status (siehe EXIT-STATUS).
 .TP
 .B \-v, \-\-verbose n%
 mehr erl\[:a]uternde Ausgaben
 .TP
 .B \-x, \-\-threads n
-Verwende n Kontrollf\[:a]den f\[:u]r den RS03-Kodierer/Dekodierer. Empfohlen
+Verwende n Kontrollf\[:a]den f\[:u]r den RS03- und RS04-Kodierer/Dekodierer. Empfohlen
 sind 2 bzw. 4 Kontrollf\[:a]den f\[:u]r 2- bzw. 4-Kern-Prozessoren. Lassen Sie
 auf gr\[:o]\[ss]eren Systemen einen Kontrollfaden f\[:u]r Verwaltungszwecke frei,
 d.h. benutzen Sie 7 Kontrollf\[:a]den auf einem 8-Kern-System.
 .TP
+.B \-\-abort-file f
+bricht die laufende Aktion ab (wie der Stop-Knopf der graphischen Oberfl\[:a]che),
+sobald die Datei f existiert. N\[:u]tzlich f\[:u]r unbeaufsichtigte L\[:a]ufe.
+.TP
 .B \-\-adaptive-read
 verwende optimierte Lesestrategie f\[:u]r defekte Datentr\[:a]ger.
+.TP
+.B \-\-audio-offset n
+Nur RS04: Leseversatz eines CD-DA-Abbilds gegen\[:u]ber dem Abbild, aus dem
+die Fehlerkorrektur-Datei erzeugt wurde, in Samples (4 Bytes). Normalerweise
+wird der Versatz beim Reparieren automatisch erkannt; diese Option ist nur
+n\[:o]tig, wenn die Erkennung scheitert.
+Beim Lesen einer Audio-CD werden die AccurateRip- und CTDB-Pr\[:u]fsummen (siehe
+\-\-cdda) mit dieser Leseversatz-Korrektur berechnet; geben Sie den
+AccurateRip-Leseversatz des Laufwerks an, um sie mit den Datenbanken zu vergleichen.
+Das Abbild selbst wird so gespeichert, wie es gelesen wurde.
 .TP
 .B \-\-auto-suffix
 automatisches Anf\[:u]gen der .iso- und .ecc-Dateiendungen.
@@ -277,12 +358,82 @@ automatisches Anf\[:u]gen der .iso- und .ecc-Dateiendungen.
 .B \-\-cache-size n
 Zwischenspeicher in MiB bei .ecc-Datei-Erzeugung - (Standard: 32MiB).
 .TP
+.B \-\-cdda
+liest eine CD als CD-DA-Abbild: jeder Sektor wird mit 2352 Bytes gespeichert
+(Audio-Samples, oder der rohe Datensektor mit Sync-Muster, Kopf und EDC/ECC)
+in einem .bin-Abbild, und ein Cue-Sheet mit gleichem Namen und der Endung .cue
+wird geschrieben. Bei Audio-CDs geschieht dies automatisch; verwenden Sie \-\-cdda
+f\[:u]r Mixed-Mode- und CD-Extra-Datentr\[:a]ger, um auch deren Audio-Spuren zu lesen.
+Audio-Sektoren werden mit C2-Fehlerzeigern gelesen, sofern das Laufwerk diese
+unterst\[:u]tzt; ein Sektor mit C2-Fehlern gilt als unlesbar (er wird gem\[:a]\[ss]
+\-\-read-attempts wiederholt gelesen) und wird als Markierung f\[:u]r defekte
+Sektoren (2048 Bytes) gefolgt von 304 Null-Bytes gespeichert. Laufwerke ohne
+C2-Unterst\[:u]tzung interpolieren besch\[:a]digte Audio-Sektoren eventuell
+unbemerkt; dvdisaster gibt in diesem Fall eine Warnung aus. Das angepasste
+Lesen ist f\[:u]r CD-DA-Abbilder nicht verf\[:u]gbar, und RS01-, RS02- und
+RS03-Fehlerkorrekturdaten werden beim Lesen nicht verwendet. Eine mit \-e
+angegebene RS04-Fehlerkorrekturdatei f\[:u]r 2352-Byte-Sektoren dient zur Pr\[:u]fung
+der Sektoren anhand ihrer CRC32, sofern das Abbild, aus dem sie erstellt wurde, mit
+demselben Lese-Offset gelesen wurde (andernfalls entf\[:a]llt die Pr\[:u]fung).
+Datensektoren werden anhand ihres EDC gepr\[:u]ft (Mode 1, Mode 2 Form 1 und Form 2,
+sofern der Sektor einen tr\[:a]gt); ein Sektor, der die Pr\[:u]fung nicht besteht, gilt
+wie ein Sektor mit C2-Fehlern als unlesbar, so dass RS04 ihn reparieren kann.
+CDs mit Mode-2-Form-2-Sektoren (Video-CD, Super-Video-CD, PlayStation, CD-i) werden
+immer als CD-DA-Abbild gelesen, da diese Sektoren nicht in 2048 Bytes passen. Bei
+Mode-2-(XA)-Datentr\[:a]gern sucht dvdisaster sie in 64 \[:u]ber die Datenspuren
+verteilten Sektoren; verwenden Sie \-\-cdda, wenn sie auf dem Datentr\[:a]ger selten sind.
+Nach dem Lesen werden die AccurateRip-Pr\[:u]fsummen v1 und v2 und die CRC32
+jeder Audio-Spur, die AccurateRip-Disc-ID (die mit der FreeDB-Disc-ID endet) sowie
+die TOC-ID und CRC32 der CUETools-Datenbank (CTDB) ausgegeben und als REM-Zeilen
+in das Cue-Sheet geschrieben, um das Abbild mit anderen Programmen gegen diese
+Datenbanken pr\[:u]fen zu k\[:o]nnen; dvdisaster fragt sie nicht online ab. Sie
+stimmen nur dann mit der AccurateRip-Datenbank \[:u]berein, wenn der Leseversatz
+des Laufwerks mit \-\-audio-offset angegeben wird (Protokoll und Cue-Sheet nennen
+den verwendeten Versatz). CD-TEXT wird in das Cue-Sheet \[:u]bernommen (TITLE,
+PERFORMER, SONGWRITER, ...), sofern das Laufwerk ihn liefert; verwendet wird nur
+CD-TEXT in ISO 8859-1 oder ASCII, und Pakete mit CRC-Fehlern werden \[:u]bergangen.
+Siehe auch \-\-test-and-copy.
+.RS
+Datentr\[:a]ger mit mehreren Sitzungen (CD, DVD und BD) werden immer als ein
+Abbild gelesen, in dem die Sektoren an ihrer tats\[:a]chlichen Position liegen.
+Die Sektoren zwischen den Sitzungen werden nicht gelesen; sie werden mit Nullen
+gef\[:u]llt gespeichert und nicht als Lesefehler gez\[:a]hlt. Unlesbare Sektoren
+unter den letzten beiden Sektoren einer Sitzung (der Auslauf von im TAO-Modus
+geschriebenen Sitzungen) werden gesondert gemeldet.
+Ohne \-\-cdda werden die Audio-Spuren einer CD mit Datenspuren genauso gespeichert.
+Datentr\[:a]ger mit RS02- oder RS03-Fehlerkorrekturdaten k\[:o]nnen nicht im
+Mehrfachsitzungs-Modus gelesen werden.
+.RE
+.TP
+.B \-\-catalog f
+h\[:a]ngt das Ergebnis jedes \[:U]berpr\[:u]fens (\-s) oder Lesens (\-r) an die Katalogdatei f an,
+so da\[ss] der Zustand eines Datentr\[:a]gers \[:u]ber die Jahre verfolgt werden kann. Jeder Lauf
+f\[:u]gt eine Zeile mit Datum, Fingerabdruck, Bezeichnung und Gr\[:o]\[ss]e des Datentr\[:a]gers,
+der Aktion und der Anzahl unlesbarer Sektoren und CRC-Fehler hinzu (durch Tabulatoren getrennt).
+.TP
+.B \-\-catalog-report f
+gibt den Verlauf jedes in der Katalogdatei f erfassten Datentr\[:a]gers aus und warnt bei
+Datentr\[:a]gern, deren Anzahl besch\[:a]digter Sektoren zunimmt.
+.TP
 .B \-\-dao
 unterstelle DAO; Abbild am Ende nicht k\[:u]rzen.
 .TP
 .B \-\-defective-dump d
 Gibt das Unterverzeichnis zum Sammeln von unvollst\[:a]ndigen
 Roh-Sektoren an.
+.TP
+.B \-\-drive-test
+Gibt einen Bericht dar\[:u]ber aus, was das mit \-d gew\[:a]hlte Laufwerk f\[:u]r
+dvdisaster leisten kann: Hersteller, Modell und Firmware, die unterst\[:u]tzten
+Profile und Lesefunktionen (CD, DVD, BD, HD DVD, C2-Fehlerzeiger, CD-TEXT,
+Streaming), die Fehlerbehandlungs-Seite (mode page 01h; ob das Laufwerk im
+Roh-Modus defekte Sektoren liefern kann) sowie eine Zusammenfassung der
+geeigneten Lesemodi. Bei eingelegter CD werden Lesen der Nutzdaten, Roh-Lesen
+und CD-DA-Lesen mit und ohne C2-Fehlerzeiger am ersten Daten- und Audiosektor
+ausprobiert. Es werden nur lesende Befehle gesendet; die Einstellungen des
+Laufwerks werden nicht ver\[:a]ndert. Der Leseversatz (read offset) des
+Laufwerks wird nicht gemessen.
+Bitte f\[:u]gen Sie diesen Bericht Fehlermeldungen zu Laufwerksproblemen bei.
 .TP
 .B \-\-driver d  (nur f\[:u]r Linux)
 W\[:a]hlt zwischen dem sg (SG_IO)-Treiber (voreingestellt) und dem
@@ -310,6 +461,11 @@ die h\[:o]chste Geschwindigkeit. Daher werden der SSE2- oder der
 AltiVec-Kodierer automatisch ausgew\[:a]hlt sofern der Prozessor 
 dies unterst\[:u]tzt und nichts anderes mit dieser Option angegeben wird.
 
+.RE
+.RS
+RS04 w\[:a]hlt GFNI, AVX2, SSSE3 oder NEON automatisch; 32bit und 64bit
+w\[:a]hlen den portablen Kodierer, SSE2 den SSSE3-Kodierer. Alle
+Varianten erzeugen identische Fehlerkorrektur-Daten.
 .RE
 .TP
 .B \-\-encoding-io-strategy [readwrite|mmap]
@@ -367,6 +523,30 @@ Viele Laufwerke ignorieren diese Einstellung ohnehin. Benutzen Sie den Wert \-1 
 die Standardeinstellungen des Laufwerks zu verwenden.
 .RE
 .TP
+.B \-\-json Datei
+schreibt beim Beenden eine Zusammenfassung des Laufs als JSON-Objekt in
+\fIDatei\fP; \- steht f\[:u]r stdout.
+.RS
+Der Bericht enth\[:a]lt die Programmversion, die Aktionen, Angaben zu Laufwerk
+und Datentr\[:a]ger, Abbild und Fehlerkorrektur-Datei, die Sektorz\[:a]hler von
+Lesen/\[:U]berpr\[:u]fen, Testen und Reparieren, Fehlerkorrektur-Methode und
+Redundanz, md5-Summen soweit vorhanden, sowie den Exit-Status mit seiner
+Bedeutung ("ok", "error", "defects", "data_loss"). Nicht zutreffende Eintr\[:a]ge
+werden weggelassen.
+.RE
+.TP
+.B \-\-mapfile f
+schreibt eine zu GNU ddrescue kompatible Map-Datei des Abbilds in die Datei f.
+Vorhandene Sektoren werden als fertig (+), fehlende Sektoren (Markierungen f\[:u]r
+defekte Sektoren) als defekt (\-) eingetragen. Die Datei kann mit ddrescueview
+angezeigt oder zum Weiterlesen mit ddrescue verwendet werden.
+.TP
+.B \-\-list-damaged-files
+listet die Dateien eines ISO-9660-Abbilds auf (Joliet-Namen werden verwendet, sofern
+vorhanden), die fehlende Sektoren enthalten, und wie viele fehlende Sektoren
+au\[ss]erhalb von Dateien liegen. Kann mit dem Lesen (\-r) kombiniert oder alleine
+auf ein Abbild angewendet werden. Reine UDF-Abbilder werden noch nicht unterst\[:u]tzt.
+.TP
 .B \-\-medium-info
 Gibt Informationen \[:u]ber den Datentr\[:a]ger im ausgew\[:a]hlten Laufwerk aus.
 .TP
@@ -385,6 +565,10 @@ da diese keine fehlenden Sektoren in den Abbildern erkennen w\[:u]rden.
 Bearbeiten Sie ein Abbild nicht mit wechselnden Einstellungen f\[:u]r
 diese Option.
 .RE
+.TP
+.B \-\-pause-after-errors n[:s]
+legt nach jeweils n Lesefehlern eine Lesepause von s Sekunden ein (Standard: 60),
+damit sich Laufwerke, die bei defekten Datentr\[:a]gern \[:u]berhitzen, abk\[:u]hlen k\[:o]nnen.
 .TP
 .B \-\-prefetch-sectors n
 n Sektoren f\[:u]r die RS03-(De)kodierung im Voraus laden (Standard: 32)
@@ -418,15 +602,74 @@ ver\[:a]ndert einige Ausgaben so da\[ss] sie von den Regressionstest-Skripten be
 .B \-\-resource-file n
 Gibt den Pfad zur Konfigurationsdatei an (Voreinstellung: $HOME/.dvdisaster)
 .TP
+.B \-\-rs04-memory n
+Nur RS04: Speicherbudget in MiB f\[:u]r das Kodieren und Dekodieren (Standard: 4096).
+Es bestimmt die Codewortl\[:a]nge neu erzeugter Fehlerkorrekturdaten: l\[:a]ngere
+Codew\[:o]rter vertragen mehr verstreute Sch\[:a]den, ben\[:o]tigen aber mehr Speicher
+oder mehr Durchl\[:a]ufe \[:u]ber das Abbild. Jede Codewortl\[:a]nge kann mit jedem
+Budget repariert werden; ein kleineres Budget macht die Reparatur nur langsamer.
+.TP
+.B \-\-sector-size n
+Nur RS04: Sektorgr\[:o]\[ss]e der Daten beim Erzeugen einer Fehlerkorrektur-Datei:
+2048 (Standard), 2324 (Mode 2 Form 2, z.B. VCD/SVCD-Videospuren) oder 2352
+(CD-DA-Audioabbilder, siehe \-\-cdda).
+.TP
 .B \-\-speed-warning n
 warnt bei Geschwindigkeits\[:a]nderung um mehr als n Prozent.
 .TP
 .B \-\-spinup-delay n
 gibt dem Laufwerk n Sekunden Zeit zum Hochlaufen.
 .TP
+.B \-\-time-limit n
+bricht die laufende Aktion nach n Sekunden ab (wie der Stop-Knopf der
+graphischen Oberfl\[:a]che). Bereits gelesene Daten bleiben im Abbild erhalten.
+.TP
+.B \-\-test-and-copy
+f\[:u]r Audio-CDs (siehe \-\-cdda): liest die Audio-Spuren nach dem Lesen ein
+zweites Mal und vergleicht die CRC32 jeder Spur mit der des Abbilds, wie
+"Test & Kopie" in anderen CD-Rippern. Eine Spur mit abweichender CRC32 wurde
+nicht zuverl\[:a]ssig gelesen, z.B. weil das Laufwerk besch\[:a]digte Samples
+interpoliert hat, ohne C2-Fehler zu melden; dvdisaster endet dann mit einem
+Fehlercode.
+.TP
 .B \-\-version
 gibt die Versionsnummer und einige Konfigurationseigenschaften aus
 .PP
+
+.SH EXIT-STATUS
+.TP
+.B 0
+Erfolg; es wurden keine Fehler gefunden (bzw. es musste nichts repariert werden).
+.TP
+.B 1
+Fehler; die Aktion konnte nicht ausgef\[:u]hrt werden, z.B. wegen
+ung\[:u]ltiger Optionen, fehlender oder unbrauchbarer Dateien, Laufwerks-
+oder Ein-/Ausgabefehlern.
+Wird auch nach Ausgabe des Hilfetextes zur\[:u]ckgegeben.
+.TP
+.B 2
+Es wurden Fehler gefunden, aber kein Datenverlust festgestellt: der
+Datentr\[:a]ger bzw. das Abbild enth\[:a]lt unlesbare Sektoren oder
+Pr\[:u]fsummenfehler, oder die Fehlerkorrektur-Daten sind besch\[:a]digt
+(\-s, \-r, \-t).
+Bei \-f wurden alle defekten Sektoren repariert.
+Bei \-t mit RS02/RS03-Daten ist eine vollst\[:a]ndige Wiederherstellung m\[:o]glich.
+Bei \-\-adaptive-read wurde das Lesen beendet, weil die fehlenden Sektoren
+mit \-f wiederhergestellt werden k\[:o]nnen.
+.TP
+.B 3
+Datenverlust; die Fehler k\[:o]nnen mit den vorhandenen
+Fehlerkorrektur-Daten nicht vollst\[:a]ndig repariert werden: \-f hat
+unreparierte Sektoren hinterlassen, \-t sagt voraus da\[ss] keine
+vollst\[:a]ndige Wiederherstellung m\[:o]glich ist (oder hat f\[:u]r ein
+defektes Abbild keine Fehlerkorrektur-Daten gefunden), oder
+\-\-adaptive-read konnte nicht gen\[:u]gend Daten f\[:u]r eine
+vollst\[:a]ndige Wiederherstellung lesen.
+.PP
+\-s und \-r (ohne \-\-adaptive-read) sowie \-t mit RS01 sch\[:a]tzen nicht
+ab, ob Fehler reparierbar sind, und liefern bei jedem Fehler 2.
+Werden mehrere Aktionen kombiniert (z.B. \-r \-f), hat 1 Vorrang,
+ansonsten wird der h\[:o]chste Wert zur\[:u]ckgegeben.
 
 .SH SIEHE AUCH
 .B Dokumentation

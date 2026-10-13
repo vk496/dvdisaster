@@ -461,6 +461,182 @@ static int query_incomplete(DeviceHandle *dh, int probe_only)
 }
 
 /*
+ * Track table helpers.
+ * The table is only used when it describes something we must take care of
+ * (several sessions, audio tracks); single session data media are read
+ * exactly as before.
+ */
+
+static int validate_track_table(DeviceHandle *dh)
+{  int i, audio = FALSE;
+
+   for(i=0; i<dh->nTracks; i++)
+   {  TrackInfo *t = &dh->track[i];
+
+      if(t->start < 0 || t->end <= t->start
+	 || (i>0 && t->start < dh->track[i-1].end))
+      {  Verbose("# implausible track table (track %d: %" PRId64 "-%" PRId64 "), ignoring it\n",
+		 t->number, t->start, t->end);
+	 dh->nTracks = 0;
+	 dh->zeroFill = FALSE;
+	 return FALSE;
+      }
+      if(t->audio) audio = TRUE;
+   }
+
+   dh->zeroFill = dh->nTracks && (dh->sessions > 1 || audio);
+   return TRUE;
+}
+
+/*
+ * Parse the full TOC (READ TOC format 2) of a CD.
+ * Entries are 11 bytes: session, ADR/CONTROL, TNO, POINT, MSF, zero, PMSF.
+ * Track starts come from POINT 1..99, session ends from POINT A2 (lead-out).
+ */
+
+static void parse_full_toc(DeviceHandle *dh, unsigned char *buf, int length)
+{  gint64 leadout[100];
+   int i;
+
+   memset(leadout, 0, sizeof(leadout));
+   dh->nTracks = 0;
+
+   for(i=4; i+11<=length; i+=11)
+   {  unsigned char *d = buf+i;
+      int point = d[3];
+      gint64 lba = ((gint64)d[8]*60 + d[9])*75 + d[10] - 150;
+
+      if((d[1]>>4) != 1 || d[0] < 1 || d[0] > 99)  /* only ADR 1 entries carry positions */
+	continue;
+
+      if(point == 0xa2)
+	leadout[d[0]] = lba;
+
+      if(point >= 1 && point <= 99 && dh->nTracks < MAX_TRACKS)
+      {  TrackInfo *t = &dh->track[dh->nTracks++];
+
+	 t->number  = point;
+	 t->session = d[0];
+	 t->start   = lba;
+	 t->audio   = !(d[1] & 4);
+	 t->xa      = FALSE;
+      }
+   }
+
+   /* A track ends where the next one of its session starts, or at the lead-out.
+      Mode 2 data tracks are recognized by the disc type of their session (A0 PSEC). */
+
+   for(i=0; i<dh->nTracks; i++)
+   {  TrackInfo *t = &dh->track[i];
+      int j;
+
+      if(i+1 < dh->nTracks && dh->track[i+1].session == t->session)
+	   t->end = dh->track[i+1].start;
+      else t->end = leadout[t->session];
+
+      for(j=4; j+11<=length; j+=11)
+	if(buf[j] == t->session && buf[j+3] == 0xa0 && (buf[j+9] == 0x20 || buf[j+9] == 0x10))
+	  t->xa = !t->audio;
+   }
+
+   validate_track_table(dh);
+}
+
+static gint64 be32(unsigned char *b)
+{  return (gint64)((guint32)b[0]<<24 | (guint32)b[1]<<16 | (guint32)b[2]<<8 | (guint32)b[3]);
+}
+
+/*
+ * Get the tracks of multi-session DVD and BD media
+ * from READ DISC INFORMATION and READ TRACK INFORMATION.
+ */
+
+static void query_tracks(DeviceHandle *dh)
+{  AlignedBuffer *ab = CreateAlignedBuffer(2048);
+   unsigned char *buf = ab->buf;
+   unsigned char cmd[MAX_CDB_SIZE];
+   int sessions, last_track, track;
+
+   memset(cmd, 0, MAX_CDB_SIZE);
+   cmd[0] = 0x51;     /* READ DISC INFORMATION */
+   cmd[8] = 36;       /* allocation length */
+   memset(buf, 0, 36);
+   if(SendPacket(dh, cmd, 10, buf, 36, &dh->sense, DATA_READ)<0)
+   {  Verbose("# READ DISC INFORMATION failed; assuming one session\n");
+      FreeAlignedBuffer(ab);
+      return;
+   }
+
+   sessions   = buf[9]<<8 | buf[4];
+   last_track = buf[11]<<8 | buf[6];
+   Verbose("# %d sessions, last track %d\n", sessions, last_track);
+
+   if(sessions <= 1)
+   {  FreeAlignedBuffer(ab);
+      return;
+   }
+
+   dh->nTracks = 0;
+
+   for(track=1; track<=last_track; track++)
+   {  TrackInfo *t;
+
+      if(dh->nTracks >= MAX_TRACKS)
+      {  dh->nTracks = 0;   /* refused later */
+	 break;
+      }
+
+      memset(cmd, 0, MAX_CDB_SIZE);
+      cmd[0] = 0x52;     /* READ TRACK INFORMATION */
+      cmd[1] = 1;        /* address is a track number */
+      cmd[2] = (track>>24) & 0xff;
+      cmd[3] = (track>>16) & 0xff;
+      cmd[4] = (track>> 8) & 0xff;
+      cmd[5] = track & 0xff;
+      cmd[8] = 36;       /* allocation length */
+      memset(buf, 0, 36);
+      if(SendPacket(dh, cmd, 10, buf, 36, &dh->sense, DATA_READ)<0)
+      {  Verbose("# READ TRACK INFORMATION failed for track %d\n", track);
+	 dh->nTracks = 0;
+	 break;
+      }
+
+      if(buf[6] & 0x40)  /* blank (e.g. invisible) track */
+	continue;
+
+      t = &dh->track[dh->nTracks++];
+      t->number  = track;
+      t->session = buf[33]<<8 | buf[3];
+      t->start   = be32(buf+8);
+      t->end     = t->start + be32(buf+24);
+      if((buf[7] & 3) == 3) /* incomplete track: use the last recorded address */
+      {  gint64 lra = be32(buf+28);
+	 if(lra >= t->start && lra < t->end)
+	   t->end = lra+1;
+      }
+      t->audio = t->xa = FALSE;
+   }
+
+   /* The session count includes an empty/incomplete last session;
+      count the sessions which really hold tracks. Without a usable
+      track table the medium is read as before (one session). */
+
+   for(sessions=1, track=1; track<dh->nTracks; track++)
+     if(dh->track[track].session != dh->track[track-1].session)
+       sessions++;
+
+   dh->sessions = sessions;
+   if(sessions < 2 || !validate_track_table(dh))
+   {  Verbose("# no usable multi-session track table; reading as one session\n");
+      dh->sessions = 1;
+      dh->nTracks = 0;
+      dh->zeroFill = FALSE;
+   }
+
+   FreeAlignedBuffer(ab);
+}
+
+/*
  * CD specific probing
  */
 
@@ -469,8 +645,8 @@ static int query_cd(DeviceHandle *dh, int probe_only)
    unsigned char *buf = ab->buf;
    unsigned char cmd[MAX_CDB_SIZE];
    Sense *sense = &dh->sense;
-   unsigned int length;
-   int control;
+   unsigned int length, alloc;
+   int control, disc_type;
 
    Verbose("#CD: starting media probe\n");
 
@@ -557,6 +733,7 @@ static int query_cd(DeviceHandle *dh, int probe_only)
 
    length = buf[0]<<8 | buf[1];
    length += 2;    /* MMC3: "Disc information length excludes itself" */
+   alloc = (length+3) & ~3;  /* aligned, but large enough for all track descriptors */
    length_align(&length);
    Verbose("#CD: size returned is %d\n", length);
 
@@ -566,7 +743,7 @@ static int query_cd(DeviceHandle *dh, int probe_only)
 	 Stop(_("TOC info too short, length %d.\n"),length);
       return FALSE;
    }
-   if(length>1024) /* don't let the drive hack us using a buffer overflow ;-) */
+   if(alloc>4096) /* don't let the drive hack us using a buffer overflow ;-) */
    {  FreeAlignedBuffer(ab);
       if(!probe_only)
 	 Stop(_("TOC info too long (%d), probably multisession.\n"),length);
@@ -578,11 +755,11 @@ static int query_cd(DeviceHandle *dh, int probe_only)
    cmd[1] = 0x02;  /* TIME bit required for this format */
    cmd[2] = 2;     /* format; we want the full TOC */
    cmd[6] = 1;     /* track/session number */
-   cmd[7] = (length>>8) & 0xff; /* allocation length */
-   cmd[8] = length & 0xff;
+   cmd[7] = (alloc>>8) & 0xff; /* allocation length */
+   cmd[8] = alloc & 0xff;
 
    Verbose("#CD: querying real READ TOC/PMA/ATIP (for full TOC)\n");
-   if(SendPacket(dh, cmd, 10, buf, length, sense, DATA_READ)<0)
+   if(SendPacket(dh, cmd, 10, buf, alloc, sense, DATA_READ)<0)
    {  FreeAlignedBuffer(ab);
       if(!probe_only)
 	 Stop(_("%s\nCould not read full TOC.\n"),
@@ -609,19 +786,38 @@ static int query_cd(DeviceHandle *dh, int probe_only)
    dh->sessions = buf[3];
    Verbose("#CD: %d sessions\n", dh->sessions);
 
+   disc_type = buf[13];
+   parse_full_toc(dh, buf, MIN(alloc, (buf[0]<<8 | buf[1]) + 2));
+
+   /* Use the first data track for the disc type (e.g. CD Extra
+      starts with audio tracks), or report an audio CD. */
+
+   if(dh->nTracks)
+   {  int i;
+
+      control = 0;
+      for(i=0; i<dh->nTracks; i++)
+	if(!dh->track[i].audio)
+	{  control = 4;
+	   if(dh->track[i].session > 1)
+	     disc_type = dh->track[i].xa ? 0x20 : 0;
+	   break;
+	}
+   }
+
    if(dh->typeDescr)  /* dh may have been reused; avoid memleak */
      g_free(dh->typeDescr);
      
    if(control & 4)
-     switch(buf[13])
+     switch(disc_type)
      {  case 0x00: dh->typeDescr = g_strdup_printf("%s mode 1", dh->profileDescr); dh->subType = DATA1; break;
-        case 0x10: dh->typeDescr = g_strdup_printf("%s/CD-I", dh->profileDescr); dh->subType = UNSUPPORTED; break;
+        case 0x10: dh->typeDescr = g_strdup_printf("%s/CD-I", dh->profileDescr); dh->subType = XA21; dh->form2 = TRUE; break;
         case 0x20: dh->typeDescr = g_strdup_printf("%s XA",dh->profileDescr); dh->subType = XA21; break;
         default:   dh->typeDescr = g_strdup_printf("%s ??",dh->profileDescr); dh->subType = UNSUPPORTED; break;
      }
    else 
    {  dh->typeDescr = g_strdup_printf("%s Audio", dh->profileDescr); 
-      dh->subType = UNSUPPORTED;
+      dh->subType = dh->nTracks ? CDDA : UNSUPPORTED;
    }
 
    FreeAlignedBuffer(ab);
@@ -1914,6 +2110,15 @@ static gint64 query_size(Image *image)
   
    Verbose("# *** query_size(%s) ***\n", dh->devinfo);
 
+   /*** Multi-session and audio media are read as a whole,
+	up to the end of the last track. */
+
+   if(dh->nTracks && (dh->sessions > 1 || dh->subType == CDDA))
+   {  Verbose("Medium size obtained from the track table: %" PRId64 " sectors\n",
+	      dh->track[dh->nTracks-1].end);
+      return dh->track[dh->nTracks-1].end;
+   }
+
    /*** If an EccHeader was already found and the codec specified
 	the overall image size, use that as an authoritative source 
 	for the medium size. */
@@ -2317,8 +2522,8 @@ static int read_dvd_sector(DeviceHandle *dh, unsigned char *buf, int lba, int ns
    cmd[4] = (lba >>  8) & 0xff;
    cmd[5] = lba & 0xff;
    cmd[6] = 0;         /* reserved */
-   cmd[7] = 0;         /* number of sectors */
-   cmd[8] = nsectors;  /* read 1 sector */
+   cmd[7] = (nsectors >> 8) & 0xff;  /* number of sectors */
+   cmd[8] = nsectors & 0xff;
 
    ret = SendPacket(dh, cmd, 10, buf, 2048*nsectors, sense, DATA_READ);
 
@@ -2482,13 +2687,411 @@ static int read_raw_cd_sector(DeviceHandle *dh, unsigned char *outbuf, int lba, 
 }
 
 /*
+ * Reading CD-DA images: every sector is read with 2352 bytes;
+ * audio sectors as CD-DA, data sectors raw (sync, header, user data, EDC/ECC).
+ * If the drive supports it, C2 error pointers are requested and
+ * a sector with C2 errors counts as unreadable.
+ * The caller makes sure that all sectors are of the same kind (see read_by_class()).
+ */
+
+static TrackInfo* find_track(DeviceHandle*, gint64);
+
+/* EDC of a raw Mode 1, Mode 2 Form 1 or Form 2 data sector.
+   The Form 2 EDC is optional (zero if unused); Mode 0 sectors have none,
+   and without a sync pattern the mode byte means nothing. */
+
+static int raw_sector_edc_ok(unsigned char *frame)
+{  static unsigned char sync[12] = { 0, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 0 };
+   int from = 16, len;   /* EDC covers len bytes from offset from and follows them */
+   guint32 edc;
+
+   if(memcmp(frame, sync, 12))
+      return TRUE;
+
+   switch(frame[15])
+   {  case 1:  from = 0; len = 2064; break;
+      case 2:  len = frame[18] & 0x20 ? 2332 : 2056; break;
+      default: return TRUE;
+   }
+
+   if(len == 2332 && !memcmp(frame+2348, "\0\0\0\0", 4))
+      return TRUE;
+
+   edc = EDCCrc32(frame+from, len);   /* byte order as on disc */
+   return !memcmp(&edc, frame+from+len, 4);
+}
+
+static int read_cdda_sector(DeviceHandle *dh, unsigned char *buf, int lba, int nsectors)
+{  Sense *sense = &dh->sense;
+   unsigned char cmd[MAX_CDB_SIZE];
+   TrackInfo *t = find_track(dh, lba);
+   int audio = t && t->audio;
+   int frame = dh->canC2Audio ? CD_RAW_C2_SECTOR_SIZE : CD_RAW_SECTOR_SIZE;
+   AlignedBuffer *ab = NULL;
+   unsigned char *rbuf = buf;
+   int i,ret;
+
+   if(dh->canC2Audio)
+   {  ab = CreateAlignedBuffer(nsectors*frame);
+      rbuf = ab->buf;
+   }
+
+   memset(cmd, 0, MAX_CDB_SIZE);
+   cmd[0]  = 0xbe;                 /* READ CD */
+   cmd[1]  = audio ? 1<<2 : 0;     /* CD-DA, or any type for data sectors */
+   cmd[2]  = (lba >> 24) & 0xff;
+   cmd[3]  = (lba >> 16) & 0xff;
+   cmd[4]  = (lba >>  8) & 0xff;
+   cmd[5]  = lba & 0xff;
+   cmd[8]  = nsectors;
+   cmd[9]  = audio ? 0x10 : 0xf8;  /* 2352 bytes: user data / sync+headers+user data+EDC/ECC */
+   if(dh->canC2Audio)
+     cmd[9] |= 0x02;               /* C2 error pointers (294 bytes) */
+
+   ret = SendPacket(dh, cmd, 12, rbuf, nsectors*frame, sense, DATA_READ);
+
+   if(!ret && dh->canC2Audio)
+   {  for(i=0; i<nsectors; i++)
+      {  if(CountC2Errors(rbuf+i*frame))
+	 {  sense->sense_key = 3;  /* medium error */
+	    sense->asc = 255;
+	    sense->ascq = 9;       /* C2 error */
+	    ret = -1;
+	    break;
+	 }
+	 memcpy(buf+i*CD_RAW_SECTOR_SIZE, rbuf+i*frame, CD_RAW_SECTOR_SIZE);
+      }
+   }
+
+   /* A data sector failing its EDC is unreadable, too */
+
+   for(i=0; !ret && !audio && i<nsectors; i++)
+      if(!raw_sector_edc_ok(buf+i*CD_RAW_SECTOR_SIZE))
+      {  sense->sense_key = 3;  /* medium error */
+	 sense->asc = 255;
+	 sense->ascq = 1;       /* EDC failure */
+	 ret = -1;
+      }
+
+   if(ret<0) RememberSense(sense->sense_key, sense->asc, sense->ascq);
+   if(ab) FreeAlignedBuffer(ab);
+   return ret;
+}
+
+/***
+ *** Sessions, gaps and audio tracks
+ ***/
+
+/*
+ * Track containing sector s, or NULL.
+ * Sectors in front of a first audio track (hidden track audio in its pregap)
+ * are counted as part of that track.
+ */
+
+static TrackInfo* find_track(DeviceHandle *dh, gint64 s)
+{  int i;
+
+   if(dh->nTracks && dh->track[0].audio && s >= 0 && s < dh->track[0].start)
+      return &dh->track[0];
+
+   for(i=0; i<dh->nTracks; i++)
+     if(s >= dh->track[i].start && s < dh->track[i].end)
+       return &dh->track[i];
+
+   return NULL;
+}
+
+/*
+ * 0: sector is not part of the image (between sessions, or audio in a
+ *    2048 byte image) and is stored as a zero-filled sector without reading it.
+ * 1: data sector, 2: audio sector (CD-DA image only).
+ * Sectors behind the last track are left to the drive as before.
+ */
+
+static int sector_class(DeviceHandle *dh, gint64 s)
+{  TrackInfo *t;
+
+   if(!dh->zeroFill)
+      return 1;
+
+   t = find_track(dh, s);
+   if(!t)
+      return s < dh->track[dh->nTracks-1].end ? 0 : 1;
+   if(!t->audio)
+      return 1;
+
+   return dh->sectorBytes == CD_RAW_SECTOR_SIZE ? 2 : 0;
+}
+
+int IsZeroFilledSector(DeviceHandle *dh, gint64 s)
+{  return sector_class(dh, s) == 0;
+}
+
+/*
+ * End of the session containing s (first sector behind it),
+ * or 0 if s is in the last session or not in a session at all.
+ */
+
+gint64 SessionEnd(DeviceHandle *dh, gint64 s)
+{  TrackInfo *t;
+   int i;
+
+   if(!dh->zeroFill || !(t = find_track(dh, s)))
+      return 0;
+
+   for(i=dh->nTracks-1; i>=0; i--)
+     if(dh->track[i].session == t->session)
+       break;
+
+   return i == dh->nTracks-1 ? 0 : dh->track[i].end;
+}
+
+/*
+ * Read sectors piecewise so that zero-filled sectors are not read
+ * and the reader only sees sectors of one kind.
+ */
+
+static int needs_split(DeviceHandle *dh, gint64 s, int nsectors)
+{  int class,i;
+
+   if(!dh->zeroFill)
+      return FALSE;
+
+   class = sector_class(dh, s);
+   if(!class)
+      return TRUE;
+
+   for(i=1; i<nsectors; i++)
+      if(sector_class(dh, s+i) != class)
+	 return TRUE;
+
+   return FALSE;
+}
+
+static int read_by_class(DeviceHandle *dh, unsigned char *buf, gint64 s, int nsectors,
+			 int (*reader)(DeviceHandle*, unsigned char*, gint64, int))
+{
+   while(nsectors > 0)
+   {  int class = sector_class(dh, s);
+      int n = 1;
+
+      while(n < nsectors && sector_class(dh, s+n) == class)
+	 n++;
+
+      if(!class)
+	 memset(buf, 0, (size_t)n*dh->sectorBytes);
+      else
+      {  int status = reader(dh, buf, s, n);
+	 if(status) return status;
+      }
+
+      buf += n*dh->sectorBytes;
+      s += n;
+      nsectors -= n;
+   }
+
+   return 0;
+}
+
+/*
+ * Print the session/track layout
+ */
+
+void PrintTrackTable(DeviceHandle *dh, void (*print)(char*, ...))
+{  gint64 between = 0, audio = 0;
+   int i;
+
+   for(i=0; i<dh->nTracks; i++)
+   {  TrackInfo *t = &dh->track[i];
+
+      if(i>0 && t->start > dh->track[i-1].end)
+      {  print(_("  Sectors %" PRId64 " - %" PRId64 ": not part of a session\n"),
+	       dh->track[i-1].end, t->start-1);
+	 between += t->start - dh->track[i-1].end;
+      }
+      print(_("  Session %d, track %2d: sectors %" PRId64 " - %" PRId64 ", %s\n"),
+	    t->session, t->number, t->start, t->end-1,
+	    t->audio ? _("audio") : (t->xa ? _("data, mode 2") : _("data")));
+      if(t->audio)
+	audio += t->end - t->start;
+   }
+
+   if(between)
+      print(_("%" PRId64 " sectors between sessions are not part of the image;\n"
+	      "they are stored as zero-filled sectors and are not read.\n"), between);
+   if(audio && dh->sectorBytes == 2048 && dh->subType != CDDA)
+      print(_("%" PRId64 " audio sectors are not part of the data image;\n"
+	      "they are stored as zero-filled sectors (use --cdda to read them).\n"), audio);
+}
+
+/*
+ * Mode 2 (XA) discs may contain Form 2 sectors (VCD/SVCD video, PlayStation
+ * XA audio, Photo CD) which do not fit into a 2048 byte image.
+ * Look at the subheaders of sectors spread over the data tracks.
+ * ponytail: 64 samples may miss rare Form 2 sectors; --cdda forces the raw image.
+ */
+
+#define FORM2_PROBES 64
+
+static int has_form2_sectors(DeviceHandle *dh)
+{  AlignedBuffer *ab = CreateAlignedBuffer(CD_RAW_SECTOR_SIZE);
+   gint64 total = 0;
+   int i,j,found = FALSE;
+
+   for(i=0; i<dh->nTracks; i++)   /* data sectors without the TAO run-out */
+     if(!dh->track[i].audio)
+       total += MAX(0, dh->track[i].end - dh->track[i].start - 2);
+
+   for(j=0; j<FORM2_PROBES && total && !found; j++)
+   {  gint64 pos = j*total/FORM2_PROBES;
+
+      for(i=0; i<dh->nTracks; i++)
+      {  TrackInfo *t = &dh->track[i];
+	 gint64 len = MAX(0, t->end - t->start - 2);
+
+	 if(t->audio) continue;
+	 if(pos < len)
+	 {  if(   !read_cdda_sector(dh, ab->buf, t->start+pos, 1)
+	       && ab->buf[15] == 2 && (ab->buf[18] & 0x20))
+	      found = TRUE;
+	    break;
+	 }
+	 pos -= len;
+      }
+   }
+
+   FreeAlignedBuffer(ab);
+   Verbose("# Mode 2 Form 2 sectors %sfound\n", found ? "" : "not ");
+   return found;
+}
+
+/*
+ * Switch to reading a CD-DA image (2352 bytes per sector).
+ * Done automatically for audio CDs, and for all CDs with --cdda.
+ */
+
+int UseCDDAImage(Image *image)
+{  DeviceHandle *dh = image->dh;
+   AlignedBuffer *ab;
+   gint64 lba;
+   int i,status;
+
+   if(!Closure->cdda && dh->subType != CDDA && !dh->form2)
+      return FALSE;
+
+   if(!Closure->cdda && dh->form2)
+      PrintLog(_("This CD contains Mode 2 Form 2 sectors (e.g. VCD, PlayStation or CD-i)\n"
+		 "which do not fit into 2048 byte sectors; reading it as a CD-DA image (see --cdda).\n"));
+
+   if(dh->mainType != CD || !dh->nTracks)
+      Stop(_("--cdda requires a CD with a readable table of contents."));
+
+   dh->sectorBytes = CD_RAW_SECTOR_SIZE;
+   dh->zeroFill    = TRUE;
+   dh->read        = read_cdda_sector;
+   dh->readRaw     = NULL;
+   if(dh->canReadDefective)
+      SetRawMode(dh, MODE_PAGE_UNSET);
+   dh->canReadDefective = dh->canC2Scan = FALSE;
+   dh->sectors = dh->track[dh->nTracks-1].end;
+
+   /* Find out whether the drive delivers C2 error pointers
+      (illegal request means it does not). */
+
+   lba = dh->track[0].start;
+   for(i=0; i<dh->nTracks; i++)
+     if(dh->track[i].audio)
+     {  lba = dh->track[i].start;
+	break;
+     }
+
+   ab = CreateAlignedBuffer(CD_RAW_SECTOR_SIZE);
+   dh->canC2Audio = TRUE;
+   status = read_cdda_sector(dh, ab->buf, lba, 1);
+   if(status && dh->sense.sense_key == 5)
+      dh->canC2Audio = FALSE;
+   Verbose("C2 probing for CD-DA: %s\n", dh->canC2Audio ? "supported" : "not supported");
+   FreeAlignedBuffer(ab);
+
+   /* The fingerprint is taken from the 2352 byte sector */
+
+   image->fpSector = -1;
+   image->fpState  = 0;
+   GetImageFingerprint(image, NULL, FINGERPRINT_SECTOR);
+
+   PrintLog(_("Reading CD-DA image: %" PRId64 " sectors of 2352 bytes%s.\n"),
+	    dh->sectors, dh->canC2Audio ? _(", using C2 error pointers") : "");
+   if(!dh->canC2Audio)
+      LogWarning(_("The drive does not report C2 errors for audio sectors.\n"
+		   "Damaged audio sectors may be interpolated silently by the drive.\n"));
+
+   return TRUE;
+}
+
+/*
+ * Write a cue sheet for a CD-DA image
+ */
+
+void WriteCueSheet(DeviceHandle *dh, char *image_name)
+{  size_t len = strlen(image_name);
+   char *base = g_path_get_basename(image_name);
+   char *cue;
+   FILE *file;
+   GString **extra;
+   int i;
+
+   if(len > 4 && (!g_ascii_strcasecmp(image_name+len-4, ".bin") || !g_ascii_strcasecmp(image_name+len-4, ".iso")))
+        cue = g_strdup_printf("%.*s.cue", (int)len-4, image_name);
+   else cue = g_strdup_printf("%s.cue", image_name);
+
+   file = fopen(cue, "wb");
+   if(!file)
+   {  LogWarning(_("Could not write cue sheet %s: %s\n"), cue, strerror(errno));
+      g_free(cue);
+      g_free(base);
+      return;
+   }
+
+   extra = CDDACueLines(dh, image_name);
+   fputs(extra[0]->str, file);
+   fprintf(file, "FILE \"%s\" BINARY\n", base);
+   for(i=0; i<dh->nTracks; i++)
+   {  TrackInfo *t = &dh->track[i];
+
+      if(dh->sessions > 1 && (!i || t->session != dh->track[i-1].session))
+	fprintf(file, "REM SESSION %02d\n", t->session);
+      fprintf(file, "  TRACK %02d %s\n", t->number,
+	      t->audio ? "AUDIO" : (t->xa ? "MODE2/2352" : "MODE1/2352"));
+      fputs(extra[i+1]->str, file);
+      if(!i && t->audio && t->start > 0)
+	fprintf(file, "    INDEX 00 00:00:00\n");
+      fprintf(file, "    INDEX 01 %02d:%02d:%02d\n",
+	      (int)(t->start/4500), (int)((t->start/75)%60), (int)(t->start%75));
+   }
+   fclose(file);
+   for(i=0; i<=dh->nTracks; i++)
+      g_string_free(extra[i], TRUE);
+   g_free(extra);
+
+   PrintLog(_("Cue sheet written to %s.\n"), cue);
+   g_free(cue);
+   g_free(base);
+}
+
+/*
  * Sector reading through the device handle.
  * dh->read dispatches to one the routines above.
  */
 
 int ReadSectors(DeviceHandle *dh, unsigned char *buf, gint64 s, int nsectors)
-{  int retry,status = -1;
+{  static int errors_since_pause = 0;
+   int retry,status = -1;
    int recommended_attempts = Closure->minReadAttempts;
+
+   /* Sectors between sessions etc. are not read */
+
+   if(needs_split(dh, s, nsectors))
+      return read_by_class(dh, buf, s, nsectors, ReadSectors);
 
    /* See if we are in a simulated defective area */ 
 
@@ -2573,10 +3176,37 @@ int ReadSectors(DeviceHandle *dh, unsigned char *buf, gint64 s, int nsectors)
 			    _("Sector %" PRId64 ", try %d: %s\n"),
 			    s, retry, GetLastSenseString(FALSE));
 
+	 /* Copy protected or encrypted sectors can not be read without the
+	    authentication done by player software, so re-reading is pointless. */
+
+	 if(last_asc == 0x6F)
+	 {  if(!dh->copyProtectionExplained)
+	    {  PrintLog(_("\n* The drive refuses to read copy protected or encrypted sectors\n"
+			  "* without the authentication done by player software, which dvdisaster\n"
+			  "* does not perform. Such media (e.g. video DVD or Blu-ray discs) can not\n"
+			  "* be read or protected with dvdisaster.\n\n"));
+	       dh->copyProtectionExplained = TRUE;
+	    }
+	    return status;
+	 }
+
 	 /* Last attempt; create failure notice */
 
 	 if(dh->canReadDefective && retry >= recommended_attempts)
 	    RememberSense(3, 255, 7);  /* Recovery failed */
+
+	 /* Give overheating drives some time to cool down */
+
+	 if(Closure->pauseAfterErrors > 0 && ++errors_since_pause >= Closure->pauseAfterErrors)
+	 {  int i;
+
+	    PrintCLIorLabel(Closure->status,
+			    _("Pausing %d seconds to let the drive cool down...\n"),
+			    Closure->pauseDuration);
+	    for(i=0; i<10*Closure->pauseDuration && !Closure->stopActions; i++)
+	       g_usleep(G_USEC_PER_SEC/10);
+	    errors_since_pause = 0;
+	 }
       }
       else /* good return status */
       {  if(recommended_attempts > 1 && retry > 1)
@@ -2608,6 +3238,9 @@ int ReadSectors(DeviceHandle *dh, unsigned char *buf, gint64 s, int nsectors)
 
 int ReadSectorsFast(DeviceHandle *dh, unsigned char *buf, gint64 s, int nsectors)
 {  int status = -1;
+
+   if(needs_split(dh, s, nsectors))
+      return read_by_class(dh, buf, s, nsectors, ReadSectorsFast);
 
    /* See if we are in a simulated defective area */ 
 
@@ -2645,6 +3278,7 @@ Image* OpenImageFromDevice(char *device, int query_only)
    Verbose("# *** OpenImageFromDevice(%s) ***\n", device);
    dh = OpenDevice(device);
    if(!dh) return NULL;
+   dh->sectorBytes = 2048;
 
    InquireDevice(dh, 0);
    Verbose("# InquireDevice returned: %s\n", dh->devinfo);
@@ -2690,13 +3324,24 @@ Image* OpenImageFromDevice(char *device, int query_only)
       return NULL;
    }
 
-   if(dh->sessions>1 && query_only != 2)
+   /* Multi-session media are read as a whole (absolute sector numbers);
+      sectors between the sessions are not read. This needs the track table. */
+
+   if(dh->mainType != CD && !dh->incomplete)
+      query_tracks(dh);
+
+   if(dh->sessions>1 && !dh->nTracks && query_only != 2)
    {  int sessions = dh->sessions;
 
       CloseDevice(dh);
       Stop(_("This software does not support multisession (%d sessions) media."), sessions);
       return NULL;
    }
+
+   /* Mode 2 discs with Form 2 sectors are read as CD-DA images */
+
+   if(dh->subType == XA21 && !dh->form2 && dh->nTracks && !query_only)
+      dh->form2 = has_form2_sectors(dh);
 
    /* Create the Image structure.
       From here we need it to store additional information about the image. */
@@ -2712,7 +3357,7 @@ Image* OpenImageFromDevice(char *device, int query_only)
    Verbose("# deciding reading strategy...\n");
    switch(dh->mainType)
    {  case CD:
-	if(Closure->readRaw)
+	if(Closure->readRaw && dh->subType != CDDA)
 	{  dh->rawBuffer = CreateRawBuffer(MAX_RAW_TRANSFER_SIZE);
 
 	   dh->rawBuffer->validFP = GetImageFingerprint(image, dh->rawBuffer->mediumFP, FINGERPRINT_SECTOR);
@@ -2756,6 +3401,17 @@ Image* OpenImageFromDevice(char *device, int query_only)
        Verbose("Capacity is zero, skipping ExamineECC() as we allow blanks");
    else
        ExamineECC(image);
+
+   /* RS02/RS03 augmented images describe a single session only. */
+
+   if(dh->sessions > 1 && query_only != 2 && image->eccMethod
+      && (!strncmp(image->eccMethod->name, "RS02", 4) || !strncmp(image->eccMethod->name, "RS03", 4)))
+   {  int sessions = dh->sessions;
+
+      CloseImage(image);
+      Stop(_("This software does not support multisession (%d sessions) media."), sessions);
+      return NULL;
+   }
 
    Verbose("# Calling query_size()\n");
    dh->sectors = query_size(image);
@@ -2817,6 +3473,296 @@ Image* OpenImageFromDevice(char *device, int query_only)
      dh->defects = SimulateDefects(dh->sectors);
 
    return image;
+}
+
+/*
+ * Overwritable media (DVD-RAM, DVD-RW in restricted overwrite mode,
+ * DVD+RW and BD-RE) report their formatted capacity instead of the size
+ * of the image written onto them, and burning software may write them
+ * in packet mode. Explain why no augmented ecc data may have been found.
+ * Call after OpenEccFileForImage().
+ */
+
+void HintOverwritableMedium(Image *image)
+{  DeviceHandle *dh = image->dh;
+
+   if(image->eccMethod || image->eccFileMethod)
+     return;
+
+   switch(dh->profile)
+   {  case 0x12: case 0x13: case 0x1a: case 0x2a: case 0x43:
+	LogWarning(_("No error correction data found on this %s medium.\n"
+		     "Overwritable media report their formatted size (here %" PRId64 " sectors)\n"
+		     "instead of the size of the written image, and some burning programs\n"
+		     "write them in packet mode. If this medium was written from an image\n"
+		     "augmented with RS02/RS03 data, search for the ecc data with -a RS02\n"
+		     "or -a RS03 (preferences: \"Exhaustive RS02 header search\" or\n"
+		     "\"Recover RS03 signatures\") or write the image without packet writing.\n"),
+		   dh->profileDescr, dh->readCapacity+1);
+	break;
+   }
+}
+
+/***
+ *** Drive capability report (--drive-test).
+ ***
+ * Only read-only commands are sent; drive settings are never changed.
+ * The report is not translated as it is meant for bug reports.
+ */
+
+static struct { int profile; char *name; } profile_names[] =
+{  {0x08, "CD-ROM"}, {0x09, "CD-R"}, {0x0a, "CD-RW"},
+   {0x10, "DVD-ROM"}, {0x11, "DVD-R"}, {0x12, "DVD-RAM"},
+   {0x13, "DVD-RW restricted overwrite"}, {0x14, "DVD-RW sequential"},
+   {0x15, "DVD-R DL sequential"}, {0x16, "DVD-R DL layer jump"}, {0x17, "DVD-RW DL"},
+   {0x18, "DVD-Download"}, {0x1a, "DVD+RW"}, {0x1b, "DVD+R"},
+   {0x2a, "DVD+RW DL"}, {0x2b, "DVD+R DL"},
+   {0x40, "BD-ROM"}, {0x41, "BD-R SRM"}, {0x42, "BD-R RRM"}, {0x43, "BD-RE"},
+   {0x50, "HD DVD-ROM"}, {0x51, "HD DVD-R"}, {0x52, "HD DVD-RAM"}, {0x53, "HD DVD-RW"},
+   {0x58, "HD DVD-R DL"}, {0x5a, "HD DVD-RW DL"},
+   {0, ""}
+};
+
+/* GET CONFIGURATION for a single feature.
+   Returns the feature descriptor, or NULL if the drive does not have it. */
+
+static unsigned char* get_feature(DeviceHandle *dh, AlignedBuffer *ab, int feature)
+{  unsigned char cmd[MAX_CDB_SIZE];
+   unsigned char *buf = ab->buf;
+
+   memset(cmd, 0, MAX_CDB_SIZE);
+   memset(buf, 0, 2048);
+   cmd[0] = 0x46;           /* GET CONFIGURATION */
+   cmd[1] = 2;              /* only the given feature */
+   cmd[2] = feature>>8;
+   cmd[3] = feature&0xff;
+   cmd[7] = 2048>>8;        /* allocation length */
+   cmd[8] = 2048&0xff;
+
+   if(SendPacket(dh, cmd, 10, buf, 2048, &dh->sense, DATA_READ)<0)
+      return NULL;
+
+   if(be32(buf) < 8 || (buf[8]<<8 | buf[9]) != feature)
+      return NULL;
+
+   return buf+8;
+}
+
+/* MODE SENSE for the current or changeable values of mode page 01h.
+   Like read_mode_page(), assumes no block descriptors. */
+
+static int mode_sense_01(DeviceHandle *dh, AlignedBuffer *ab, int changeable)
+{  unsigned char cmd[MAX_CDB_SIZE];
+
+   memset(cmd, 0, MAX_CDB_SIZE);
+   memset(ab->buf, 0, 252);
+   cmd[0] = 0x5a;                          /* MODE SENSE(10) */
+   cmd[2] = (changeable ? 0x40 : 0) | 1;   /* page control, page code */
+   cmd[8] = 252;                           /* allocation length */
+
+   return SendPacket(dh, cmd, 10, ab->buf, 252, &dh->sense, DATA_READ) >= 0;
+}
+
+/* Read one sector with READ CD; returns 1 if it works,
+   0 if the drive refuses the request and -1 for other errors. */
+
+#define UNTESTED -2
+
+static int try_read_cd(DeviceHandle *dh, AlignedBuffer *ab, gint64 lba, int audio, int flags)
+{  unsigned char cmd[MAX_CDB_SIZE];
+   int size = (audio || (flags & 0x80)) ? CD_RAW_SECTOR_SIZE : 2048;
+
+   if(flags & 0x02) size += 294;   /* C2 error pointers */
+
+   memset(cmd, 0, MAX_CDB_SIZE);
+   cmd[0] = 0xbe;                  /* READ CD */
+   cmd[1] = audio ? 1<<2 : 0;      /* CD-DA, or any sector type */
+   cmd[2] = (lba >> 24) & 0xff;
+   cmd[3] = (lba >> 16) & 0xff;
+   cmd[4] = (lba >>  8) & 0xff;
+   cmd[5] = lba & 0xff;
+   cmd[8] = 1;
+   cmd[9] = flags;
+
+   if(SendPacket(dh, cmd, 12, ab->buf, size, &dh->sense, DATA_READ) >= 0)
+      return 1;
+
+   return dh->sense.sense_key == 5 ? 0 : -1;  /* illegal request: not supported */
+}
+
+static void print_test(DeviceHandle *dh, char *what, int result)
+{  if(result > 0)
+      PrintLog("  %-42s yes\n", what);
+   else PrintLog("  %-42s %s (%s)\n", what, result ? "read error" : "no",
+		 GetSenseString(dh->sense.sense_key, dh->sense.asc, dh->sense.ascq, FALSE));
+}
+
+/* Test result if available, else what the drive claims */
+
+static int works(int test, int claimed)
+{  return test == UNTESTED || test < 0 ? claimed : test;
+}
+
+static char* untested(int test1, int test2)
+{  return test1 > 0 && test2 >= 0 ? "" : " (not tested)";
+}
+
+void DriveTest(char *device)
+{  DeviceHandle *dh = OpenDevice(device);
+   AlignedBuffer *ab;
+   unsigned char cmd[MAX_CDB_SIZE];
+   unsigned char *f;
+   char *firmware;
+   int cd_read, c2_flag = FALSE, dvd_read, bd_read, hddvd_read;
+   int defective = FALSE, medium = UNSUPPORTED;
+   int data = UNTESTED, raw = UNTESTED, raw_c2 = UNTESTED, cdda = UNTESTED, cdda_c2 = UNTESTED;
+   gint64 data_lba = -1, audio_lba = -1;
+   int i;
+
+   if(!dh) return;
+   InquireDevice(dh, 0);
+   ab = CreateAlignedBuffer(4096);
+
+   firmware = dh->devinfo + strlen(dh->vendor);
+   while(*firmware == ' ') firmware++;
+
+   PrintLog("\nDrive capability report for %s\n\n", device);
+   PrintLog("Drive:    %s\n", dh->vendor);
+   PrintLog("Firmware: %s\n", firmware);
+
+   /*** Profiles and features (GET CONFIGURATION) */
+
+   PrintLog("\nProfiles (GET CONFIGURATION):\n");
+   if((f = get_feature(dh, ab, 0x0000)))
+   {  int current = ab->buf[6]<<8 | ab->buf[7];
+
+      for(i=0; i<f[3]/4; i++)
+      {  int p = f[4+4*i]<<8 | f[5+4*i];
+	 int j;
+
+	 for(j=0; profile_names[j].profile && profile_names[j].profile != p; j++)
+	   ;
+	 PrintLog("  %04xh %s%s\n", p, profile_names[j].name, p == current ? " (current)" : "");
+      }
+   }
+   else PrintLog("  none reported\n");
+
+   PrintLog("\nFeatures:\n");
+   f = get_feature(dh, ab, 0x001e);
+   cd_read = f != NULL;
+   PrintLog("  CD read (001Eh):               %s\n", cd_read ? "yes" : "no");
+   if(cd_read)
+   {  c2_flag = f[4] & 0x02;
+      PrintLog("    C2 error pointers:           %s\n", c2_flag ? "yes" : "no");
+      PrintLog("    CD-TEXT:                     %s\n", f[4] & 0x01 ? "yes" : "no");
+   }
+   dvd_read = get_feature(dh, ab, 0x001f) != NULL;
+   PrintLog("  DVD read (001Fh):              %s\n", dvd_read ? "yes" : "no");
+   bd_read = get_feature(dh, ab, 0x0040) != NULL;
+   PrintLog("  BD read (0040h):               %s\n", bd_read ? "yes" : "no");
+   hddvd_read = get_feature(dh, ab, 0x0050) != NULL;
+   PrintLog("  HD DVD read (0050h):           %s\n", hddvd_read ? "yes" : "no");
+   f = get_feature(dh, ab, 0x0107);
+   PrintLog("  Real time streaming (0107h):   %s\n",
+	    !f ? "no" : (f[4] & 0x08 ? "yes (SET STREAMING, SET CD SPEED)" : "yes (SET STREAMING)"));
+
+   /*** Read error recovery mode page. dvdisaster sets the TB (and DCR)
+	bits for raw reading so that defective sectors are delivered. */
+
+   PrintLog("\nRead error recovery (mode page 01h):\n");
+   if(mode_sense_01(dh, ab, FALSE))
+   {  PrintLog("  Current parameters:            %02xh, %d read retries\n", ab->buf[10], ab->buf[11]);
+      if(mode_sense_01(dh, ab, TRUE))
+      {  defective = ab->buf[10] & 0x20;
+	 PrintLog("  Changeable parameters:         %02xh\n", ab->buf[10]);
+	 PrintLog("  Delivers defective sectors:    %s\n",
+		  defective ? "probably (TB bit changeable)" : "no (TB bit not changeable)");
+      }
+   }
+   else PrintLog("  not available (%s)\n",
+		 GetSenseString(dh->sense.sense_key, dh->sense.asc, dh->sense.ascq, FALSE));
+
+   /*** Inserted medium */
+
+   PrintLog("\nMedium:\n");
+   memset(cmd, 0, MAX_CDB_SIZE);
+   cmd[0] = 0x00;     /* TEST UNIT READY; twice for a pending unit attention */
+   if(   SendPacket(dh, cmd, 6, NULL, 0, &dh->sense, DATA_NONE) < 0
+      && SendPacket(dh, cmd, 6, NULL, 0, &dh->sense, DATA_NONE) < 0)
+      PrintLog("  none (%s)\n", GetSenseString(dh->sense.sense_key, dh->sense.asc, dh->sense.ascq, FALSE));
+   else if(!query_type(dh, 2))
+      PrintLog("  not recognized (profile %04xh)\n", dh->profile);
+   else
+   {  int audio_tracks = 0;
+
+      medium = dh->mainType;
+      PrintLog("  %s\n", dh->typeDescr ? dh->typeDescr : dh->profileDescr);
+      for(i=0; i<dh->nTracks; i++)
+      {  if(dh->track[i].audio)
+	 {  audio_tracks++;
+	    if(audio_lba < 0) audio_lba = dh->track[i].start;
+	 }
+	 else if(data_lba < 0) data_lba = dh->track[i].start;
+      }
+      if(dh->nTracks)
+	 PrintLog("  %d session(s), %d track(s), %d audio\n", dh->sessions, dh->nTracks, audio_tracks);
+      else if(medium != CD || dh->subType != UNSUPPORTED)
+	 data_lba = 0;
+   }
+
+   /*** Read tests */
+
+   if(data_lba >= 0)
+   {  PrintLog("\nRead tests (data sector %" PRId64 "):\n", data_lba);
+      data = dh->read(dh, ab->buf, data_lba, 1) >= 0 ? 1 : -1;
+      print_test(dh, "Reading user data", data);
+      if(medium == CD)
+      {  raw = try_read_cd(dh, ab, data_lba, FALSE, 0xf8);
+	 print_test(dh, "READ CD raw (sync, headers, EDC/ECC)", raw);
+	 raw_c2 = try_read_cd(dh, ab, data_lba, FALSE, 0xfa);
+	 print_test(dh, "READ CD raw with C2 error pointers", raw_c2);
+      }
+   }
+
+   if(audio_lba >= 0)
+   {  PrintLog("\nRead tests (audio sector %" PRId64 "):\n", audio_lba);
+      cdda = try_read_cd(dh, ab, audio_lba, TRUE, 0x10);
+      print_test(dh, "READ CD CD-DA", cdda);
+      cdda_c2 = try_read_cd(dh, ab, audio_lba, TRUE, 0x12);
+      print_test(dh, "READ CD CD-DA with C2 error pointers", cdda_c2);
+   }
+
+   if(cd_read)
+     PrintLog("\nRead offset: unknown; dvdisaster does not measure it.\n"
+	      "  Look up the drive in the AccurateRip drive offset list if needed;\n"
+	      "  RS04 detects offset differences between CD-DA rips (see --audio-offset).\n");
+
+   /*** Summary */
+
+   PrintLog("\nSuitable for:\n");
+   if(cd_read || (medium == CD && data > 0))
+   {  if(works(raw, cd_read))
+	   PrintLog("  data CDs, raw reading (--read-raw) %s C2 scanning%s%s\n",
+		    works(raw_c2, c2_flag) ? "with" : "without",
+		    defective ? ", delivers defective sectors" : "", untested(raw, raw_c2));
+      else PrintLog("  data CDs, no raw reading\n");
+
+      if(works(cdda, cd_read))
+      {  if(works(cdda_c2, c2_flag))
+	      PrintLog("  audio CDs (--cdda) with C2 error detection%s\n", untested(cdda, cdda_c2));
+	 else PrintLog("  audio CDs (--cdda) without C2 error detection%s;\n"
+		       "  damaged audio sectors may be interpolated silently\n", untested(cdda, cdda_c2));
+      }
+   }
+   if(dvd_read || (medium == DVD && data > 0))
+      PrintLog("  DVD\n");
+   if(bd_read || (medium == BD && data > 0))
+      PrintLog("  BD\n");
+   if(hddvd_read || (medium == HD_DVD && data > 0))
+      PrintLog("  HD DVD\n");
+
+   FreeAlignedBuffer(ab);
+   CloseDevice(dh);
 }
 
 /***

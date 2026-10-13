@@ -9,10 +9,17 @@ INTERACTIVE_DIFF yes
 # Verify tests
 RS01_good yes
 RS01_good_quick yes
+RS01_mapfile_export yes
+RS01_list_damaged_files yes
+RS01_list_damaged_files_ms yes
 RS01_no_files yes
+RS01_good_json yes
+RS01_no_files_quiet_json yes
 RS01_no_image yes
 RS01_no_ecc yes
 RS01_defective_image_no_ecc yes
+RS01_xorriso_md5_good yes
+RS01_xorriso_md5_altered yes
 RS01_plus56_bytes yes
 RS01_image_plus56_bytes yes
 RS01_ecc_plus56_bytes yes
@@ -27,6 +34,10 @@ RS01_plus17 yes
 RS01_defective_with_ecc yes
 RS01_missing_sectors_with_ecc yes
 RS01_crc_errors_with_ecc yes
+RS01_ecc_margin_exceeded yes
+RS01_find_ecc_in_dir yes
+RS01_find_ecc_in_dir_no_match yes
+RS01_find_ecc_in_dir_ambiguous yes
 RS01_crc_in_fingerprint yes
 RS01_missing_fingerprint yes
 RS01_missing_ecc_header yes
@@ -93,6 +104,7 @@ RS01_scan_crc_errors_with_ecc yes
 RS01_scan_shorter_with_ecc yes
 RS01_scan_longer_with_ecc yes
 RS01_scan_tao_tail_with_ecc yes
+RS01_scan_tao_tail_json yes
 RS01_scan_no_tao_tail_with_ecc yes
 RS01_scan_more_missing_at_end_with_ecc yes
 RS01_scan_with_double_ecc yes
@@ -104,6 +116,9 @@ RS01_scan_medium_with_dsm yes
 # Reading tests (linear)
 
 RS01_read_no_ecc yes
+RS01_read_copy_protected yes
+RS01_read_abort_file yes
+RS01_catalog_report yes
 RS01_read_no_ecc_good_file yes
 RS01_read_no_device yes
 RS01_read_no_device_access yes
@@ -118,6 +133,7 @@ RS01_read_new_with_range_no_ecc yes
 RS01_read_new_with_invalid_range_no_ecc yes
 RS01_read_two_missing_secs_no_ecc yes
 RS01_read_with_ecc yes
+RS01_read_find_ecc_in_dir yes
 RS01_read_with_ecc_good_file yes
 RS01_read_with_non_existing_ecc yes
 RS01_read_with_no_permission_for_ecc yes
@@ -204,6 +220,8 @@ RS02_modulo_glitch yes
 RS02_modulo_glitch2 yes
 RS02_modulo_glitch3 yes
 RS02_modulo_glitch4 yes
+RS02_tiny_old_header yes
+RS02_empty_image yes
 RS02_with_rs01_file yes
 RS02_with_wrong_rs01_file yes
 RS02_with_rs03_file yes
@@ -216,6 +234,8 @@ RS02_uncorrectable_dsm_in_image3 yes
 
 # Creation tests
 RS02_ecc_create yes
+RS02_ecc_create_tiny yes
+RS02_ecc_create_padded yes
 RS02_ecc_missing_image yes
 RS02_ecc_no_read_perm yes
 RS02_ecc_no_write_perm yes
@@ -298,6 +318,7 @@ RS02_read_no_tao_tail yes
 RS02_read_incompatible_ecc yes
 RS02_read_bad_master yes
 RS02_read_bad_master_exhaustive yes
+RS02_read_padded yes
 RS02_read_bad_header yes
 RS02_read_bad_headers yes
 RS02_read_missing_data_sectors yes
@@ -320,6 +341,7 @@ RS02_read_multipass_ecc_partial_success yes
 # Reading tests (adaptive)
 
 RS02_adaptive_good yes
+RS02_adaptive_insufficient yes
 RS02_adaptive_good_file yes
 RS02_adaptive_good_verbose yes
 RS02_adaptive_shorter yes
@@ -364,6 +386,8 @@ RS03i_bad_crc_cookie yes
 RS03i_bad_crc_checksum yes
 RS03i_missing_crc_sectors yes
 RS03i_missing_data_sectors yes
+RS03i_uncorrectable_block yes
+RS03i_uncorrectable_block_json yes
 RS03i_missing_ecc_sectors yes
 RS03i_data_bad_byte yes
 RS03i_ecc_bad_byte yes
@@ -386,6 +410,10 @@ RS03i_missing_header3 yes
 RS03i_missing_header4 yes
 RS03i_missing_header5 yes
 RS03i_missing_header6 yes
+RS03i_header_zero_layer_size yes
+RS03i_header_huge_sectors yes
+RS03i_header_invalid_inlast yes
+RS03i_crc_block_zero_layer_size yes
 RS03i_missing_header_truncated yes
 RS03i_missing_header_no_crcsec yes
 RS03i_random_image yes
@@ -405,6 +433,8 @@ RS03i_verify_custom_n_bad_header_with_n yes
 # Creation tests
 
 RS03i_ecc_create yes
+RS03i_ecc_create_small_partial yes
+RS03i_ecc_create_padded yes
 RS03i_ecc_missing_image yes
 RS03i_ecc_no_read_perm yes
 RS03i_ecc_no_write_perm yes
@@ -436,6 +466,8 @@ RS03i_fix_trailing_tao yes
 RS03i_fix_trailing_garbage yes
 RS03i_fix_trailing_garbage2 yes
 RS03i_fix_correctable yes
+RS03i_fix_uncorrectable_block yes
+RS03i_fix_correctable_json yes
 RS03i_fix_border_cases_erasures yes
 RS03i_fix_border_cases_crc_errors yes
 RS03i_fix_layer_multiple yes
@@ -454,6 +486,7 @@ RS03i_fix_custom_n_bad_header_bruteforce yes
 RS03i_fix_custom_n_truncated_with_n yes
 RS03i_fix_custom_n_truncated_no_bruteforce yes
 RS03i_fix_custom_n_truncated_bruteforce yes
+RS03i_fix_trailing_medium_space yes
 
 # Scanning tests
 
@@ -466,6 +499,7 @@ RS03i_scan_no_tao_tail yes
 RS03i_scan_incompatible_ecc yes
 RS03i_scan_bad_header yes
 RS03i_scan_missing_data_sectors yes
+RS03i_scan_missing_data_sectors_quiet_json yes
 RS03i_scan_missing_crc_sectors yes
 RS03i_scan_missing_ecc_sectors yes
 RS03i_scan_data_bad_byte yes
@@ -515,6 +549,7 @@ RS03i_read_with_wrong_rs01_file yes
 RS03i_read_with_rs03_file yes
 RS03i_read_with_wrong_rs03_file yes
 RS03i_read_crc_section_with_uncorrectable_dsm yes
+RS03i_read_padded yes
 RS03i_read_with_missing_header yes
 RS03i_read_with_missing_header_exhaustive yes
 RS03i_read_with_missing_iso_header_exhaustive yes
@@ -554,6 +589,9 @@ RS03f_missing_ecc_header yes
 RS03f_missing_ecc_header_and_crc yes
 RS03f_missing_ecc_header_and_defective_crc yes
 RS03f_ecc_header_crc_error yes
+RS03f_ecc_header_no_file_flag yes
+RS03f_ecc_header_huge_sectors yes
+RS03f_ecc_header_invalid_inlast yes
 RS03f_ecc_file_truncated yes
 RS03f_ecc_file_plus_garbage yes
 RS03f_ecc_file_cookieless_crc yes
@@ -590,6 +628,7 @@ RS03f_ecc_recreate_after_read_rs03f yes
 
 RS03f_fix_good yes
 RS03f_fix_missing_data_sectors yes
+RS03f_fix_find_ecc_in_dir yes
 RS03f_fix_missing_crc_sectors yes
 RS03f_fix_missing_ecc_sectors yes
 RS03f_fix_border_cases_erasures yes
@@ -659,3 +698,180 @@ RS03f_read_multipass_ecc_partial_success yes
 # Reading tests (adaptive)
 
 RS03f_adaptive_good yes
+
+### RS04f tests
+
+RS04f_ecc_create yes
+RS04f_ecc_create_threads yes
+RS04f_ecc_create_portable yes
+RS04f_ecc_create_percent yes
+RS04f_ecc_create_roots yes
+RS04f_ecc_create_size yes
+RS04f_ecc_create_low_memory yes
+RS04f_ecc_bad_redundancy yes
+RS04f_ecc_invalid_redundancy yes
+RS04f_ecc_invalid_sector_size yes
+RS04f_ecc_missing_image yes
+RS04f_ecc_tiny_1 yes
+RS04f_ecc_tiny_10 yes
+RS04f_reference_2048 yes
+RS04f_reference_2352 yes
+RS04f_reference_2324 yes
+RS04f_good yes
+RS04f_good_quick yes
+RS04f_no_image yes
+RS04f_missing_data_sectors yes
+RS04f_crc_errors yes
+RS04f_ecc_damaged yes
+RS04f_tag0_lost yes
+RS04f_tag0_invalid yes
+RS04f_tag0_foreign yes
+RS04f_fix_tag0_foreign yes
+RS04f_tag_newer_version yes
+RS04f_image_truncated yes
+RS04f_image_plus56 yes
+RS04f_ecc_truncated yes
+RS04f_ecc_plus1 yes
+RS04f_wrong_image yes
+RS04f_supplementary yes
+RS04f_fix_good yes
+RS04f_fix_correctable yes
+RS04f_fix_correctable_threads yes
+RS04f_fix_correctable_portable yes
+RS04f_fix_low_memory yes
+RS04f_fix_crc_sectors yes
+RS04f_fix_ecc_damaged yes
+RS04f_fix_uncorrectable yes
+RS04f_fix_truncated_image yes
+RS04f_fix_truncated_ecc yes
+RS04f_fix_image_plus56 yes
+RS04f_fix_image_plus56_truncate yes
+RS04f_fix_partial_last_sector yes
+RS04f_fix_supplementary_dir yes
+RS04f_fix_supplementary_unrepairable yes
+RS04f_audio_create yes
+RS04f_audio_good yes
+RS04f_audio_offset_verify yes
+RS04f_audio_offset_fix yes
+RS04f_audio_offset_fix_negative yes
+RS04f_audio_offset_fix_damaged yes
+RS04f_audio_offset_given yes
+RS04f_audio_offset_wrong yes
+RS04f_bincue_create yes
+RS04f_gdi_create yes
+RS04f_bincue_verify yes
+RS04f_bincue_fix yes
+RS04f_bincue_fixed yes
+RS04f_bincue_rs01 yes
+RS04f_bincue_mode1_2048 yes
+
+### RS04i tests
+
+RS04i_ecc_create yes
+RS04i_ecc_create_threads yes
+RS04i_ecc_create_fill yes
+RS04i_ecc_create_medium_size yes
+RS04i_ecc_create_medium_too_small yes
+RS04i_ecc_recreate yes
+RS04i_ecc_from_rs03 yes
+RS04i_ecc_non_multiple yes
+RS04i_ecc_tiny_1 yes
+RS04i_ecc_tiny_150 yes
+RS04i_reference_check yes
+RS04i_good yes
+RS04i_good_quick yes
+RS04i_missing_data_sectors yes
+RS04i_crc_errors yes
+RS04i_zone_damaged yes
+RS04i_truncated yes
+RS04i_truncated_into_data yes
+RS04i_trailing_garbage yes
+RS04i_tag0_lost yes
+RS04i_tag0_lost_garbage yes
+RS04i_tag0_lost_garbage_assume yes
+RS04i_tags_disagree yes
+RS04i_crc_sectors_lost yes
+RS04i_embedded_ecc_file yes
+RS04i_multisession yes
+RS04i_multisession_gap_scan yes
+RS04i_supplementary yes
+RS04i_fix_good yes
+RS04i_fix_correctable yes
+RS04i_fix_crc_sectors yes
+RS04i_fix_zone_damaged yes
+RS04i_fix_uncorrectable yes
+RS04i_fix_truncated yes
+RS04i_fix_truncated_threads yes
+RS04i_fix_trailing_garbage yes
+RS04i_fix_tiny_1 yes
+RS04i_fix_multisession yes
+RS04i_fix_supplementary yes
+RS04i_strip_ecc yes
+RS04i_read_good yes
+### Reading tests (codec independent): multi-session media and audio CDs
+
+READ_multisession_read yes
+READ_multisession_scan yes
+READ_multisession_defective yes
+READ_multisession_defective_adaptive yes
+READ_multisession_adaptive yes
+READ_multisession_rs02_refused yes
+READ_multisession_medium_info yes
+READ_audio_read yes
+READ_audio_c2_error yes
+READ_audio_no_c2 yes
+READ_audio_complete yes
+READ_audio_adaptive_refused yes
+READ_audio_checksums_offset yes
+READ_audio_cdtext yes
+READ_audio_test_and_copy yes
+READ_audio_test_and_copy_unstable yes
+READ_cdextra_read yes
+READ_cdextra_cdda yes
+READ_cdextra_medium_info yes
+READ_dvd_medium_info yes
+READ_dvd_read yes
+READ_dvd_read_adaptive yes
+READ_drive_test_data yes
+READ_drive_test_cdextra yes
+READ_drive_test_no_c2 yes
+
+### RS04 reading workflows
+
+RS04r_ms_read yes
+RS04r_ms_read_create_rs01 yes
+RS04r_ms_medium_info yes
+RS04r_ms_verify yes
+RS04r_ms_read_damaged yes
+RS04r_ms_fix yes
+RS04r_ms_fix_partial yes
+RS04r_ms_fix_partial_verify yes
+RS04r_ms_crc_errors yes
+RS04r_ms_crc_fix yes
+RS04r_ms_read_tag0_lost yes
+RS04r_ms_adaptive yes
+RS04r_ms_adaptive_fix yes
+RS04r_ms_adaptive_run_out yes
+RS04r_ms_adaptive_run_out_verify yes
+RS04r_ms_parity_crc_errors yes
+RS04r_ms_adaptive_parity_crc yes
+RS04r_ms_adaptive_parity_crc_fix yes
+RS04r_ecc_file_adaptive yes
+RS04r_ecc_file_adaptive_fix yes
+RS04r_ecc_file_adaptive_tao yes
+RS04r_audio_read yes
+RS04r_audio_ecc_create yes
+RS04r_audio_read_offset yes
+RS04r_audio_read_ecc yes
+RS04r_audio_read_ecc_offset yes
+RS04r_audio_fix_offset yes
+RS04r_audio_fix_offset_negative yes
+RS04r_cdextra_read yes
+RS04r_cdextra_verify yes
+RS04r_cdextra_fix yes
+RS04r_xa_read yes
+RS04r_xa_form1_only yes
+RS04r_cdi_read yes
+RS04r_xa_edc_errors yes
+RS04r_xa_edc_errors_ecc yes
+RS04r_xa_fix yes

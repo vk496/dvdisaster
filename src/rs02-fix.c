@@ -40,7 +40,9 @@ typedef struct
    ReedSolomonTables *rt;
    int earlyTermination;
    char *msg;
+   GTimer *timer;
    unsigned char *imgBlock[255];
+   guint8 synBlock[GF_FIELDMAX*2048];
 } fix_closure;
 
 static void fix_cleanup(gpointer data)
@@ -61,6 +63,7 @@ static void fix_cleanup(gpointer data)
 
    if(fc->image) CloseImage(fc->image);
    if(fc->msg) g_free(fc->msg);
+   if(fc->timer) g_timer_destroy(fc->timer);
 
    for(i=0; i<255; i++)
    {  if(fc->imgBlock[i])
@@ -325,6 +328,7 @@ void RS02Fix(Image *image)
    /*** Test ecc blocks and attempt error correction */
 
    last_percent = -1;
+   fc->timer = g_timer_new();
 
    for(s=0; s<lay->sectorsPerLayer; s++)
    { gint64 si = (s + lay->firstCrcLayerIndex) % lay->sectorsPerLayer;
@@ -478,6 +482,8 @@ void RS02Fix(Image *image)
 
      /* Build ecc block and attempt to correct it */
 
+     CalcSyndromes(fc->rt, fc->imgBlock, cache_offset, fc->synBlock);
+
      for(bi=0; bi<2048; bi++)  /* Run through each ecc block byte */
      {  int offset = cache_offset+bi;
         int r, deg_lambda, el, deg_omega;
@@ -491,16 +497,7 @@ void RS02Fix(Image *image)
 	/* Form the syndromes; i.e., evaluate data(x) at roots of g(x) */
 
 	for(i=0; i<nroots; i++)
-	  syn[i] = fc->imgBlock[0][offset];
-
-	for(j=1; j<GF_FIELDMAX; j++)
-	{  int data = fc->imgBlock[j][offset];
-
-	   for(i=0;i<nroots;i++)
-	   {  if(syn[i] == 0) syn[i] = data;
-	      else syn[i] = data ^ gf_alpha_to[mod_fieldmax(gf_index_of[syn[i]] + (RS_FIRST_ROOT+i)*RS_PRIM_ELEM)];
-	   }
-	}
+	  syn[i] = fc->synBlock[2048*i+bi];
 
 	/* Convert syndromes to index form, check for nonzero condition */
 
@@ -794,7 +791,7 @@ skip:
 	   RS02UpdateFixResults(wl, corrected, uncorrected);
 #endif
 	}
-        else PrintProgress(_("Ecc progress: %3d.%1d%%"),percent/10,percent%10);
+        else PrintProgressETA(fc->timer, percent, _("Ecc progress: %3d.%1d%%"),percent/10,percent%10);
         last_percent = percent;
      }
 
@@ -829,6 +826,11 @@ skip:
 	   PrintLog("%s\n", t);
       }
    }
+   if(uncorrected > 0)    SetExitCode(EXIT_CODE_DATA_LOSS);
+   else if(corrected > 0) SetExitCode(EXIT_CODE_DEFECTS);
+   ReportNumber("fix", "repaired", corrected);
+   ReportNumber("fix", "unrepaired", uncorrected);
+
    if(corrected > 0 || uncorrected > 0)
      PrintLog(_("Erasure counts per ecc block:  avg =  %.1f; worst = %d.\n"),
 	     (double)damaged_sectors/(double)damaged_eccsecs,worst_ecc);
