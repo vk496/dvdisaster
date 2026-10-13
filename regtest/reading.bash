@@ -216,6 +216,40 @@ if try "medium info of CD Extra" cdextra_medium_info; then (
   run_regtest cdextra_medium_info "--medium-info" $ISODIR/no.iso $ISODIR/no.ecc
 ) & limit_jobs; fi
 
+### DVD tests
+
+REGTEST_SECTION="DVD reading tests"
+
+# The simulated DVD (--sim-toc=dvd) fails whole ECC blocks of 16 sectors and
+# complains about reads of more than one block. A damaged sector at 1605 and
+# the unreadable end of the disc (RS04 tags are searched there) must cost one
+# failed read per block, not one per sector.
+
+function make_dvd_image()
+{  cp $MASTERISO $1
+   $NEWVER --regtest --debug --set-version $SETVERSION -i$1 -mRS04 -n 20% -c >>$LOGFILE 2>&1
+   $NEWVER --debug -i$1 --erase 1605 >>$LOGFILE 2>&1
+   $NEWVER --debug -i$1 --erase 3520-3591 >>$LOGFILE 2>&1
+}
+
+if try "medium info of DVD with unreadable end" dvd_medium_info; then (
+  make_dvd_image $TEST_TMPDIR/dvd.iso
+  extra_args="--debug --sim-cd=$TEST_TMPDIR/dvd.iso --sim-toc=dvd"
+  run_regtest dvd_medium_info "--medium-info" $ISODIR/no.iso $ISODIR/no.ecc
+) & limit_jobs; fi
+
+if try "reading DVD with unreadable end" dvd_read; then (
+  make_dvd_image $TEST_TMPDIR/dvd.iso
+  extra_args="--debug --sim-cd=$TEST_TMPDIR/dvd.iso --sim-toc=dvd --fixed-speed-values"
+  run_regtest dvd_read "--spinup-delay=0 -r" $TMPISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
+if try "reading DVD with unreadable end, adaptive" dvd_read_adaptive; then (
+  make_dvd_image $TEST_TMPDIR/dvd.iso
+  extra_args="--debug --sim-cd=$TEST_TMPDIR/dvd.iso --sim-toc=dvd --fixed-speed-values"
+  run_regtest dvd_read_adaptive "--spinup-delay=0 -r --adaptive-read" $TMPISO $ISODIR/no.ecc
+) & limit_jobs; fi
+
 ### Drive capability report
 
 REGTEST_SECTION="Drive test"

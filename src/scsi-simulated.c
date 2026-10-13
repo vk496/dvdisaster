@@ -90,6 +90,11 @@ static void write_sense(Sense *sense, int sense_key, int asc, int ascq)
  * A dead sector marker with the simulation hint "c2 error" in an audio
  * sector simulates a sector with C2 errors (interpolated as silence),
  * the hint "unstable" a sector which reads differently each time.
+ *
+ * "dvd" simulates a single layer DVD+R holding the image instead: it is
+ * read with READ(10) in whole ECC blocks of 16 sectors, so a dead sector
+ * marker makes its whole block unreadable, and the drive takes at most
+ * one block per command (more hung a real USB drive).
  */
 
 typedef struct
@@ -105,8 +110,9 @@ static int sim_no_c2;
 static int sim_offset;
 static int sim_cdi;
 static int sim_cdtext;
+static int sim_dvd;
 
-static void parse_sim_toc(void)
+static void parse_sim_toc(DeviceHandle *dh)
 {  char *p = Closure->simulateTOC;
 
    if(sim_tracks >= 0)
@@ -115,6 +121,16 @@ static void parse_sim_toc(void)
    sim_tracks = 0;
    sim_sessions = 1;
    sim_sector_size = 2048;
+
+   if(!strcmp(p, "dvd"))  /* one data track spanning the image */
+   {  sim_dvd = TRUE;
+      Closure->simulateProfile = 0x1b;  /* DVD+R */
+      sim_toc[0].first = 0;
+      sim_toc[0].last = dh->simImage->size/2048 - 1;
+      sim_toc[0].session = 1;
+      sim_tracks = 1;
+      return;
+   }
 
    while(*p)
    {  sim_track *t = &sim_toc[sim_tracks];
@@ -416,11 +432,148 @@ static int simulate_read_cd(DeviceHandle *dh, unsigned char *cdb, unsigned char 
    return 0;
 }
 
+/* Sectors from the image as user data; dead sector markers are read
+   errors unless a simulation hint says otherwise */
+
+static int read_user_data(DeviceHandle *dh, guint64 lba, int alloc_len, unsigned char *out_buf, int size, Sense *sense)
+{  guint64 sectors = dh->simImage->size / 2048;
+   useconds_t delay;
+   char *nodelay;
+   int fact;
+   int i;
+
+   if(alloc_len > size/2048)
+   {  write_sense(sense, 5, 0x24, 0); /* transfer exceeds caller's buffer */
+      return -1;
+   }
+   if(!alloc_len) return 0;
+   if(lba >= sectors || alloc_len > sectors-lba)
+   {  write_sense(sense, 5, 0x21, 0x00);  /* Illegal LBA */
+      return -1;
+   }
+
+   if(!LargeSeek(dh->simImage, 2048*lba))
+   {  write_sense(sense, 5, 0x02, 0x00); /* no seek complete */
+      return -1;
+   }
+
+   if(LargeRead(dh->simImage, out_buf, alloc_len*2048) != alloc_len*2048)
+   {  write_sense(sense, 5, 0x11, 0x00); /* unrecovered read error */
+      return -1;
+   }
+
+   /* Check for dead sector markers and pass them on
+      as read errors */
+
+   for(i=0; i<alloc_len; i++)
+   {  int err;
+
+      err = CheckForMissingSector(out_buf+2048*i, lba+i, NULL, 0);
+
+      if(err != SECTOR_PRESENT)
+      {  if(err == SECTOR_WITH_SIMULATION_HINT)
+         {  char *sim_hint = GetSimulationHint(out_buf+2048*i);
+
+  	  /* simulated hardware error */
+
+  	  if(!strcmp(sim_hint, "hardware failure"))
+  	  {  g_free(sim_hint);
+  	     memset(out_buf, 0, alloc_len*2048);
+  	     write_sense(sense, 4, 0x09, 0x02); /* hardware error, focus servo failure  */
+  	     return -1;
+  	  }
+
+                            /* pass on dead sector marker from this sector */  
+
+  	  if(!strcmp(sim_hint, "pass as dead sector marker"))
+  	  {  g_free(sim_hint);
+  	     continue;
+  	  }
+
+  	  /* simulated copy protected sector */
+
+  	  if(!strcmp(sim_hint, "scrambled sector"))
+  	  {  g_free(sim_hint);
+  	     memset(out_buf, 0, alloc_len*2048);
+  	     write_sense(sense, 5, 0x6F, 0x03); /* read of scrambled sector without authentication */
+  	     return -1;
+  	  }
+
+  	  /* sector becomes readable in pass 3 */
+
+  	  if(!strcmp(sim_hint, "readable in pass 3"))
+  	  {  g_free(sim_hint);
+  	    if(dh->pass == 2)
+  	    {  memset(out_buf+i*2048, 64, 2048);
+  	       continue;
+  	    }
+  	    else
+  	    {  memset(out_buf, 0, alloc_len*2048);
+  	       write_sense(sense, 3, 0x11, 0x00); /* unrecovered read error */
+  	       return -1;
+  	    }
+  	  }
+
+  	  /* unknown simulation code becomes standard read error */
+
+  	  g_free(sim_hint);
+  	  memset(out_buf, 0, alloc_len*2048);
+  	  write_sense(sense, 3, 0x11, 0x00); /* unrecovered read error */
+  	  return -1;
+         }
+         else /* standard read error */
+         {  memset(out_buf, 0, alloc_len*2048);
+  	  write_sense(sense, 3, 0x11, 0x00); /* unrecovered read error */
+  	  return -1;
+         }
+      }
+   }
+
+   nodelay = getenv("DVDISASTER_SCSI_SIMULATED_NODELAY");
+   if (!nodelay || strcmp(nodelay, "1")) {
+     fact = (int)(200.0*sin(-0.5+(double)lba/6280.0));
+     delay = (500+fact)*alloc_len;
+     usleep(delay);
+   }
+
+   return 0;
+}
+
+/* READ(10) on the simulated DVD: whole ECC blocks, at most one per command */
+
+static int simulate_read10(DeviceHandle *dh, unsigned char *cdb, unsigned char *out_buf, int size, Sense *sense)
+{  guint64 lba = (guint64)cdb[2] << 24 | cdb[3] << 16 | cdb[4] << 8 | cdb[5];
+   int n = cdb[7] << 8 | cdb[8];
+   unsigned char rec[2048];
+   guint64 s;
+
+   if(n > 16 || 2048*n != size)
+   {  PrintLog("SendPacket(): READ(10) of %d sectors into %d bytes, the simulated DVD drive takes at most 16 sectors\n", n, size);
+      write_sense(sense, 5, 0x24, 0x00);  /* invalid field in CDB */
+      return -1;
+   }
+
+   for(s = lba & ~15; s < ((lba+n+15) & ~15) && s <= (guint64)sim_toc[0].last; s++)
+   {  int err;
+
+      if(!LargeSeek(dh->simImage, 2048*s) || LargeRead(dh->simImage, rec, 2048) != 2048)
+	break;
+      err = CheckForMissingSector(rec, s, NULL, 0);
+      if(err != SECTOR_PRESENT && err != SECTOR_WITH_SIMULATION_HINT)
+      {  PrintLog("Simulated DVD: READ(10) of sectors %" PRIu64 " - %" PRIu64 " failed, ECC block %" PRIu64 " unreadable\n",
+		  lba, lba+n-1, s/16);
+	 write_sense(sense, 3, 0x11, 0x00);  /* unrecovered read error */
+	 return -1;
+      }
+   }
+
+   return read_user_data(dh, lba, n, out_buf, size, sense);
+}
+
 int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsigned char *out_buf, int size, Sense *sense, int direction)
 {  unsigned char buf[4100];
    int real_size;
    int alloc_len;
-   char *nodelay;
 
    switch(cdb[0])
    {  
@@ -469,7 +622,7 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
 	      {	 guint64 sectors;	 
 
 		 if(Closure->simulateTOC)
-		 {  parse_sim_toc();
+		 {  parse_sim_toc(dh);
 		    sectors = sim_toc[sim_tracks-1].last;
 		 }
 		 else sectors = dh->simImage->size/2048 - 1;
@@ -490,11 +643,11 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
 	   
 		 alloc_len = cdb[7]<<8 | cdb[8];
 		 if(Closure->simulateTOC && ((cdb[2] & 0xf) == 0 || (cdb[2] & 0xf) == 2))
-		 {  parse_sim_toc();
+		 {  parse_sim_toc(dh);
 		    return simulate_read_toc(cdb, out_buf, alloc_len);
 		 }
 		 if(Closure->simulateTOC && (cdb[2] & 0xf) == 5)
-		 {  parse_sim_toc();
+		 {  parse_sim_toc(dh);
 		    if(sim_cdtext)
 		       return simulate_cdtext(out_buf, alloc_len);
 		    write_sense(sense, 5, 0x24, 0x00);  /* invalid field in CDB */
@@ -559,7 +712,7 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
 		       buf[10] = 0x09;   /* version 2, current */
 		       buf[11] = 4;
 		       if(Closure->simulateTOC)
-		       {  parse_sim_toc();
+		       {  parse_sim_toc(dh);
 			  if(!sim_no_c2 && sim_sector_size == 2352) buf[12] = 0x02;
 		       }
 		       real_size += 8;
@@ -569,6 +722,7 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
 		    return 0;
 		 }
 
+		 if(Closure->simulateTOC) parse_sim_toc(dh);
 		 memset(out_buf, 0, 8);
 		 out_buf[3] = 8;  /* data length */
 		 out_buf[6] = Closure->simulateProfile >> 8;
@@ -611,18 +765,15 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
 		 return 0;
 	 break;
 
-#if 0
       case 0x52: assert_cdb_length(cdb[0], cdb_size, 10);  /* READ TRACK INFORMATION */
                  assert_cdb_direction(cdb[0], DATA_READ, direction);
+		 write_sense(sense, 5, 0x24, 0x00);  /* not simulated; dvdisaster copes without */
+		 return -1;
 	 break;
+
+#if 0
       case 0x55: assert_cdb_length(cdb[0], cdb_size, 10);  /* MODE SELECT */
                  assert_cdb_direction(cdb[0], DATA_WRITE, direction);
-	 break;
-      case 0x5a: assert_cdb_length(cdb[0], cdb_size, 10);  /* MODE SENSE */
-                 assert_cdb_direction(cdb[0], DATA_READ, direction);
-	 break;
-      case 0xad: assert_cdb_length(cdb[0], cdb_size, 12);  /* READ DVD STRUCTURE */
-                 assert_cdb_direction(cdb[0], DATA_READ, direction);
 	 break;
 #endif
 
@@ -669,13 +820,10 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
       case 0xbe: /* READ CD */
                  assert_cdb_length(cdb[0], cdb_size, cdb[0] == 0x28 ? 10 : 12);
                  assert_cdb_direction(cdb[0], DATA_READ, direction);
-	   {     guint64 lba, sectors = dh->simImage->size / 2048;
-	         useconds_t delay;
-		 int fact;
-		 int i;
+	   {     guint64 lba;
 
 		 if(cdb[0] == 0xbe && Closure->simulateTOC)
-		 {  parse_sim_toc();
+		 {  parse_sim_toc(dh);
 		    return simulate_read_cd(dh, cdb, out_buf, sense);
 		 }
 
@@ -684,105 +832,18 @@ int SimulateSendPacket(DeviceHandle *dh, unsigned char *cdb, int cdb_size, unsig
 		    return -1;
 		 }
 
+		 if(cdb[0] == 0x28 && Closure->simulateTOC)
+		 {  parse_sim_toc(dh);
+		    if(sim_dvd)
+		       return simulate_read10(dh, cdb, out_buf, size, sense);
+		 }
+
 		 lba = (guint32)cdb[2] << 24 | cdb[3] << 16 | cdb[4] << 8 | cdb[5];
 		 alloc_len = cdb[7] << 8 | cdb[8];
 		 if(cdb[0] == 0xbe) alloc_len |= cdb[6] << 16;
 
-		 if(alloc_len > size/2048)
-		 {  write_sense(sense, 5, 0x24, 0); /* transfer exceeds caller's buffer */
-		    return -1;
-		 }
-		 if(!alloc_len) return 0;
-		 if(lba >= sectors || alloc_len > sectors-lba)
-		 {  write_sense(sense, 5, 0x21, 0x00);  /* Illegal LBA */
-		    return -1;
-		 }
-
-		 if(!LargeSeek(dh->simImage, 2048*lba))
-		 {  write_sense(sense, 5, 0x02, 0x00); /* no seek complete */
-		    return -1;
-		 }
-
-		 if(LargeRead(dh->simImage, out_buf, alloc_len*2048) != alloc_len*2048)
-		 {  write_sense(sense, 5, 0x11, 0x00); /* unrecovered read error */
-		    return -1;
-		 }
-
-		 /* Check for dead sector markers and pass them on
-		    as read errors */
-
-		 for(i=0; i<alloc_len; i++)
-		 {  int err;
-
-		    err = CheckForMissingSector(out_buf+2048*i, lba+i, NULL, 0);
-
-		    if(err != SECTOR_PRESENT)
-		    {  if(err == SECTOR_WITH_SIMULATION_HINT)
-		       {  char *sim_hint = GetSimulationHint(out_buf+2048*i);
-
-			  /* simulated hardware error */
-			  
-			  if(!strcmp(sim_hint, "hardware failure"))
-			  {  g_free(sim_hint);
-			     memset(out_buf, 0, alloc_len*2048);
-			     write_sense(sense, 4, 0x09, 0x02); /* hardware error, focus servo failure  */
-			     return -1;
-			  }
-
-                          /* pass on dead sector marker from this sector */  
-
-			  if(!strcmp(sim_hint, "pass as dead sector marker"))
-			  {  g_free(sim_hint);
-			     continue;
-			  }
-
-			  /* simulated copy protected sector */
-
-			  if(!strcmp(sim_hint, "scrambled sector"))
-			  {  g_free(sim_hint);
-			     memset(out_buf, 0, alloc_len*2048);
-			     write_sense(sense, 5, 0x6F, 0x03); /* read of scrambled sector without authentication */
-			     return -1;
-			  }
-
-			  /* sector becomes readable in pass 3 */
-			  
-			  if(!strcmp(sim_hint, "readable in pass 3"))
-			  {  g_free(sim_hint);
-			    if(dh->pass == 2)
-			    {  memset(out_buf+i*2048, 64, 2048);
-			       continue;
-			    }
-			    else
-			    {  memset(out_buf, 0, alloc_len*2048);
-			       write_sense(sense, 3, 0x11, 0x00); /* unrecovered read error */
-			       return -1;
-			    }
-			  }
-
-			  /* unknown simulation code becomes standard read error */
-			  
-			  g_free(sim_hint);
-			  memset(out_buf, 0, alloc_len*2048);
-			  write_sense(sense, 3, 0x11, 0x00); /* unrecovered read error */
-			  return -1;
-		       }
-		       else /* standard read error */
-		       {  memset(out_buf, 0, alloc_len*2048);
-			  write_sense(sense, 3, 0x11, 0x00); /* unrecovered read error */
-			  return -1;
-		       }
-		    }
-		 }
-
-		 nodelay = getenv("DVDISASTER_SCSI_SIMULATED_NODELAY");
-		 if (!nodelay || strcmp(nodelay, "1")) {
-		   fact = (int)(200.0*sin(-0.5+(double)lba/6280.0));
-		   delay = (500+fact)*alloc_len;
-		   usleep(delay);
-		 }
+		 return read_user_data(dh, lba, alloc_len, out_buf, size, sense);
 	   }
-	         return 0;
 	 break;
 
       default:
