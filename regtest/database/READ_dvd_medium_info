@@ -1,0 +1,42 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ(10).
+Simulated DVD: READ(10) of sectors 3584 - 3585 failed, ECC block 224 unreadable
+Simulated DVD: READ(10) of sectors 3520 - 3535 failed, ECC block 220 unreadable
+Simulated DVD: READ(10) of sectors 3536 - 3551 failed, ECC block 221 unreadable
+Simulated DVD: READ(10) of sectors 3552 - 3567 failed, ECC block 222 unreadable
+Simulated DVD: READ(10) of sectors 3568 - 3583 failed, ECC block 223 unreadable
+Simulated DVD: READ(10) of sectors 3584 - 3591 failed, ECC block 224 unreadable
+Medium "Random Image": DVD+R, 3592 sectors, Ecc, created 16-07-2006.
+
+Physical medium info
+
+Medium type:    DVD+R
+Book type:      DVD+R
+Manuf.-ID:      
+Drive profile:  DVD+R
+Disc status:    finalized (1 sessions; last session complete)
+Used sectors:   3592 sectors (7 MiB), from READ CAPACITY
+                3591 sectors (7 MiB), from DVD structure
+Blank capacity: 0 sectors (0 MiB)
+
+
+Filesystem info
+
+Medium label:     Random Image
+File system size: 3000 sectors (5 MiB)
+Creation time:    16-07-2006
+
+
+Augmented image info
+
+Error correction data: RS04, 1 set(s).
+                       sectors 0 - 3591: 48+9 layers, 18.9% redundancy
+Augmented image size:  3592 sectors (7 MiB)
+dvdisaster version:    0.80
