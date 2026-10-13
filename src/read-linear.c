@@ -1107,10 +1107,13 @@ next_reading_pass:
 	   Switching to fast mode is done only on cluster boundaries
 	   -- this matches the internal structure of DVD and later media better. 
            In order to treat the 2 read errors at the end of TAO discs correctly,
-           we switch back to per sector reading at the end of the medium. */
+           we switch back to per sector reading at the end of the medium
+	   (CD only: on DVD and BD an unreadable ECC block would be retried
+	   sector by sector, which takes very long). */
 
-      if(   rc->readPos & cluster_mask 
-	 || rc->readPos >= ((rc->image->dh->sectors - 2) & ~cluster_mask)
+      if(   rc->readPos & cluster_mask
+	 || (   rc->image->dh->mainType == CD
+	     && rc->readPos >= ((rc->image->dh->sectors - 2) & ~cluster_mask))
 	 || (session_end && rc->readPos >= ((session_end - 2) & ~cluster_mask)))
             nsectors = 1;
       else  nsectors = rc->image->dh->clusterSize;
