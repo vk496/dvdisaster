@@ -2522,8 +2522,8 @@ static int read_dvd_sector(DeviceHandle *dh, unsigned char *buf, int lba, int ns
    cmd[4] = (lba >>  8) & 0xff;
    cmd[5] = lba & 0xff;
    cmd[6] = 0;         /* reserved */
-   cmd[7] = 0;         /* number of sectors */
-   cmd[8] = nsectors;  /* read 1 sector */
+   cmd[7] = (nsectors >> 8) & 0xff;  /* number of sectors */
+   cmd[8] = nsectors & 0xff;
 
    ret = SendPacket(dh, cmd, 10, buf, 2048*nsectors, sense, DATA_READ);
 
