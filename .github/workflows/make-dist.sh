@@ -27,6 +27,15 @@ echo "!> Copying locales"
 mkdir -p dist/locale
 cp -va locale/*/ dist/locale/
 
+# The development archival frontend is optional and requires Python 3 on the
+# host. Include its offline scalar reader even in portable/static packages.
+mkdir -p dist/contrib
+cp contrib/rs04_archive.py contrib/rs04_archive_codec.py contrib/rs04-archive-vectors.py contrib/rs04_archive_vectors.json COPYING dist/contrib/
+cp documentation/codec-specs/rs04-archival.md dist/contrib/FORMAT.md
+cp documentation/rs04-archive.md dist/contrib/USAGE.md
+# Host-library dependencies of a shared codec cannot be assumed in a static
+# Linux or portable Windows package. The scalar reader works without them.
+
 # WINDOWS 32/64
 if [ "$os" != "linux64" ]; then
   lookup_dependencies="dvdisaster"
@@ -83,6 +92,10 @@ if [ "$os" != "linux64" ]; then
   do
     cp -va "$file" dist/
   done
+  # console launcher for command line use of the GUI build
+  if [ "$GUI" = 1 ]; then
+    cp -va dvdisaster.com dist/
+  fi
 # /WINDOWS
 else
 # Linux

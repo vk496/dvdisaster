@@ -50,6 +50,8 @@ try_sector: trying sector 21000
 try_sector: read error, trying next header
 try_sector: trying sector 20850
 try_sector: no cookie, skipping current modulo
+try_sector: trying sector 21150
+try_sector: read error, trying next header
 RS02Recognize: No EH, entering exhaustive search
 FindHeaderInMedium: Trying modulo 4611686018427387904
 FindHeaderInMedium: Trying modulo 2305843009213693952
@@ -636,6 +638,7 @@ RS03: try number = 491, reading sector 20418
 RS03: try number = 492, reading sector 20501
 ** All layers tested -> no RS03 data found
 RS03RecognizeImage: no RS03 data found
+...trying RS04
 ...no augmented image detected.
 GetImageFingerprint(16): read & cached
 GetImageFingerprint(16): cached
@@ -705,4 +708,6 @@ rs01-master.ecc: created by dvdisaster-0.80
 - fingerprint match: good
 - ecc blocks       : 194560 (good)
 - ecc md5sum       : 2c9545f3ec387a9ce8b50e152cf39c17 (good)
+- erasure counts   :  avg =  1.0; worst = 1 per ecc block.
+- ecc margin       : worst block uses 1 of 32 roots (3%)
 

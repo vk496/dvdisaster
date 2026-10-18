@@ -1,0 +1,14 @@
+ignore
+04dbd67b1c8e0e80675c9423ad17fb5e
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rip.bin: 2940 medium sectors.
+Creating the error correction file with Method RS04:
+2560 data sectors of 2352 bytes, 524 ecc sectors (48+9 layers of 54 sectors; 18.9% redundancy).
+* Warning: Using redundancies below 20% may not give
+*          the expected data loss protection.
+Error correction file "rip.ecc" created.
+Make sure to keep this file on a reliable medium.

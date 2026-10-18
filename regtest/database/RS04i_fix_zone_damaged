@@ -1,0 +1,24 @@
+9b5c6ccc5364b4658e853486d3fd29fb
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04i-tmp.iso: 10022 medium sectors.
+
+Fix mode(RS04i): Repairable sectors will be fixed in the image.
+    1 repaired sectors: 8060d 
+    2 repaired sectors: 8061d 9000c 
+    1 repaired sectors: 8062d 
+    1 repaired sectors: 8063d 
+    1 repaired sectors: 8065d 
+    1 repaired sectors: 8066d 
+    1 repaired sectors: 8067d 
+    1 repaired sectors: 8068d 
+    1 repaired sectors: 8069d 
+    1 repaired sectors: 8070d 
+    1 repaired sectors: 10021d 
+Repaired sectors: 14 (0 data, 0 crc, 12 ecc, 2 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  1.1; worst = 2.

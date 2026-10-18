@@ -217,6 +217,15 @@ int RS02Recognize(Image *image)
 	 FreeAlignedBuffer(ab);
 	 return TRUE;
       }
+
+      /* xorriso appends 150 sectors of padding after the ISO image by default,
+	 so the ecc data starts after the padding. */
+
+      if(try_sector(image, iso_size+150, &image->eccHeader, ab->buf) == HEADER_FOUND)
+      {  Verbose("Root sector search at +150 successful\n");
+	 FreeAlignedBuffer(ab);
+	 return TRUE;
+      }
    }
 
    /* This concludes the non-exhaustive search, where we tried to look for
@@ -261,8 +270,10 @@ int RS02Recognize(Image *image)
 	 max_sectors = MAX(image->dh->readCapacity, image->dh->userAreaSize);
 	 break;
    }
-   if(max_sectors == 0)
-      Stop("max_sectors uninitialized");
+   if(max_sectors == 0)  /* empty image or medium: nothing to find */
+   {  FreeAlignedBuffer(ab);
+      return FALSE;
+   }
 
    try_next_header = CreateBitmap0(max_sectors);
    try_next_modulo = CreateBitmap0(max_sectors);

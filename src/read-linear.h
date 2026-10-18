@@ -44,6 +44,7 @@ typedef struct
    int doChecksumsFromImage;    /* calculate sector CRC and MD5 from image */
    int doChecksumsFromCodec;    /* let codec compute its own/additional checksums */
    int savedSectorSkip;
+   int sectorBytes;             /* 2048, or 2352 for CD-DA images */
    char *volumeLabel;
 
    /* Data exchange between reader and worker */
@@ -82,6 +83,9 @@ typedef struct
    int pass;
    int maxC2;                       /* max C2 error since last output */
    int crcIncomplete;               /* CRC information was found incomplete (RS03 only) */
+   int audioOffset;                 /* CD-DA: AUDIO_*, see read-linear.c */
+   gint64 audioPending[8];          /* CRC errors while the offset is unconfirmed */
+   int nAudioPending;
   
    /* for drawing the curve and spiral */
 

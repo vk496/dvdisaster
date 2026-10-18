@@ -1,0 +1,14 @@
+cd53c5898cf6fbeffb76d94290fb4e34
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ CD.
+Medium: CD-R XA, 600 sectors.
+
+Creating new rs04r-tmp.iso image.
+
+All sectors successfully read.

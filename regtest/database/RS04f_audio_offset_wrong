@@ -1,0 +1,55 @@
+f4443d0f54deb18d656a3e404cf64a5b
+e2ce47584228ebbdb4cfaa143d669ca3
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04f-rip.bin: 2296 medium sectors and 1792 bytes.
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+- read offset      : +0 samples (given)
+* ecc block 0: 48 erasures, but only 9 can be corrected
+* ecc block 1: 48 erasures, but only 9 can be corrected
+* ecc block 2: 48 erasures, but only 9 can be corrected
+* ecc block 3: 48 erasures, but only 9 can be corrected
+* ecc block 4: 48 erasures, but only 9 can be corrected
+* ecc block 5: 48 erasures, but only 9 can be corrected
+* ecc block 6: 48 erasures, but only 9 can be corrected
+* ecc block 7: 48 erasures, but only 9 can be corrected
+* ecc block 8: 48 erasures, but only 9 can be corrected
+* ecc block 9: 48 erasures, but only 9 can be corrected
+* ecc block 10: 48 erasures, but only 9 can be corrected
+* ecc block 11: 48 erasures, but only 9 can be corrected
+* ecc block 12: 48 erasures, but only 9 can be corrected
+* ecc block 13: 48 erasures, but only 9 can be corrected
+* ecc block 14: 48 erasures, but only 9 can be corrected
+* ecc block 15: 48 erasures, but only 9 can be corrected
+* ecc block 16: 48 erasures, but only 9 can be corrected
+* ecc block 17: 48 erasures, but only 9 can be corrected
+* ecc block 18: 48 erasures, but only 9 can be corrected
+* ecc block 19: 48 erasures, but only 9 can be corrected
+* ecc block 20: 48 erasures, but only 9 can be corrected
+* ecc block 21: 48 erasures, but only 9 can be corrected
+* ecc block 22: 48 erasures, but only 9 can be corrected
+* ecc block 23: 48 erasures, but only 9 can be corrected
+* ecc block 24: 48 erasures, but only 9 can be corrected
+* ecc block 25: 48 erasures, but only 9 can be corrected
+* ecc block 26: 47 erasures, but only 9 can be corrected
+* ecc block 27: 47 erasures, but only 9 can be corrected
+* ecc block 28: 47 erasures, but only 9 can be corrected
+* ecc block 29: 47 erasures, but only 9 can be corrected
+* ecc block 30: 47 erasures, but only 9 can be corrected
+* ecc block 31: 47 erasures, but only 9 can be corrected
+* ecc block 32: 47 erasures, but only 9 can be corrected
+* ecc block 33: 47 erasures, but only 9 can be corrected
+* ecc block 34: 47 erasures, but only 9 can be corrected
+* ecc block 35: 47 erasures, but only 9 can be corrected
+* ecc block 36: 47 erasures, but only 9 can be corrected
+* ecc block 37: 47 erasures, but only 9 can be corrected
+* ecc block 38: 47 erasures, but only 9 can be corrected
+* ecc block 39: 47 erasures, but only 9 can be corrected
+* ecc block 40: 47 erasures, but only 9 can be corrected
+* ecc block 41: 47 erasures, but only 9 can be corrected
+Unrepaired sectors: 2000
+Erasure counts per ecc block:  avg =  47.6; worst = 48.

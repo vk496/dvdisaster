@@ -385,6 +385,29 @@ if try "header modulo glitch, old style, truncated img, missing ref secs" modulo
    run_regtest modulo_glitch4 "-v -t" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
+# Tiny image with a pre-0.79.5 style header (no size info) which was
+# truncated so that the header modulo must be guessed (verify hung)
+
+if try "tiny image, old style hdr, truncated img" tiny_old_header; then (
+   $NEWVER --debug -i$TMPISO --random-image 209 >>$LOGFILE 2>&1
+   $NEWVER --regtest --debug --set-version $SETVERSION -i$TMPISO -mRS02 -n 43r -c >>$LOGFILE 2>&1
+   $NEWVER --debug -i $TMPISO --byteset 209,128,0 >>$LOGFILE 2>&1 # size info
+   $NEWVER --debug -i $TMPISO --byteset 209,96,241 >>$LOGFILE 2>&1 # recomputed header CRC
+   $NEWVER --debug -i $TMPISO --byteset 209,97,187 >>$LOGFILE 2>&1
+   $NEWVER --debug -i $TMPISO --byteset 209,98,218 >>$LOGFILE 2>&1
+   $NEWVER --debug -i $TMPISO --byteset 209,99,28 >>$LOGFILE 2>&1
+   $NEWVER --debug -i $TMPISO --truncate=255 >>$LOGFILE 2>&1
+
+   run_regtest tiny_old_header "-t" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+# Empty image (recognition stopped with "max_sectors uninitialized")
+
+if try "empty image" empty_image; then (
+   : >$TMPISO
+   run_regtest empty_image "-a RS02 -t" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
 # Augmented image is protected by an outer RS01 error correction file
 
 if try "with RS01 error correction file" with_rs01_file; then (
@@ -539,6 +562,31 @@ if try "augmented image creation" ecc_create; then (
   replace_config medium-size 35000
   extra_args="--debug --set-version $SETVERSION"
   run_regtest ecc_create "-mRS02 -n$ECCSIZE -c" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+# Create tiny image with few roots
+# (unfixed versions grew the image without bound, hence the ulimit)
+
+if try "augmented image creation, tiny image" ecc_create_tiny; then (
+  ulimit -f 4096 2>/dev/null
+  $NEWVER --debug -i$TMPISO --random-image 300 >>$LOGFILE 2>&1
+
+  replace_config method-name RS02
+  extra_args="--debug --set-version $SETVERSION"
+  run_regtest ecc_create_tiny "-mRS02 -n 8r -c" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
+# Create from an image with trailing padding behind the ISO file system
+# (like xorriso's default 300 KiB); a warning is expected.
+
+if try "augmented image creation from padded image" ecc_create_padded; then (
+  $NEWVER --debug -i$TMPISO --random-image $ISOSIZE >>$LOGFILE 2>&1
+  dd if=/dev/zero bs=2048 count=150 >>$TMPISO 2>>$LOGFILE
+
+  replace_config method-name RS02
+  replace_config medium-size 35000
+  extra_args="--debug --set-version $SETVERSION"
+  run_regtest ecc_create_padded "-mRS02 -n$ECCSIZE -c" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
 # Create with missing image
@@ -1040,7 +1088,7 @@ if try "scanning good image" scan_good; then (
   cp $MASTERISO $SIMISO
 
   extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-  run_regtest scan_good "--spinup-delay=0 -s" $TMPISO $NO_FILE
+  run_regtest scan_good "--spinup-delay=0 -s" $TMPISO $NO_FILE EXITCODE
 ) & limit_jobs; fi
 
 # Scan image which is shorter than expected
@@ -1186,7 +1234,7 @@ if try "scanning image with bad data byte" scan_data_bad_byte; then (
    $NEWVER -i$SIMISO --debug --byteset 1235,50,10 >>$LOGFILE 2>&1
 
    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-   run_regtest scan_data_bad_byte "--spinup-delay=0 -s" $TMPISO $NO_FILE
+   run_regtest scan_data_bad_byte "--spinup-delay=0 -s" $TMPISO $NO_FILE EXITCODE
 ) & limit_jobs; fi
 
 # Image contains bad byte in the CRC section
@@ -1525,6 +1573,22 @@ if try "reading image with missing master header, exhaustive" read_bad_master_ex
   run_regtest read_bad_master_exhaustive "--spinup-delay=0 -r -v -a RS02" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
+# Read an image with the ecc data behind 150 zero sectors of padding,
+# as xorriso appends them by default. The quick search must find the
+# master header behind the padding. Sector 32768 is erased so that the
+# quick search can not fall back to a header copy.
+
+if try "reading image with ecc behind 150 sectors padding" read_padded; then (
+
+  $NEWVER --debug -i$SIMISO --random-image $ISOSIZE >>$LOGFILE 2>&1
+  dd if=/dev/zero bs=2048 count=150 >>$SIMISO 2>/dev/null
+  $NEWVER --regtest --debug --set-version $SETVERSION -i$SIMISO -mRS02 -n$ECCSIZE -c >>$LOGFILE 2>&1
+  $NEWVER -i$SIMISO --debug --erase 32768 >>$LOGFILE 2>&1
+
+  extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
+  run_regtest read_padded "--spinup-delay=0 -r" $TMPISO $NO_FILE
+) & limit_jobs; fi
+
 # Read an image containing one header with an invalid cookie.
 # Does not produce a warning message while reading
 # Change to better behaviour?
@@ -1842,7 +1906,16 @@ REGTEST_SECTION="Reading tests (adaptive)"
 if try "reading good image" adaptive_good; then (
   cp $MASTERISO $SIMISO
 
-  run_regtest adaptive_good "--debug --sim-cd=$SIMISO --fixed-speed-values --spinup-delay=0 -r --adaptive-read" $TMPISO $NO_FILE
+  run_regtest adaptive_good "--debug --sim-cd=$SIMISO --fixed-speed-values --spinup-delay=0 -r --adaptive-read" $TMPISO $NO_FILE EXITCODE
+) & limit_jobs; fi
+
+# Read a defective range which does not provide enough data for a full recovery
+
+if try "reading image with insufficient data" adaptive_insufficient; then (
+  cp $MASTERISO $SIMISO
+  $NEWVER --debug -i$SIMISO --erase 1000-19000 >>$LOGFILE 2>&1
+
+  run_regtest adaptive_insufficient "--debug --sim-cd=$SIMISO --fixed-speed-values --spinup-delay=0 -r500-1500 --adaptive-read" $TMPISO $NO_FILE EXITCODE
 ) & limit_jobs; fi
 
 # Read into existing and complete image file

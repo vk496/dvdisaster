@@ -11,6 +11,8 @@ GNUmakefile
 .gitignore
 simple-md5sum
 inlined-icons.c
+build/
+__pycache__/
 help-dialogs.h
 dvdisaster
 build.h

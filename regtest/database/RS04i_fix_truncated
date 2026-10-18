@@ -1,0 +1,55 @@
+9b5c6ccc5364b4658e853486d3fd29fb
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04i-tmp.iso: 9900 medium sectors.
+
+Fix mode(RS04i): Repairable sectors will be fixed in the image.
+    2 repaired sectors: 9937d 9979d 
+    2 repaired sectors: 9938d 9980d 
+    2 repaired sectors: 9939d 9981d 
+    2 repaired sectors: 9940d 9982d 
+    2 repaired sectors: 9941d 9983d 
+    2 repaired sectors: 9942d 9985d 
+    3 repaired sectors: 9900d 9943d 9986d 
+    3 repaired sectors: 9901d 9944d 9987d 
+    3 repaired sectors: 9902d 9945d 9988d 
+    3 repaired sectors: 9903d 9946d 9989d 
+    3 repaired sectors: 9904d 9947d 9990d 
+    3 repaired sectors: 9905d 9948d 9991d 
+    3 repaired sectors: 9906d 9949d 9992d 
+    3 repaired sectors: 9907d 9950d 9993d 
+    3 repaired sectors: 9908d 9951d 9994d 
+    3 repaired sectors: 9909d 9952d 9995d 
+    3 repaired sectors: 9910d 9953d 9996d 
+    3 repaired sectors: 9911d 9954d 9997d 
+    3 repaired sectors: 9912d 9955d 9998d 
+    3 repaired sectors: 9913d 9956d 9999d 
+    3 repaired sectors: 9914d 9957d 10000d 
+    3 repaired sectors: 9915d 9958d 10001d 
+    3 repaired sectors: 9916d 9959d 10002d 
+    3 repaired sectors: 9917d 9960d 10003d 
+    3 repaired sectors: 9918d 9961d 10004d 
+    3 repaired sectors: 9919d 9962d 10005d 
+    3 repaired sectors: 9921d 9963d 10006d 
+    3 repaired sectors: 9922d 9964d 10007d 
+    3 repaired sectors: 9923d 9965d 10008d 
+    3 repaired sectors: 9924d 9966d 10009d 
+    3 repaired sectors: 9925d 9967d 10010d 
+    3 repaired sectors: 9926d 9968d 10011d 
+    3 repaired sectors: 9927d 9969d 10012d 
+    3 repaired sectors: 9928d 9970d 10013d 
+    3 repaired sectors: 9929d 9971d 10014d 
+    3 repaired sectors: 9930d 9972d 10015d 
+    3 repaired sectors: 9931d 9973d 10016d 
+    3 repaired sectors: 9932d 9974d 10017d 
+    3 repaired sectors: 9933d 9975d 10018d 
+    3 repaired sectors: 9934d 9976d 10019d 
+    3 repaired sectors: 9935d 9977d 10020d 
+    3 repaired sectors: 9936d 9978d 10021d 
+Repaired sectors: 122 (0 data, 0 crc, 120 ecc, 2 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  2.9; worst = 3.

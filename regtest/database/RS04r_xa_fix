@@ -1,0 +1,16 @@
+b3f86c7a122d21207e233ffb55bd5048
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rip.bin: 1378 medium sectors and 256 bytes.
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+    1 repaired sectors: 100d 
+    1 repaired sectors: 500d 
+    1 repaired sectors: 504c 
+Repaired sectors: 3 (3 data, 0 crc, 0 ecc, 0 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  1.0; worst = 1.

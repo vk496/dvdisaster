@@ -1,0 +1,33 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+disc.cue present.
+rs04f-master-bin.ecc present.
+
+Error correction properties:
+- type             : Error correction file
+- method           : RS04, 48+9 layers of 42 sectors, 18.9% redundancy.
+- sector size      : 2352 bytes
+- created by       : dvdisaster-0.80
+- data md5sum      : c419d9ae1f2a59f2a843294fdaac1329
+
+Data integrity:
+* sectors          : 4680480 bytes (4704000 bytes expected); 408 sectors in ecc file
+- read offset      : +0 samples (63 of 64 probe sectors match)
+* CRC error, sector: 699
+* CRC error, sector: 700
+* CRC error, sector: 701
+* CRC error, sector: 1000
+* missing sectors  : 1990 - 1999 
+* BAD image        : 10 sectors missing, 4 CRC errors
+  ... data section   : 10 sectors missing; 4 CRC errors
+  ... crc section    : 0 sectors missing; 0 CRC errors
+  ... ecc section    : 0 sectors missing; 0 CRC errors
+  ... tags           : 0 of 26 missing
+- erasure counts   :  avg =  1.0; worst = 1 per ecc block.
+- ecc margin       : worst block uses 1 of 9 roots (11%)
+- prognosis        : 2408 of 2408 sectors recoverable (100.0%)

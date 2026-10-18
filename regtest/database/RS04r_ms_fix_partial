@@ -1,0 +1,102 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04r-tmp.iso: 10213 medium sectors.
+
+Fix mode(RS04i): Repairable sectors will be fixed in the image.
+
+Set 1 of 2 (image sectors 0 - 5995):
+* ecc block 0: 21 erasures, but only 18 can be corrected
+* ecc block 1: 21 erasures, but only 18 can be corrected
+* ecc block 2: 21 erasures, but only 18 can be corrected
+* ecc block 3: 21 erasures, but only 18 can be corrected
+* ecc block 4: 21 erasures, but only 18 can be corrected
+* ecc block 5: 21 erasures, but only 18 can be corrected
+* ecc block 6: 21 erasures, but only 18 can be corrected
+* ecc block 7: 21 erasures, but only 18 can be corrected
+* ecc block 8: 21 erasures, but only 18 can be corrected
+* ecc block 9: 21 erasures, but only 18 can be corrected
+* ecc block 10: 21 erasures, but only 18 can be corrected
+* ecc block 11: 21 erasures, but only 18 can be corrected
+* ecc block 12: 21 erasures, but only 18 can be corrected
+* ecc block 13: 21 erasures, but only 18 can be corrected
+* ecc block 14: 21 erasures, but only 18 can be corrected
+* ecc block 15: 21 erasures, but only 18 can be corrected
+* ecc block 16: 21 erasures, but only 18 can be corrected
+* ecc block 17: 21 erasures, but only 18 can be corrected
+* ecc block 18: 21 erasures, but only 18 can be corrected
+* ecc block 19: 21 erasures, but only 18 can be corrected
+* ecc block 20: 21 erasures, but only 18 can be corrected
+* ecc block 21: 21 erasures, but only 18 can be corrected
+* ecc block 22: 21 erasures, but only 18 can be corrected
+* ecc block 23: 21 erasures, but only 18 can be corrected
+* ecc block 24: 21 erasures, but only 18 can be corrected
+* ecc block 25: 21 erasures, but only 18 can be corrected
+* ecc block 26: 21 erasures, but only 18 can be corrected
+* ecc block 27: 21 erasures, but only 18 can be corrected
+* ecc block 28: 21 erasures, but only 18 can be corrected
+* ecc block 29: 21 erasures, but only 18 can be corrected
+* ecc block 30: 21 erasures, but only 18 can be corrected
+* ecc block 31: 21 erasures, but only 18 can be corrected
+* ecc block 32: 21 erasures, but only 18 can be corrected
+* ecc block 33: 21 erasures, but only 18 can be corrected
+* ecc block 34: 20 erasures, but only 18 can be corrected
+* ecc block 35: 20 erasures, but only 18 can be corrected
+* ecc block 36: 20 erasures, but only 18 can be corrected
+* ecc block 37: 20 erasures, but only 18 can be corrected
+* ecc block 38: 20 erasures, but only 18 can be corrected
+* ecc block 39: 20 erasures, but only 18 can be corrected
+* ecc block 40: 20 erasures, but only 18 can be corrected
+* ecc block 41: 20 erasures, but only 18 can be corrected
+* ecc block 42: 20 erasures, but only 18 can be corrected
+* ecc block 43: 21 erasures, but only 18 can be corrected
+* ecc block 44: 21 erasures, but only 18 can be corrected
+* ecc block 45: 21 erasures, but only 18 can be corrected
+* ecc block 46: 21 erasures, but only 18 can be corrected
+* ecc block 47: 21 erasures, but only 18 can be corrected
+* ecc block 48: 21 erasures, but only 18 can be corrected
+* ecc block 49: 21 erasures, but only 18 can be corrected
+* ecc block 50: 21 erasures, but only 18 can be corrected
+* ecc block 51: 21 erasures, but only 18 can be corrected
+* ecc block 52: 21 erasures, but only 18 can be corrected
+
+Set 2 of 2 (image sectors 6296 - 10212):
+    1 repaired sectors: 6992d 
+    1 repaired sectors: 6993d 
+    1 repaired sectors: 6994d 
+    1 repaired sectors: 6995d 
+    1 repaired sectors: 6996d 
+    1 repaired sectors: 6997d 
+    1 repaired sectors: 6998d 
+    1 repaired sectors: 6999d 
+    1 repaired sectors: 7000d 
+    1 repaired sectors: 7001d 
+    1 repaired sectors: 7002d 
+    1 repaired sectors: 7003d 
+    1 repaired sectors: 7004d 
+    1 repaired sectors: 7005d 
+    1 repaired sectors: 7006d 
+    1 repaired sectors: 7007d 
+    1 repaired sectors: 7008d 
+    1 repaired sectors: 7009d 
+    1 repaired sectors: 7010d 
+    1 repaired sectors: 7011d 
+    1 repaired sectors: 7012d 
+    1 repaired sectors: 7013d 
+    1 repaired sectors: 7014d 
+    1 repaired sectors: 7015d 
+    1 repaired sectors: 7016d 
+    1 repaired sectors: 7017d 
+    1 repaired sectors: 7018d 
+    1 repaired sectors: 7019d 
+    1 repaired sectors: 7020d 
+    1 repaired sectors: 7021d 
+    1 repaired sectors: 7022d 
+    1 repaired sectors: 7023d 
+Repaired sectors: 32 (32 data, 0 crc, 0 ecc, 0 tags)
+Unrepaired sectors: 1104
+Erasure counts per ecc block:  avg =  13.4; worst = 21.

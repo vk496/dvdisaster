@@ -104,7 +104,20 @@ endif
 
 .PHONY : all help show locale
 
-all: dvdisaster
+all: dvdisaster rs04-archive
+
+.PHONY: rs04-archive archive-check
+rs04-archive: $(BUILDTMP)/librs04-codec.so
+
+$(BUILDTMP)/librs04-codec.so: src/rs04-ff16.c src/rs04-ff16.h src/rs04-ff16-simd.h
+	$(CC) -O2 -Wall -fPIC -shared -DRS04_STANDALONE $(CFG_GLIB2_CFLAGS) src/rs04-ff16.c -o $@ $(GLIB_LIBS)
+
+$(BUILDTMP)/rs04-family-test: regtest/rs04-family.c src/rs04-ff16.c src/rs04-ff16.h src/rs04-ff16-simd.h
+	$(CC) -O2 -Wall -Wextra -Werror -DRS04_STANDALONE $(CFG_GLIB2_CFLAGS) regtest/rs04-family.c src/rs04-ff16.c -o $@ $(GLIB_LIBS)
+
+archive-check: rs04-archive $(BUILDTMP)/rs04-family-test
+	$(BUILDTMP)/rs04-family-test
+	python3 -B regtest/rs04-archive.py
 
 src/build.h: configure
 	@echo "Updating:" src/build.h
@@ -133,6 +146,10 @@ dvdisaster: $(OFILES)
 	@if test $(CFG_SYS_OPTIONS) == -DSYS_MINGW; \
 	then windres -v src/winres.rc -O coff -o ${BUILDTMP}/winres.o >/dev/null ; \
 	     $(CC) $(LOPTS) $(OFILES) $(LIBS) ${BUILDTMP}/winres.o -o dvdisaster ; \
+	     if echo $(WITH_OPTIONS) | grep -q WITH_GUI_YES; \
+	     then echo "Linking  : dvdisaster.com"; \
+	          $(CC) $(CFLAGS) contrib/win-console-launcher.c -o dvdisaster.com ; \
+	     fi ; \
 	else $(CC) $(LOPTS) $(OFILES) $(LIBS) -o dvdisaster ; \
 	fi
 	@if test -e locale/de/LC_MESSAGES/dvdisaster.mo \
@@ -257,10 +274,18 @@ show:
 # Distribution management
 ######################################################################
 
-.PHONY : install uninstall clean distclean arch
+.PHONY : install install-archive uninstall clean distclean arch
 .PHONY : srcdist dist
 
-install: dvdisaster manual
+install-archive: rs04-archive
+	install -d "$(BUILDROOT)$(DOCSUBDIR)/rs04-archive"
+	install -m 644 contrib/rs04_archive.py contrib/rs04_archive_codec.py contrib/rs04-archive-vectors.py contrib/rs04_archive_vectors.json "$(BUILDROOT)$(DOCSUBDIR)/rs04-archive"
+	install -m 644 $(BUILDTMP)/librs04-codec.so "$(BUILDROOT)$(DOCSUBDIR)/rs04-archive"
+	install -m 644 documentation/codec-specs/rs04-archival.md "$(BUILDROOT)$(DOCSUBDIR)/rs04-archive/FORMAT.md"
+	install -m 644 documentation/rs04-archive.md "$(BUILDROOT)$(DOCSUBDIR)/rs04-archive/USAGE.md"
+	install -m 644 COPYING "$(BUILDROOT)$(DOCSUBDIR)/rs04-archive/COPYING"
+
+install: dvdisaster manual install-archive
 	@echo "Installing package..."
 	install -d "$(BUILDROOT)$(BINDIR)"
 	install dvdisaster "$(BUILDROOT)$(BINDIR)"
@@ -297,6 +322,8 @@ install: dvdisaster manual
 	@echo "rm -f \"$(DOCSUBDIR)/CREDITS.en\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
 	@echo "rm -f \"$(DOCSUBDIR)/manual.pdf\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
 	@echo "rm -f \"$(DOCSUBDIR)/TODO\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
+	@echo "rm -f \"$(DOCSUBDIR)/rs04-archive/rs04_archive.py\" \"$(DOCSUBDIR)/rs04-archive/rs04_archive_codec.py\" \"$(DOCSUBDIR)/rs04-archive/rs04-archive-vectors.py\" \"$(DOCSUBDIR)/rs04-archive/rs04_archive_vectors.json\" \"$(DOCSUBDIR)/rs04-archive/librs04-codec.so\" \"$(DOCSUBDIR)/rs04-archive/FORMAT.md\" \"$(DOCSUBDIR)/rs04-archive/USAGE.md\" \"$(DOCSUBDIR)/rs04-archive/COPYING\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
+	@echo "rmdir \"$(DOCSUBDIR)/rs04-archive\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
 	@echo "rmdir \"$(DOCSUBDIR)\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
 	@for i in $(PO_LOCALES); do \
 	  echo "rm \"$(LOCALEDIR)/$$i/LC_MESSAGES/dvdisaster.mo\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh" ; \
@@ -309,6 +336,8 @@ install: dvdisaster manual
 
 uninstall:
 	@echo "Uninstalling package..."
+	rm -f "$(DOCSUBDIR)/rs04-archive/rs04_archive.py" "$(DOCSUBDIR)/rs04-archive/rs04_archive_codec.py" "$(DOCSUBDIR)/rs04-archive/rs04-archive-vectors.py" "$(DOCSUBDIR)/rs04-archive/rs04_archive_vectors.json" "$(DOCSUBDIR)/rs04-archive/librs04-codec.so" "$(DOCSUBDIR)/rs04-archive/FORMAT.md" "$(DOCSUBDIR)/rs04-archive/USAGE.md" "$(DOCSUBDIR)/rs04-archive/COPYING"
+	rmdir "$(DOCSUBDIR)/rs04-archive"
 	rm -f "$(BINDIR)/dvdisaster" "$(BINDIR)/dvdisaster-uninstall.sh"
 	rm -f "$(DOCSUBDIR)/CHANGELOG"
 	rm -f "$(DOCSUBDIR)/COPYING"
@@ -338,7 +367,9 @@ distclean: clean
 
 clean:
 	@echo "Removing rebuildable files"
-	@rm -f *.o "$(BUILDTMP)"/*.o medium.* abbild.* dvdisaster .dvdisaster core core.* *.core
+	@rm -f "$(BUILDTMP)/librs04-codec.so"
+	@rm -f "$(BUILDTMP)/rs04-family-test"
+	@rm -f *.o "$(BUILDTMP)"/*.o medium.* abbild.* dvdisaster dvdisaster.com .dvdisaster core core.* *.core
 	@rm -f "$(BUILDTMP)"/inlined-icons.c src/help-dialogs.h
 	@find . -name \*\~ -print | xargs rm -f;
 	@find . -name \*.mo -print | xargs rm -f;

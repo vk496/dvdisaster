@@ -1,0 +1,18 @@
+85a24eb529119e79c540b623f47fc2a3
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04i-tmp.iso: 8000 medium sectors.
+
+*
+* dvdisaster - can not continue:
+*
+Not enough space on medium left for error correction data.
+Data portion of image: 8000 sect.; maximum possible size: 8100 sect.
+If reducing the image size or using a larger medium is not
+an option, please create a separate error correction file.
+
+Aborted by unrecoverable error.

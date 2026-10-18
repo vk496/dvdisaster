@@ -1,0 +1,39 @@
+6b6750b1aeacb4c18fab2e1858930d46
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ(10).
+Simulated DVD: READ(10) of sectors 3584 - 3585 failed, ECC block 224 unreadable
+Simulated DVD: READ(10) of sectors 3520 - 3535 failed, ECC block 220 unreadable
+Simulated DVD: READ(10) of sectors 3536 - 3551 failed, ECC block 221 unreadable
+Simulated DVD: READ(10) of sectors 3552 - 3567 failed, ECC block 222 unreadable
+Simulated DVD: READ(10) of sectors 3568 - 3583 failed, ECC block 223 unreadable
+Simulated DVD: READ(10) of sectors 3584 - 3591 failed, ECC block 224 unreadable
+Medium "Random Image": DVD+R, 3592 sectors, Ecc, created 16-07-2006.
+
+Creating new reading-tmp.iso image.
+Reading CRC information from ecc data (RS04) ... done.
+Simulated DVD: READ(10) of sectors 1600 - 1615 failed, ECC block 100 unreadable
+Sector 1600, try 1: Medium Error; Unrecovered read error.
+Sector 1600: Medium Error; Unrecovered read error. Skipping 15 sectors.
+Simulated DVD: READ(10) of sectors 3520 - 3535 failed, ECC block 220 unreadable
+Sector 3520, try 1: Medium Error; Unrecovered read error.
+Sector 3520: Medium Error; Unrecovered read error. Skipping 15 sectors.
+Simulated DVD: READ(10) of sectors 3536 - 3551 failed, ECC block 221 unreadable
+Sector 3536, try 1: Medium Error; Unrecovered read error.
+Sector 3536: Medium Error; Unrecovered read error. Skipping 15 sectors.
+Simulated DVD: READ(10) of sectors 3552 - 3567 failed, ECC block 222 unreadable
+Sector 3552, try 1: Medium Error; Unrecovered read error.
+Sector 3552: Medium Error; Unrecovered read error. Skipping 15 sectors.
+Simulated DVD: READ(10) of sectors 3568 - 3583 failed, ECC block 223 unreadable
+Sector 3568, try 1: Medium Error; Unrecovered read error.
+Sector 3568: Medium Error; Unrecovered read error. Skipping 15 sectors.
+Simulated DVD: READ(10) of sectors 3584 - 3591 failed, ECC block 224 unreadable
+Sector 3584, try 1: Medium Error; Unrecovered read error.
+Sector 3584: Medium Error; Unrecovered read error. Skipping 7 sectors.
+
+88 unreadable sectors.

@@ -311,6 +311,48 @@ if try "checksum error in ecc header" ecc_header_crc_error; then (
   run_regtest ecc_header_crc_error "-t -v" $MASTERISO $TMPECC
 ) & limit_jobs; fi
 
+# Ecc header without the ecc file flag, but valid CRC (crashed)
+
+if try "ecc header without ecc file flag" ecc_header_no_file_flag; then (
+
+  cp $MASTERECC $TMPECC
+  $NEWVER --debug -i $TMPECC --byteset 0,16,0 >>$LOGFILE 2>&1
+  $NEWVER --debug -i $TMPECC --byteset 0,96,37 >>$LOGFILE 2>&1 # recomputed header CRC
+  $NEWVER --debug -i $TMPECC --byteset 0,97,53 >>$LOGFILE 2>&1
+  $NEWVER --debug -i $TMPECC --byteset 0,98,19 >>$LOGFILE 2>&1
+  $NEWVER --debug -i $TMPECC --byteset 0,99,56 >>$LOGFILE 2>&1
+
+run_regtest ecc_header_no_file_flag "-t" $MASTERISO $TMPECC
+) & limit_jobs; fi
+
+# Ecc header with a huge sector count, but valid CRC (crashed)
+
+if try "ecc header with huge sector count" ecc_header_huge_sectors; then (
+
+  cp $MASTERECC $TMPECC
+  $NEWVER --debug -i $TMPECC --byteset 0,73,1 >>$LOGFILE 2>&1
+  $NEWVER --debug -i $TMPECC --byteset 0,96,108 >>$LOGFILE 2>&1 # recomputed header CRC
+  $NEWVER --debug -i $TMPECC --byteset 0,97,52 >>$LOGFILE 2>&1
+  $NEWVER --debug -i $TMPECC --byteset 0,98,200 >>$LOGFILE 2>&1
+  $NEWVER --debug -i $TMPECC --byteset 0,99,152 >>$LOGFILE 2>&1
+
+run_regtest ecc_header_huge_sectors "-t" $MASTERISO $TMPECC
+) & limit_jobs; fi
+
+# Ecc header with an invalid inLast, but valid CRC (crashed)
+
+if try "ecc header with invalid inLast" ecc_header_invalid_inlast; then (
+
+  cp $MASTERECC $TMPECC
+  $NEWVER --debug -i $TMPECC --byteset 0,118,1 >>$LOGFILE 2>&1
+  $NEWVER --debug -i $TMPECC --byteset 0,96,189 >>$LOGFILE 2>&1 # recomputed header CRC
+  $NEWVER --debug -i $TMPECC --byteset 0,97,72 >>$LOGFILE 2>&1
+  $NEWVER --debug -i $TMPECC --byteset 0,98,105 >>$LOGFILE 2>&1
+  $NEWVER --debug -i $TMPECC --byteset 0,99,246 >>$LOGFILE 2>&1
+
+run_regtest ecc_header_invalid_inlast "-t" $MASTERISO $TMPECC
+) & limit_jobs; fi
+
 # Truncated error correction file
 
 if try "truncated ecc file" ecc_file_truncated; then (
@@ -749,6 +791,19 @@ if try "fixing image with missing data sectors" fix_missing_data_sectors; then (
   run_regtest fix_missing_data_sectors "-f" $TMPISO $TMPECC
 ) & limit_jobs; fi
 
+# Fix image with the ecc file picked from a directory
+
+if try "fixing image, ecc file found in directory" fix_find_ecc_in_dir; then (
+  mkdir -p $TEST_TMPDIR/eccdir
+  cp $MASTERISO $TMPISO
+  cp $MASTERECC $TEST_TMPDIR/eccdir/master.ecc
+  ln -sf $ISODIR/no.ecc $TEST_TMPDIR/eccdir/dangling.ecc
+
+  $NEWVER --debug -i $TMPISO --erase 900-924 >>$LOGFILE 2>&1
+
+  run_regtest fix_find_ecc_in_dir "-f" $TMPISO $TEST_TMPDIR/eccdir
+) & limit_jobs; fi
+
 # Fix ecc file with missing crc sectors
 
 if try "fixing ecc file with missing crc sectors" fix_missing_crc_sectors; then (
@@ -1018,7 +1073,7 @@ if try "scanning good image" scan_good; then (
   cp $MASTERISO $SIMISO
 
   extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-  run_regtest scan_good "--spinup-delay=0 -s" $TMPISO $MASTERECC
+  run_regtest scan_good "--spinup-delay=0 -s" $TMPISO $MASTERECC EXITCODE
 ) & limit_jobs; fi
 
 # Scan complete / optimal image
@@ -1174,7 +1229,7 @@ if try "scanning image with bad data byte" scan_data_bad_byte; then (
    $NEWVER -i$SIMISO --debug --byteset 1235,50,10 >>$LOGFILE 2>&1
 
    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-   run_regtest scan_data_bad_byte "--spinup-delay=0 -s " $TMPISO $MASTERECC
+   run_regtest scan_data_bad_byte "--spinup-delay=0 -s " $TMPISO $MASTERECC EXITCODE
 ) & limit_jobs; fi
 
 # Image contains bad byte in the crc section

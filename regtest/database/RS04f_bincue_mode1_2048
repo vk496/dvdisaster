@@ -1,0 +1,14 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening disc.cue
+*
+* dvdisaster - can not continue:
+*
+disc.cue: track 01 (MODE1/2048) is not supported; all tracks need 2352 byte sectors.
+
+Aborted by unrecoverable error.

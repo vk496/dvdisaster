@@ -1,0 +1,19 @@
+a82e05901e03bfa2c64ff21a0d08a96c
+210c7a5b81e68f8dbc978010cfb9eceb
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04f-tmp.iso: 8000 medium sectors and 56 bytes.
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+
+*
+* dvdisaster - can not continue:
+*
+The image file is 56 bytes longer than noted
+in the ecc file.
+Add the --truncate option to the program call
+to have the superfluous sectors removed.
+

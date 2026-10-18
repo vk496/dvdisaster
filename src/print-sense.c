@@ -551,6 +551,7 @@ static struct error_info additional[] =
   {0xff,0x06,R,"Sector accumulated for analysis"},
   {0xff,0x07,R,"Recovery failed"},
   {0xff,0x08,R,"Invalid sector; possibly random data returned"},
+  {0xff,0x09,R,"C2 error in audio sector"},
 
   /*
    * Errors created by the SCSI layer simulation code

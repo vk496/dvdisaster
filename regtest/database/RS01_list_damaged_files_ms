@@ -1,0 +1,11 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Files affected by missing sectors:
+(file system of the last session, starting at sector 1000)
+- /TWO.BIN: 100 of 977 sectors missing
+1 damaged files; 100 missing sectors in total, 0 of them outside of files (file system data or unused).

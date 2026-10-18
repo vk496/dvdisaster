@@ -1,0 +1,71 @@
+471a1d881e6091d505a7ec717d0425e7
+210c7a5b81e68f8dbc978010cfb9eceb
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+rs04f-tmp.iso present.
+rs04f-master.ecc present.
+
+Error correction properties:
+- type             : Error correction file
+- method           : RS04, 223+31 layers of 36 sectors, 13.9% redundancy.
+- sector size      : 2048 bytes
+- created by       : dvdisaster-0.80
+- data md5sum      : 85a24eb529119e79c540b623f47fc2a3
+
+Data integrity:
+* sectors          : 131072 bytes (16384000 bytes expected); 1150 sectors in ecc file
+* CRC error, sector: 16
+* CRC error, sector: 17
+* CRC error, sector: 21
+* CRC error, sector: 24
+* CRC error, sector: 25
+* CRC error, sector: 26
+* CRC error, sector: 27
+* CRC error, sector: 28
+* CRC error, sector: 29
+* CRC error, sector: 30
+* CRC error, sector: 31
+* CRC error, sector: 32
+* CRC error, sector: 33
+* CRC error, sector: 34
+* CRC error, sector: 35
+* CRC error, sector: 36
+* CRC error, sector: 37
+* CRC error, sector: 38
+* CRC error, sector: 39
+* CRC error, sector: 40
+* CRC error, sector: 41
+* CRC error, sector: 42
+* CRC error, sector: 43
+* CRC error, sector: 44
+* CRC error, sector: 45
+* CRC error, sector: 46
+* CRC error, sector: 47
+* CRC error, sector: 48
+* CRC error, sector: 49
+* CRC error, sector: 50
+* CRC error, sector: 51
+* CRC error, sector: 52
+* CRC error, sector: 53
+* CRC error, sector: 54
+* CRC error, sector: 55
+* CRC error, sector: 56
+* CRC error, sector: 57
+* CRC error, sector: 58
+* CRC error, sector: 59
+* CRC error, sector: 60
+* CRC error, sector: 61
+* CRC error, sector: 62
+* CRC error, sector: 63
+* missing sectors  : 64 - 7999 
+* BAD image        : 7936 sectors missing, 43 CRC errors
+  ... data section   : 7936 sectors missing; 43 CRC errors
+  ... crc section    : 0 sectors missing; 0 CRC errors
+  ... ecc section    : 0 sectors missing; 0 CRC errors
+  ... tags           : 0 of 18 missing
+- erasure counts   :  avg =  221.6; worst = 222 per ecc block.
+- ecc margin       : worst block uses 222 of 31 roots (716%)
+- prognosis        : 1171 of 9150 sectors recoverable (12.7%)

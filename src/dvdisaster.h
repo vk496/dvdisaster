@@ -235,6 +235,10 @@ typedef struct _GlobalClosure
    GPtrArray *deviceNodes;  /* List of device nodes (C: or /dev/foo) */
    char *imageName;     /* complete path of current image file */
    char *eccName;       /* complete path of current ecc file */
+   char *mapFile;       /* write ddrescue mapfile to this file */
+   GPtrArray *moreEccNames; /* further ecc files given with -e (RS04 supplementary sets) */
+   char *catalogFile;   /* append scan/read results to this file */
+   char *catalogReport; /* print the history from this catalog file */
    GPtrArray *methodList; /* List of available methods */
    char *methodName;    /* Name of currently selected codec */
    gint64 readStart;    /* Range to read */
@@ -257,12 +261,14 @@ typedef struct _GlobalClosure
    int cacheMiB;        /* Cache setting for the parity codec, in megabytes */
    int prefetchSectors; /* Prefetch setting per encoder thread */
    int codecThreads;    /* Number of threads to use for RS encoders */
-   int encodingAlgorithm; /* Force a certain codec type for RS03 */
+   int encodingAlgorithm; /* Force a certain codec type for RS03/RS04 */
    int encodingIOStrategy; /* Force a IO strategy for RS03 encoding */
    int sectorSkip;      /* Number of sectors to skip after read error occurs */
    char *redundancy;    /* Error correction code redundancy */
    int eccTarget;       /* 0=file; 1=augmented image */
    int readRaw;         /* Read CD sectors raw + verify them */
+   int cdda;            /* Read CDs as CD-DA images (2352 bytes per sector) */
+   int testAndCopy;     /* Read audio tracks twice and compare their CRC32 */
    int rawMode;         /* mode for mode page */
    int minReadAttempts; /* minimum reading attempts */
    int maxReadAttempts; /* maximal reading attempts */
@@ -271,9 +277,14 @@ typedef struct _GlobalClosure
    int speedWarning;    /* Print warning if speed changes by more than given percentage */
    int fillUnreadable;  /* Byte value for filling unreadable sectors or -1 */
    int spinupDelay;     /* Seconds to wait for drive to spin up */
+   int timeLimit;       /* stop actions after this many seconds (0 = no limit) */
+   char *abortFile;     /* stop actions when this file appears */
+   int listDamagedFiles;/* list files containing missing sectors */
    int truncate;        /* confirms truncation of large images */
    int noTruncate;      /* do not truncate image at the end */
    int noProgress;      /* do not print the percentage progress indicator */
+   int quiet;           /* do not print anything except errors in CLI mode */
+   char *jsonFile;      /* write a machine readable report to this file */
    int dsmVersion;      /* 1 means new style dead sector marker */
    int unlinkImage;     /* delete image after ecc file creation */
    int confirmDeletion; /* do not ask whether files should be deleted */
@@ -288,22 +299,30 @@ typedef struct _GlobalClosure
    int ignoreIsoSize;   /* get size per READ CAPACITY; ignore all ISO/UDF meta data */
    int examineRS02;     /* perform deep search for RS02 structures */
    int examineRS03;     /* perform deep search for RS03 structures */
+   int examineRS04;     /* scan whole images for RS04 tags */
+   int sectorBytes;     /* RS04: sector size of the protected data */
+   int audioOffset;     /* RS04: read offset of a CD-DA rip in samples */
+   int audioOffsetGiven;/* RS04: TRUE if audioOffset was specified */
+   int rs04MemoryMiB;   /* RS04: memory budget for de-/encoding */
    int readAndCreate;   /* automatically create .ecc file after reading an image */
    int enableCurveSwitch; /* TRUE in readAndCreateMode after reading is complete */
    int welcomeMessage;  /* just print dvdisaster logo if FALSE */
    int dotFileVersion;  /* version of dotfile */
    int simulateDefects; /* if >0, this is the percentage of simulated media defects */
    char *simulateCD;    /* Simulate CD from given image */
+   char *simulateTOC;   /* Session/track layout of the simulated CD */
    int defectiveDump;   /* dump non-recoverable sectors into given path */
    char *dDumpDir;      /* directory for above */
    char *dDumpPrefix;   /* file name prefix for above */
    int eject;           /* eject medium on success */
    int readingPasses;   /* try to read medium n times */
    int pauseAfter;      /* pause after given amount of minutes */
-   int pauseDuration;   /* duration of pause in minutes */
+   int pauseAfterErrors;/* pause after given amount of read errors */
+   int pauseDuration;   /* duration of pause in seconds */
    int pauseEject;      /* Eject medium during pause */
    int ignoreFatalSense;/* Continue reading after potential fatal sense errors */
    int useSSE2;         /* TRUE means to use SSE2 version of the codec. */
+   int useAVX2;         /* TRUE means to use AVX2 version of the codec. */
    int useAltiVec;      /* TRUE means to use AltiVec version of the codec. */
    int clSize;          /* Bytesize of cache line */
    int useSCSIDriver;   /* Whether to use generic or sg driver on Linux */
@@ -436,6 +455,12 @@ typedef struct _GlobalClosure
 extern GlobalClosure *Closure;  /* these should be the only global variables! */
 extern int exitCode;            /* value to use on exit() */
 
+/* Exit codes in addition to EXIT_SUCCESS (0) and EXIT_FAILURE (1);
+   see EXIT STATUS in the man page */
+
+#define EXIT_CODE_DEFECTS   2       /* defects found, no data loss detected */
+#define EXIT_CODE_DATA_LOSS 3       /* defects which can not be fully repaired */
+
 #ifdef WITH_GUI_YES
    extern GdkRGBA transparent;
 #endif  /* WITH_GUI_YES */
@@ -452,6 +477,7 @@ typedef struct _LargeFile
    char *path;
    guint64 size;
    int flags;
+   GPtrArray *parts;  /* multi-file image (.cue/.gdi): its files in order */
 } LargeFile;
 
 /***
@@ -572,6 +598,7 @@ int ProbeCacheLineSize();
 void InitClosure(void);
 void LocalizedFileDefaults(void);
 void FreeClosure(void);
+void SetExitCode(int);
 void WriteSignature(void);
 int  VerifySignature(void);
 
@@ -586,6 +613,7 @@ void GuiUpdateMarkup(char**, GdkRGBA*);
  ***/
 
 guint32 Crc32(unsigned char*, int);
+guint32 Crc32Update(guint32, unsigned char*, int);
 guint32 EDCCrc32(unsigned char*, int);
 
 /***
@@ -605,6 +633,9 @@ typedef struct _CrcBuf
    guint32 *crcbuf;
    guint64 crcSize;
    Bitmap *valid;
+   Bitmap *covered;             /* if not NULL: sectors which have a CRC at all */
+   void *rs04;                  /* RS04Info: augmented sets whose tags hold more CRCs */
+   int sectorBytes;             /* 2048, or 2352 for CD-DA */
    gint32 crcCached;            /* CRC has been retrieved from ECC or previous run */
   
    /* MD5 sum of image sectors */
@@ -936,14 +967,30 @@ typedef struct _Image
 } Image;
 
 Image* OpenImageFromFile(char*, int, mode_t);
+void WriteMapfile(char*, char*);
+
+/***
+ *** iso-files.c
+ ***/
+
+void ListDamagedFiles(char*);
+
+/***
+ *** catalog.c
+ ***/
+
+void AppendCatalog(Image*, char*, char*, gint64, gint64, gint64);
+void CatalogReport(char*);
 Image* OpenImageFromDevice(char*, int);   /* really in scsi-layer.h */
 Image* OpenEccFileForImage(Image*, char*, int, mode_t);
 int ReportImageEccInconsistencies(Image*);
 int GetImageFingerprint(Image*, guint8*, guint64);
 void ExamineECC(Image*);
+void WarnAboutImagePadding(Image*);
 int ImageReadSectors(Image*, void*, guint64, int);
 int TruncateImage(Image*, guint64);
 void CloseImage(Image*);
+void RefuseMultiFileImage(Image*);
 
 /***
  *** large-io.c
@@ -1174,6 +1221,7 @@ void PrintLogWithAsterisks(char*, ...) PRINTF_FORMAT(1);
 void Verbose(char*, ...) PRINTF_FORMAT(1);
 void PrintTimeToLog(GTimer*, char*, ...) PRINTF_FORMAT(2);
 void PrintProgress(char*, ...) PRINTF_FORMAT(1);
+void PrintProgressETA(GTimer*, int, char*, ...) PRINTF_FORMAT(3);
 void ClearProgress(void);
 void PrintCLIorLabel(GtkWidget*, char*, ...) PRINTF_FORMAT(2);
 int GetLongestTranslation(char*, ...);
@@ -1353,6 +1401,18 @@ void GuiCreateAdaptiveReadWindow(GtkWidget*);
 
 
 /***
+ *** report.c
+ ***/
+
+void ReportString(char*, char*, char*);
+void ReportNumber(char*, char*, gint64);
+void ReportMd5(char*, char*, unsigned char*);
+void ReportAction(char*);
+void ReportDevice(struct _DeviceHandle*);
+void ReportEccHeader(EccHeader*);
+void WriteReport(char*);
+
+/***
  *** recover-raw.c
  ***/
 
@@ -1453,6 +1513,7 @@ AlignedBuffer *CreateAlignedBuffer(int);
 void FreeAlignedBuffer(AlignedBuffer*);
 
 char* DefaultDevice(void);
+void DriveTest(char*);
 gint64 CurrentImageSize(void);
 gint64 CurrentImageCapacity(void);
 
@@ -1468,7 +1529,7 @@ void InitSimulatedCD(void);
  *** rs-decoder.c
  ***/
 
-int TestErrorSyndromes(ReedSolomonTables*, unsigned char*);
+void CalcSyndromes(ReedSolomonTables*, unsigned char**, int, guint8*);
 
 /***
  *** rs-encoder.c and friends
@@ -1486,6 +1547,7 @@ typedef enum
 void EncodeNextLayer(ReedSolomonTables*, unsigned char*, unsigned char*, guint64, int);
 void DescribeRSEncoder(char**, char**);
 int ProbeSSE2(void);
+int ProbeAVX2(void);
 int ProbeAltiVec(void);
 
 /***
@@ -1550,5 +1612,11 @@ void GuiSetSpiralSegmentColor(Spiral*, GdkRGBA*, GdkRGBA*, int);
 void GuiCreateWelcomePage(GtkNotebook*);
 
 void StripECCFromImageFile(void);
+
+/***
+ *** xorriso-md5.c
+ ***/
+
+char* CheckXorrisoTags(char*);
 
 #endif	/* DVDISASTER_H */

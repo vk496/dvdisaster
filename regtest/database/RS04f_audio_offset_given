@@ -1,0 +1,16 @@
+c419d9ae1f2a59f2a843294fdaac1329
+e2ce47584228ebbdb4cfaa143d669ca3
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04f-rip.bin: 2296 medium sectors and 1792 bytes.
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+- read offset      : +100 samples (given)
+Image has been shifted by +100 samples.
+    1 repaired sectors: 1999c 
+Repaired sectors: 1 (1 data, 0 crc, 0 ecc, 0 tags)
+Good! All sectors are repaired.
+Erasure counts per ecc block:  avg =  1.0; worst = 1.

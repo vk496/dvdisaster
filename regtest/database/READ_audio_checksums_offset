@@ -1,0 +1,25 @@
+66c16f83e374f0466bca7eb7d8280ac2
+42f3362026bc9e8d4e7dd5dc6e813067
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Device: sim-cd, Simulated CD drive 1.00
+Using READ CD.
+Medium: CD-R Audio, 2560 sectors.
+
+Reading CD-DA image: 2560 sectors of 2352 bytes, using C2 error pointers.
+  Session 1, track  1: sectors 0 - 1279, audio
+  Session 1, track  2: sectors 1280 - 2559, audio
+
+Creating new audio.bin image.
+
+All sectors successfully read.
+
+AccurateRip checksums (read offset correction +100 samples):
+  Track  1: v1 41eaf87e, v2 354d4fe3, CRC32 3556b4e2
+  Track  2: v1 0fa9c7ce, v2 c553912f, CRC32 f8de939d
+AccurateRip disc id: 002-00000f00-00002801-0c002202
+CTDB TOC id: jMITwptWUXZfy4sfzMMsQhQp0YA-, CRC32 8058443e
+Cue sheet written to audio.cue.

@@ -28,6 +28,7 @@
 #include "udf.h"
 
 #include "rs02-includes.h"
+#include "rs04-includes.h"
 
 //#define CHECK_VISITED 1        /* This gives only reasonable output            */
                                  /* when the .ecc file is present while reading! */ 
@@ -144,6 +145,7 @@ CrcBuf *GetCRCFromRS01_obsolete(EccInfo *ei)   /* FIXME: obsolete */
    gint64 i,j,sec_idx;
 
    cb->crcbuf = g_malloc0(ei->sectors * sizeof(guint32));
+   cb->sectorBytes = 2048;
    cb->crcSize   = ei->sectors;
    cb->valid  = CreateBitmap0(ei->sectors);
    buf = cb->crcbuf;
@@ -199,6 +201,7 @@ CrcBuf *GetCRCFromRS02_obsolete(void *layv, void *dhv, LargeFile *image)
    image_sectors = lay->eccSectors+lay->dataSectors;
  
    cb->crcbuf = g_malloc0(image_sectors * sizeof(guint32));
+   cb->sectorBytes = 2048;
    cb->crcSize   = image_sectors;
    cb->valid  = CreateBitmap0(image_sectors);
 
@@ -263,7 +266,18 @@ CrcBuf *GetCRCFromRS02_obsolete(void *layv, void *dhv, LargeFile *image)
  *** Local data package used during reading
  ***/
 
-enum { IMAGE_ONLY, ECC_IN_FILE, ECC_IN_IMAGE };
+enum { IMAGE_ONLY, ECC_IN_FILE, ECC_IN_IMAGE, ECC_RS04 };
+
+/* An RS04 set (ecc file or augmented) while reading */
+
+typedef struct
+{  RS04Set *set;
+   gint64 base;                 /* medium sector of data sector 0 */
+   Bitmap *zoneBad;             /* ecc file: unusable CRC and parity sectors */
+   gint32 *missing;             /* symbols still missing per codeword */
+   int tagSeen;                 /* a valid tag at the end of the set has been read */
+   Bitmap *tagTried;            /* augmented set: tags read for the CRCs of their payload */
+} RS04Reading;
 
 typedef struct
 {  Image *medium;               /* Medium (disc) we are reading from */
@@ -276,6 +290,9 @@ typedef struct
    EccHeader *eh;               /* if ecc information is present */
    int rs01LayerSectors;        /* length of each RS01 ecc layer in sectors */
    RS02Layout *lay;             /* layout of RS02 type ecc data */
+   RS04Info *rs04;              /* RS04 sets */
+   RS04Reading *rs04Sets;
+   int sessionTails;            /* unreadable sectors at session ends (not needed) */
 
    AlignedBuffer *ab;           /* buffer suitable for reading from the drive */
    unsigned char *buf;          /* buffer component from above */
@@ -392,6 +409,18 @@ bail_out:
    
    if(rc->intervals) g_free(rc->intervals);
    if(rc->crcBuf) FreeCrcBuf(rc->crcBuf);
+
+   if(rc->rs04Sets)
+   {  int i;
+
+      for(i=0; i<rc->rs04->nSets; i++)
+      {  if(rc->rs04Sets[i].zoneBad) FreeBitmap(rc->rs04Sets[i].zoneBad);
+	 if(rc->rs04Sets[i].tagTried) FreeBitmap(rc->rs04Sets[i].tagTried);
+	 g_free(rc->rs04Sets[i].missing);
+      }
+      g_free(rc->rs04Sets);
+   }
+   if(rc->rs04) g_free(rc->rs04);
 
    if(rc->fingerprint) g_free(rc->fingerprint);
    if(rc->volumeLabel) g_free(rc->volumeLabel);
@@ -613,6 +642,48 @@ static void mark_sector(read_closure *rc, gint64 sector, GdkRGBA *color)
  ***/
 
 /*
+ * RS04 sets: reading may stop when every codeword of every set
+ * is correctable (codeword i consists of the sectors i of the
+ * k data layers and the m ecc layers of a set, see rs04.tex).
+ */
+
+static void init_rs04(read_closure *rc)
+{  RS04Set *first;
+   int i;
+
+   rc->rs04 = RS04GetSets(rc->medium);
+   rc->rs04Sets = g_malloc0(rc->rs04->nSets*sizeof(RS04Reading));
+   rc->eh = rc->rs04->eh;
+   rc->readMode = ECC_RS04;
+
+   for(i=0; i<rc->rs04->nSets; i++)
+   {  RS04Reading *rs = &rc->rs04Sets[i];
+      RS04Set *set = rs->set = &rc->rs04->set[i];
+
+      if(set->B != 2048)   /* not part of a 2048 byte image */
+	continue;
+
+      rs->base = set->target == ECC_FILE ? 0 : set->start;
+      rs->missing = g_malloc0(set->L*sizeof(gint32));
+
+      if(set->target == ECC_FILE)  /* check the ecc file once */
+      {  RS04State st;
+
+	 RS04InitState(&st, rc->medium, set);
+	 RS04ScanZone(&st, NULL);
+	 rs->zoneBad = st.payloadBad;
+	 st.payloadBad = NULL;
+	 RS04FreeState(&st);
+      }
+      else rs->tagTried = CreateBitmap0((set->Q + set->T - 2)/(set->T - 1));
+   }
+
+   first = &rc->rs04->set[0];
+   PrintLog(_("%s-type ECC found\n"), "RS04");
+   GuiSetAdaptiveReadMinimumPercentage((1000*first->k)/(first->k + first->m));
+}
+
+/*
  * Open optical drive and .ecc file.
  * Determine reading mode.
  */
@@ -625,6 +696,15 @@ static void open_and_determine_mode(read_closure *rc)
    rc->medium = OpenImageFromDevice(Closure->device, 0);
    rc->dh = rc->medium->dh;
    rc->readMode = IMAGE_ONLY;
+
+   if(rc->dh->subType == CDDA || Closure->cdda || rc->dh->form2)
+      Stop(_("Adaptive reading does not support CD-DA (audio) images.\n"
+	     "Please use linear reading."));
+
+   if(rc->dh->zeroFill)
+   {  PrintTrackTable(rc->dh, PrintLog);
+      PrintLog("\n");
+   }
 
    /* save some useful information for the missing sector marker */
 
@@ -644,6 +724,7 @@ static void open_and_determine_mode(read_closure *rc)
       by delegating to each codec's recognizeEccFile method. */
 
    OpenEccFileForImage(rc->medium, Closure->eccName, O_RDONLY, IMG_PERMS);
+   HintOverwritableMedium(rc->medium);
 
    if(rc->medium->eccFileMethod)
    {  rc->eh = rc->medium->eccFileHeader;
@@ -659,6 +740,8 @@ static void open_and_determine_mode(read_closure *rc)
 	 PrintLog(_("%s-type ECC found\n"), "RS01");
 	 GuiSetAdaptiveReadMinimumPercentage((1000*(rc->eh->dataBytes-rc->eh->eccBytes))/rc->eh->dataBytes);
       }
+      else if(!strncmp((char*)rc->eh->method, "RS04", 4))
+	 init_rs04(rc);
       else
       {  /* RS03 or other ecc file: CRC checking works via getCrcBuf,
 	    but adaptive layer tracking is not available. */
@@ -676,6 +759,8 @@ static void open_and_determine_mode(read_closure *rc)
 		     (rc->eh->neededVersion%10000)/100);
       }
    }
+   else if(rc->medium->eccHeader && !strncmp((char*)rc->medium->eccHeader->method,"RS04",4))
+      init_rs04(rc);
    else   /* see if we have RS02 type ecc */
    if(rc->medium->eccHeader && !strncmp((char*)rc->medium->eccHeader->method,"RS02",4))
    {  rc->readMode = ECC_IN_IMAGE;
@@ -740,6 +825,7 @@ static void open_and_determine_mode(read_closure *rc)
 
       case ECC_IN_FILE:
       case ECC_IN_IMAGE:
+      case ECC_RS04:
 	rc->subtitle = g_strdup(_("Trying to collect enough data for error correction."));
 	PrintLog(_("Adaptive reading: %s\n"), rc->subtitle);  
 	break;
@@ -765,6 +851,10 @@ static void check_size(read_closure *rc)
 
       case ECC_IN_IMAGE:
 	rc->sectors = rc->lay->eccSectors + rc->lay->dataSectors;
+	break;
+
+      case ECC_RS04:  /* the medium may hold more than the sets */
+	rc->sectors = MAX(rc->dh->sectors, (gint64)RS04ExpectedImageSize(rc->medium));
 	break;
    }
    rc->expectedSectors = rc->sectors; /* keep value from ecc */
@@ -960,6 +1050,8 @@ void check_image_size(read_closure *rc, gint64 image_file_sectors)
    else rc->highestWrittenSector = image_file_sectors-1;
 }
 
+static void rs04_need_tag(read_closure*, gint64, int);
+
 /***
  *** Load the crc buf from RS01/RS02 error correction data.
  ***/
@@ -976,6 +1068,10 @@ static void load_crc_buf(read_closure *rc)
    else if(rc->readMode == ECC_IN_IMAGE)
    {  GuiSetAdaptiveReadSubtitle(_utf("Loading CRC data."));
       rc->crcBuf = GetCRCFromRS02_obsolete(rc->lay, rc->dh, rc->image);
+   }
+   else if(rc->readMode == ECC_RS04)
+   {  GuiSetAdaptiveReadSubtitle(_utf("Loading CRC data."));
+      rc->crcBuf = RS04GetCrcBuf(rc->medium);
    }
    else
       rc->crcBuf = NULL;
@@ -1034,6 +1130,8 @@ static void build_interval_from_image(read_closure *rc)
 
       /* Compare checksums if available */
 
+      if(rc->readMode == ECC_RS04 && !current_missing)
+	rs04_need_tag(rc, s, TRUE);
       if(rc->crcBuf)
 	   crc_result = CheckAgainstCrcBuffer(rc->crcBuf, s, rc->buf);
       else crc_result = CRC_UNKNOWN;
@@ -1312,9 +1410,11 @@ void fill_gap(read_closure *rc)
   {  unsigned char buf[2048];
      int n;
 
-     /* Write next sector */ 
+     /* Write next sector; sectors between sessions are zero */ 
     
-     CreateMissingSector(buf, i, rc->fingerprint, FINGERPRINT_SECTOR, rc->volumeLabel);
+     if(IsZeroFilledSector(rc->dh, i))
+	  memset(buf, 0, 2048);
+     else CreateMissingSector(buf, i, rc->fingerprint, FINGERPRINT_SECTOR, rc->volumeLabel);
      n = LargeWrite(rc->image, buf, 2048);
      if(n != 2048)
        Stop(_("Failed writing to sector %" PRId64 " in image [%s]: %s"),
@@ -1335,7 +1435,7 @@ void fill_gap(read_closure *rc)
      if(j++ % 2000)
      {  int seq = (j/2000)%10;
 
-	if(!Closure->guiMode)
+	if(!Closure->guiMode && !Closure->quiet)
 	{  g_printf("%s", anim[seq]);
 	   fflush(stdout);
 	}
@@ -1381,13 +1481,268 @@ void fill_correctable_gap(read_closure *rc, gint64 correctable)
 	     ds, "skip-corr", strerror(errno));
 
       for(ds=rc->highestWrittenSector+1; ds<=correctable; ds++)
-      {  CreateMissingSector(buf, ds, rc->fingerprint, FINGERPRINT_SECTOR, rc->volumeLabel);
+      {  if(IsZeroFilledSector(rc->dh, ds))
+	      memset(buf, 0, 2048);
+	 else CreateMissingSector(buf, ds, rc->fingerprint, FINGERPRINT_SECTOR, rc->volumeLabel);
 	 if(LargeWrite(rc->image, buf, 2048) != 2048)
 	  Stop(_("Failed writing to sector %" PRId64 " in image [%s]: %s"),
 	       ds, "skip-corr", strerror(errno));
       }
       rc->highestWrittenSector = correctable;
    }
+}
+
+/*
+ * Sectors between sessions are not read; they are zero in the image.
+ */
+
+static void mark_gap_sectors(read_closure *rc)
+{  gint64 s;
+
+   if(!rc->map || !rc->dh->zeroFill)
+     return;
+
+   for(s=0; s<rc->map->size; s++)
+     if(!GetBit(rc->map, s) && IsZeroFilledSector(rc->dh, s))
+     {  SetBit(rc->map, s);
+	rc->readable++;
+	mark_sector(rc, s, Closure->greenSector);
+     }
+}
+
+/***
+ *** RS04 sets
+ ***/
+
+enum { RS04_DATA, RS04_TAG, RS04_PAYLOAD };
+
+static RS04Reading* rs04_locate(read_closure *rc, gint64 s, int *kind, guint64 *idx)
+{  int i;
+
+   for(i=0; rc->rs04 && i<rc->rs04->nSets; i++)
+   {  RS04Reading *rs = &rc->rs04Sets[i];
+      RS04Set *set = rs->set;
+      gint64 r = s - rs->base;
+
+      if(!rs->missing || r < 0)
+	continue;
+
+      if(r < (gint64)set->S)
+      {  *kind = RS04_DATA;
+	 *idx = r;
+	 return rs;
+      }
+
+      r -= set->S;
+      if(set->target == ECC_FILE || r >= (gint64)set->A)
+	continue;
+
+      if(r % set->T)
+      {  *kind = RS04_PAYLOAD;
+	 *idx = r - r/set->T - 1;
+      }
+      else
+      {  *kind = RS04_TAG;
+	 *idx = r/set->T;
+      }
+      return rs;
+   }
+
+   return NULL;
+}
+
+static gint64 rs04_zone_sector(RS04Reading *rs, guint64 q)
+{  return rs->base + rs->set->S + RS04ZoneIndex(rs->set, q);
+}
+
+static int rs04_present(read_closure *rc, gint64 s)
+{  return s < rc->map->size && GetBit(rc->map, s);
+}
+
+static int rs04_payload_present(read_closure *rc, RS04Reading *rs, guint64 q)
+{  if(rs->set->target == ECC_FILE)
+     return !GetBit(rs->zoneBad, q);
+
+   return rs04_present(rc, rs04_zone_sector(rs, q));
+}
+
+/* Sector s is not needed any more. The image is filled up to it
+   while reading, but not while preparing. */
+
+static void rs04_mark(read_closure *rc, gint64 s, int fill)
+{  if(s >= rc->map->size || GetBit(rc->map, s))
+     return;
+
+   SetBit(rc->map, s);
+   rc->correctable++;
+   mark_sector(rc, s, Closure->greenSector);
+   if(fill)
+     fill_correctable_gap(rc, s);
+}
+
+static void rs04_mark_codeword(read_closure *rc, RS04Reading *rs, guint64 i, int fill)
+{  RS04Set *set = rs->set;
+   guint64 j, t;
+
+   for(j=0; j<set->k; j++)
+   {  t = j*set->L + i;
+
+      if(t < set->S)
+	rs04_mark(rc, rs->base + t, fill);
+      else if(t < set->D && set->target == ECC_IMAGE)
+	rs04_mark(rc, rs04_zone_sector(rs, t - set->S), fill);
+   }
+
+   if(set->target == ECC_IMAGE)
+     for(j=0; j<set->m; j++)
+       rs04_mark(rc, rs04_zone_sector(rs, set->c + j*set->L + i), fill);
+}
+
+/* Fix can recreate missing tags, but the image must remain recognizable:
+   rs04.tex looks for tags in the last 256 sectors of an image, and for
+   further sets in the gaps between the sets found. So once a valid tag
+   in the last 256 sectors of a set has been read, the other tags of the
+   set are not needed. */
+
+#define RS04_END_TAG(set, a) ((a) + 256 >= (set)->A)
+
+static void rs04_mark_tags(read_closure *rc, RS04Reading *rs, int fill)
+{  RS04Set *set = rs->set;
+   guint64 g, tags = (set->Q + set->T - 2)/(set->T - 1);
+
+   rs->tagSeen = TRUE;
+   for(g=0; g<tags; g++)
+     rs04_mark(rc, rs->base + set->S + g*set->T, fill);
+}
+
+/* Count the missing symbols of all codewords */
+
+static void rs04_prepare(read_closure *rc)
+{  int n;
+
+   for(n=0; rc->rs04 && n<rc->rs04->nSets; n++)
+   {  RS04Reading *rs = &rc->rs04Sets[n];
+      RS04Set *set = rs->set;
+      guint64 i, t, q;
+
+      if(!rs->missing)
+	continue;
+
+      memset(rs->missing, 0, set->L*sizeof(gint32));
+      for(t=0; t<set->D; t++)
+	if(t < set->S ? !rs04_present(rc, rs->base + t) : !rs04_payload_present(rc, rs, t - set->S))
+	  rs->missing[t % set->L]++;
+      for(q=set->c; q<set->Q; q++)
+	if(!rs04_payload_present(rc, rs, q))
+	  rs->missing[(q - set->c) % set->L]++;
+
+      for(i=0; i<set->L; i++)
+	if(rs->missing[i] <= (gint32)set->m)
+	  rs04_mark_codeword(rc, rs, i, FALSE);
+
+      if(set->target == ECC_IMAGE)
+	for(i=0; i<set->A; i+=set->T)
+	  if(RS04_END_TAG(set, i) && rs04_present(rc, rs->base + set->S + i))
+	  {  rs04_mark_tags(rc, rs, FALSE);
+	     break;
+	  }
+   }
+}
+
+/* Sector s is about to be checked, or could not be read (read = FALSE).
+   The tag in front of a payload sector of an augmented set holds its
+   Crc32. Normally the tag has been read just before it, but an interval
+   may begin behind the tag, or the tag was skipped as not needed;
+   it is then read now. */
+
+static void rs04_need_tag(read_closure *rc, gint64 s, int read)
+{  RS04Reading *rs;
+   AlignedBuffer *ab;
+   guint64 idx, g;
+   int kind;
+
+   if(   !rc->crcBuf || !rc->crcBuf->rs04
+      || !(rs = rs04_locate(rc, s, &kind, &idx)) || kind == RS04_DATA || !rs->tagTried)
+     return;
+
+   g = kind == RS04_TAG ? idx : idx/(rs->set->T-1);
+   if(GetBit(rs->tagTried, g) || (kind != RS04_TAG && !read))
+     return;
+   SetBit(rs->tagTried, g);
+   if(kind == RS04_TAG || (s < rc->crcBuf->crcSize && GetBit(rc->crcBuf->covered, s)))
+     return;
+
+   ab = CreateAlignedBuffer(2048);
+   if(!ReadSectors(rc->dh, ab->buf, rs->base + rs->set->S + g*rs->set->T, 1))
+     RS04TagToCrcBuf(rc->crcBuf, rs->base + rs->set->S + g*rs->set->T, ab->buf);
+   FreeAlignedBuffer(ab);
+}
+
+/* Sector s with contents buf has been read */
+
+static void rs04_sector_read(read_closure *rc, gint64 s, unsigned char *buf)
+{  RS04Reading *rs;
+   RS04Set *set;
+   guint64 idx, i;
+   int kind;
+
+   if(!(rs = rs04_locate(rc, s, &kind, &idx)))
+     return;
+   set = rs->set;
+
+   if(kind == RS04_TAG)
+   {  if(!rs->tagSeen && RS04_END_TAG(set, idx*set->T) && RS04OwnTag(set, buf, idx*set->T, NULL))
+	rs04_mark_tags(rc, rs, TRUE);
+      return;
+   }
+
+   if(kind == RS04_DATA)  i = idx % set->L;
+   else if(idx < set->c)  i = (set->S + idx) % set->L;
+   else                   i = (idx - set->c) % set->L;
+
+   if(--rs->missing[i] == (gint32)set->m)
+     rs04_mark_codeword(rc, rs, i, TRUE);
+}
+
+/*
+ * The last 2 sectors of a session and of the disc (TAO run-out,
+ * unreadable then) are not needed if they are not part of an RS04 set;
+ * see read-linear.c.
+ * Without ecc data, unreadable ones are not counted as missing.
+ */
+
+static void mark_run_out(read_closure *rc, gint64 end)
+{  guint64 idx;
+   gint64 s;
+   int kind;
+
+   for(s=end-2; s<end; s++)
+     if(   s >= 0 && s < rc->map->size && !GetBit(rc->map, s)
+	&& !rs04_locate(rc, s, &kind, &idx))
+     {  SetBit(rc->map, s);
+	rc->expectedSectors--;
+     }
+}
+
+static void mark_rs04_run_out(read_closure *rc)
+{  int i;
+
+   if(!rc->rs04)
+     return;
+
+   for(i=0; i+1<rc->dh->nTracks; i++)
+     if(rc->dh->track[i].session != rc->dh->track[i+1].session)
+       mark_run_out(rc, rc->dh->track[i].end);
+
+   /* the end of the disc; single session discs have no track table */
+
+   mark_run_out(rc, rc->dh->sectors);
+}
+
+static int is_session_tail(read_closure *rc, gint64 s)
+{  gint64 end = SessionEnd(rc->dh, s);
+
+   return rc->readMode == IMAGE_ONLY && end && s >= end-2;
 }
 
 /*
@@ -1469,7 +1824,8 @@ void ReadMediumAdaptive(gpointer data)
 	becomes available. */
 
    if(   rc->readMode == ECC_IN_FILE
-      || rc->readMode == ECC_IN_IMAGE)
+      || rc->readMode == ECC_IN_IMAGE
+      || rc->readMode == ECC_RS04)
       rc->map = CreateBitmap0(rc->expectedSectors);
 
 #ifdef CHECK_VISITED
@@ -1508,6 +1864,9 @@ reopen_image:
       /* Mark RS02 header sectors as correctable. */
 
       mark_rs02_headers(rc);
+      mark_gap_sectors(rc);
+      mark_rs04_run_out(rc);
+      rs04_prepare(rc);
 
       /* Preload the CRC buffer */
 
@@ -1550,6 +1909,9 @@ reopen_image:
       /* Mark still missing RS02 header sectors as correctable. */
 
       mark_rs02_headers(rc);
+      mark_gap_sectors(rc);
+      mark_rs04_run_out(rc);
+      rs04_prepare(rc);
 
       /* Already enough information available? */
 	 
@@ -1714,23 +2076,31 @@ reread:
 		  Sectors with bad CRC sums are marked unvisited,
 		  but do not terminate the current interval. */
 
+	       if(rc->readMode == ECC_RS04)
+		  rs04_need_tag(rc, b, TRUE);
+
 	       if(rc->crcBuf) /* we have crc information */
 		    result = CheckAgainstCrcBuffer(rc->crcBuf, b, rc->buf+i*2048);
 	       else result = CRC_UNKNOWN;
 
 	       switch(result)
 	       {  case CRC_BAD:
-		  {  //unsigned char buf[2048];
+		  {  unsigned char *out = rc->buf+i*2048, dsm[2048];
+		     guint64 idx;
+		     int kind;
 
 		     PrintCLI("\n");
 		     PrintCLI(_("CRC error in sector %" PRId64 "\n"),b);
 		     print_progress(rc, TRUE);
 
-#if 0 // remark: Do we still need to mark CRC defects as completely missing?
-		     CreateMissingSector(buf, b, rc->fingerprint, FINGERPRINT_SECTOR, rc->volumeLabel);
-		     n = LargeWrite(rc->image, buf, 2048);
-#endif
-		     n = LargeWrite(rc->image, rc->buf+i*2048, 2048);
+		     /* RS04 tags are skipped when not needed, so the image may lack
+			the Crc32 of a payload sector: store it as missing instead. */
+
+		     if(rc->readMode == ECC_RS04 && rs04_locate(rc, b, &kind, &idx) && kind == RS04_PAYLOAD)
+		     {  CreateMissingSector(dsm, b, rc->fingerprint, FINGERPRINT_SECTOR, rc->volumeLabel);
+			out = dsm;
+		     }
+		     n = LargeWrite(rc->image, out, 2048);
 		     if(n != 2048)
 			Stop(_("Failed writing to sector %" PRId64 " in image [%s]: %s"),
 			     b, "unv", strerror(errno));
@@ -1743,6 +2113,7 @@ reread:
 		  }
 		  case CRC_UNKNOWN:
 		  case CRC_GOOD:
+		  case CRC_OUTSIDE_BOUND:   /* sector has no CRC */
 		     n = LargeWrite(rc->image, rc->buf+i*2048, 2048);
 		     if(n != 2048)
 			Stop(_("Failed writing to sector %" PRId64 " in image [%s]: %s"),
@@ -1856,6 +2227,12 @@ reread:
 	       }
 	    }
 
+	    if(rc->readMode == ECC_RS04)
+	    {  for(i=0, b=s; i<nsectors; i++,b++)
+		 if(GetBit(rc->map, b))
+		   rs04_sector_read(rc, b, rc->buf+i*2048);
+	    }
+
 	    /* Increment sector counters. Adjust max image sector
 	       if we added sectors beyond the image size. */
 
@@ -1895,6 +2272,13 @@ reread:
 					   s, GetLastSenseString(FALSE));  
 
 	    rc->unreadable += nsectors;
+	    if(rc->readMode == ECC_RS04 && nsectors == 1)
+	      rs04_need_tag(rc, s, FALSE);
+
+	    if(nsectors == 1 && is_session_tail(rc, s))
+	    {  rc->sessionTails++;
+	       rc->expectedSectors--;
+	    }
 
 	    /* Write nsectors of "dead sector" markers */
 
@@ -2012,6 +2396,17 @@ finished:
 
    /*** Summarize results. */
 
+   if(rc->sessionTails)
+      PrintLog(_("%d of the unreadable sectors are at the end of a session.\n"
+		 "This is okay if the session was written in TAO (track at once) mode;\n"
+		 "these sectors do not contain data.\n"), rc->sessionTails);
+
+   ReportDevice(rc->dh);
+   ReportEccHeader(rc->eh);
+   ReportNumber("read", "readable", rc->readable);
+   ReportNumber("read", "correctable", rc->correctable);
+   ReportNumber("read", "missing", rc->expectedSectors - rc->readable - rc->correctable);
+
    /* We were in ECC_IN_FILE or ECC_IN_IMAGE mode,
       but did not recover sufficient data. */
 
@@ -2027,8 +2422,10 @@ finished:
       GuiSetAdaptiveReadFootline(t, 0);
 
       g_free(t);
-      exitCode = EXIT_FAILURE;
+      SetExitCode(EXIT_CODE_DATA_LOSS);
    }
+   else if(rc->map && rc->readable < rc->expectedSectors)
+      SetExitCode(EXIT_CODE_DEFECTS);
 
    /* Results for reading in IMAGE_ONLY mode */
 
@@ -2051,7 +2448,7 @@ finished:
 
 	 GuiSetAdaptiveReadFootline(t, 0);
 	 g_free(t);
-	 exitCode = EXIT_FAILURE;
+	 SetExitCode(EXIT_CODE_DEFECTS);
       }
    }
 
@@ -2062,6 +2459,12 @@ finished:
 #endif
 
    //print_intervals(rc);
+
+   /*** Remember the result in the catalog file */
+
+   if(Closure->catalogFile)
+      AppendCatalog(rc->medium, "read", rc->volumeLabel, rc->expectedSectors,
+		    rc->expectedSectors - rc->readable, Closure->crcErrors);
 
    /*** Close and clean up */
 

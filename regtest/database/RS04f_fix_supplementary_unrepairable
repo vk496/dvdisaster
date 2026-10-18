@@ -1,0 +1,95 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04f-tmp.iso: 8000 medium sectors.
+
+Fix mode(RS04f): Repairable sectors will be fixed in the image.
+
+Set 1 of 2 (ecc file rs04f-master.ecc):
+* ecc block 0: 81 erasures, but only 31 can be corrected
+* ecc block 1: 81 erasures, but only 31 can be corrected
+* ecc block 2: 81 erasures, but only 31 can be corrected
+* ecc block 3: 81 erasures, but only 31 can be corrected
+* ecc block 4: 81 erasures, but only 31 can be corrected
+* ecc block 5: 81 erasures, but only 31 can be corrected
+* ecc block 6: 81 erasures, but only 31 can be corrected
+* ecc block 7: 81 erasures, but only 31 can be corrected
+* ecc block 8: 81 erasures, but only 31 can be corrected
+* ecc block 9: 81 erasures, but only 31 can be corrected
+* ecc block 10: 81 erasures, but only 31 can be corrected
+* ecc block 11: 81 erasures, but only 31 can be corrected
+* ecc block 12: 81 erasures, but only 31 can be corrected
+* ecc block 13: 80 erasures, but only 31 can be corrected
+* ecc block 14: 80 erasures, but only 31 can be corrected
+* ecc block 15: 80 erasures, but only 31 can be corrected
+* ecc block 16: 80 erasures, but only 31 can be corrected
+* ecc block 17: 80 erasures, but only 31 can be corrected
+* ecc block 18: 80 erasures, but only 31 can be corrected
+* ecc block 19: 80 erasures, but only 31 can be corrected
+* ecc block 20: 80 erasures, but only 31 can be corrected
+* ecc block 21: 80 erasures, but only 31 can be corrected
+* ecc block 22: 80 erasures, but only 31 can be corrected
+* ecc block 23: 80 erasures, but only 31 can be corrected
+* ecc block 24: 80 erasures, but only 31 can be corrected
+* ecc block 25: 80 erasures, but only 31 can be corrected
+* ecc block 26: 80 erasures, but only 31 can be corrected
+* ecc block 27: 80 erasures, but only 31 can be corrected
+* ecc block 28: 81 erasures, but only 31 can be corrected
+* ecc block 29: 81 erasures, but only 31 can be corrected
+* ecc block 30: 81 erasures, but only 31 can be corrected
+* ecc block 31: 81 erasures, but only 31 can be corrected
+* ecc block 32: 81 erasures, but only 31 can be corrected
+* ecc block 33: 81 erasures, but only 31 can be corrected
+* ecc block 34: 81 erasures, but only 31 can be corrected
+* ecc block 35: 81 erasures, but only 31 can be corrected
+
+Set 2 of 2 (ecc file supp.ecc):
+* ecc block 0: 69 erasures, but only 38 can be corrected
+* ecc block 1: 69 erasures, but only 38 can be corrected
+* ecc block 2: 69 erasures, but only 38 can be corrected
+* ecc block 3: 69 erasures, but only 38 can be corrected
+* ecc block 4: 69 erasures, but only 38 can be corrected
+* ecc block 5: 69 erasures, but only 38 can be corrected
+* ecc block 6: 69 erasures, but only 38 can be corrected
+* ecc block 7: 69 erasures, but only 38 can be corrected
+* ecc block 8: 69 erasures, but only 38 can be corrected
+* ecc block 9: 69 erasures, but only 38 can be corrected
+* ecc block 10: 69 erasures, but only 38 can be corrected
+* ecc block 11: 69 erasures, but only 38 can be corrected
+* ecc block 12: 69 erasures, but only 38 can be corrected
+* ecc block 13: 69 erasures, but only 38 can be corrected
+* ecc block 14: 69 erasures, but only 38 can be corrected
+* ecc block 15: 69 erasures, but only 38 can be corrected
+* ecc block 16: 70 erasures, but only 38 can be corrected
+* ecc block 17: 70 erasures, but only 38 can be corrected
+* ecc block 18: 70 erasures, but only 38 can be corrected
+* ecc block 19: 69 erasures, but only 38 can be corrected
+* ecc block 20: 69 erasures, but only 38 can be corrected
+* ecc block 21: 69 erasures, but only 38 can be corrected
+* ecc block 22: 69 erasures, but only 38 can be corrected
+* ecc block 23: 69 erasures, but only 38 can be corrected
+* ecc block 24: 69 erasures, but only 38 can be corrected
+* ecc block 25: 69 erasures, but only 38 can be corrected
+* ecc block 26: 69 erasures, but only 38 can be corrected
+* ecc block 27: 69 erasures, but only 38 can be corrected
+* ecc block 28: 69 erasures, but only 38 can be corrected
+* ecc block 29: 69 erasures, but only 38 can be corrected
+* ecc block 30: 69 erasures, but only 38 can be corrected
+* ecc block 31: 69 erasures, but only 38 can be corrected
+* ecc block 32: 69 erasures, but only 38 can be corrected
+* ecc block 33: 69 erasures, but only 38 can be corrected
+* ecc block 34: 69 erasures, but only 38 can be corrected
+* ecc block 35: 69 erasures, but only 38 can be corrected
+* ecc block 36: 69 erasures, but only 38 can be corrected
+* ecc block 37: 69 erasures, but only 38 can be corrected
+* ecc block 38: 69 erasures, but only 38 can be corrected
+* ecc block 39: 69 erasures, but only 38 can be corrected
+* ecc block 40: 69 erasures, but only 38 can be corrected
+* ecc block 41: 69 erasures, but only 38 can be corrected
+Unrepaired sectors: 2901
+Erasure counts per ecc block:  avg =  74.4; worst = 81.
+Exit status: 3
