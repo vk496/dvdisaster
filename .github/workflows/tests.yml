@@ -7,6 +7,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  rs04-archive:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+      with:
+        persist-credentials: false
+    - name: install archival test prerequisites
+      run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev python3
+    - name: build archival frontend and run damage tests
+      run: |
+        ./configure --with-gui=no --with-nls=no --with-werror
+        make -j4
+        make archive-check
+    - name: check native family boundaries under sanitizers
+      run: |
+        cc -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer \
+          -DRS04_STANDALONE regtest/rs04-family.c src/rs04-ff16.c \
+          -o build/rs04-family-sanitized $(pkg-config --cflags --libs glib-2.0)
+        ASAN_OPTIONS=detect_leaks=1 build/rs04-family-sanitized
   mac:
     strategy:
       matrix:

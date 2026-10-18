@@ -283,7 +283,7 @@ typedef struct
    guint64 affine[4];
 } MulLut;
 
-static const MulLut zero_lut;
+static const MulLut zero_lut G_GNUC_UNUSED;
 static gboolean build_affine;   /* set together with the kernels */
 
 /* Transposes an 8x8 bit matrix (bit j of byte i <-> bit i of byte j)
@@ -1041,5 +1041,68 @@ int RS04Decode(guint64 buffer_bytes, unsigned original_count, unsigned recovery_
 
    rs_decode(buffer_bytes, original_count, recovery_count, m, work_count,
 	     original, recovery, work);
+   return RS04_SUCCESS;
+}
+
+static int family_parameters(guint64 bytes, unsigned k, unsigned reserve)
+{  if(!bytes || bytes % 64 || bytes > G_MAXSIZE) return RS04_INVALID_SIZE;
+   if(!k || !reserve || reserve > FF_ORDER/2 || (reserve & (reserve-1)))
+     return RS04_INVALID_COUNTS;
+   if(k > FF_ORDER-reserve) return RS04_TOO_MUCH_DATA;
+   return RS04_SUCCESS;
+}
+
+int RS04EncodeFamily(guint64 bytes, unsigned k, unsigned reserve,
+                     unsigned work_count, const void* const* original, void** work)
+{  unsigned i;
+   int error = family_parameters(bytes, k, reserve);
+   if(error) return error;
+   if(!original || !work || work_count != 2*reserve) return RS04_INVALID_INPUT;
+   for(i=0; i<k; i++) if(!original[i]) return RS04_INVALID_INPUT;
+   for(i=0; i<work_count; i++) if(!work[i]) return RS04_INVALID_INPUT;
+   RS04InitGF16();
+   if(reserve == 1)
+     xor_parity(bytes, k-1, original+1, original[0], work[0]);
+   else rs_encode(bytes, k, reserve, reserve, original, work);
+   return RS04_SUCCESS;
+}
+
+int RS04DecodeFamily(guint64 bytes, unsigned k, unsigned reserve,
+                     unsigned work_count, const void* const* original,
+                     const void* const* recovery, void** work)
+{  unsigned i, missing=0, available=0, lost=0;
+   int error = family_parameters(bytes, k, reserve);
+   if(error) return error;
+   if(!original || !recovery || !work || work_count != next_pow2(k+reserve))
+     return RS04_INVALID_INPUT;
+   for(i=0; i<work_count; i++) if(!work[i]) return RS04_INVALID_INPUT;
+   for(i=0; i<k; i++) if(!original[i]) { missing++; lost=i; }
+   for(i=0; i<reserve; i++) if(recovery[i]) available++;
+   if(missing > available) return RS04_NEED_MORE_DATA;
+   RS04InitGF16();
+   if(!missing)
+   {  for(i=0; i<k; i++) memcpy(work[i], original[i], bytes);
+   }
+   else if(reserve == 1)
+     xor_parity(bytes, k, original, recovery[0], work[lost]);
+   else rs_decode(bytes, k, reserve, reserve, work_count, original, recovery, work);
+   return RS04_SUCCESS;
+}
+
+int RS04MulAddFamily(guint64 bytes, guint16 coefficient, const void *source, void *target)
+{  unsigned char *temporary;
+   if(!bytes || bytes % 64 || bytes > G_MAXSIZE) return RS04_INVALID_SIZE;
+   if(!source || !target) return RS04_INVALID_INPUT;
+   RS04InitGF16();
+   if(!coefficient) return RS04_SUCCESS;
+   if(coefficient == 1)
+   {  kern->xor_mem(target, source, bytes);
+      return RS04_SUCCESS;
+   }
+   temporary = g_try_malloc((gsize)bytes);
+   if(!temporary) return RS04_INVALID_INPUT;
+   mul_mem(temporary, source, log_lut[coefficient], bytes);
+   kern->xor_mem(target, temporary, bytes);
+   g_free(temporary);
    return RS04_SUCCESS;
 }

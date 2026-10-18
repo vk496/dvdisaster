@@ -23,6 +23,7 @@
 /*** src type: some GUI code ***/
 
 #include "dvdisaster.h"
+#include "rs04-archive.h"
 
 #if defined(SYS_MINGW) && defined(WITH_GUI_YES)
 #include <windows.h>
@@ -211,6 +212,9 @@ int main(int argc, char *argv[])
       }
    }
 #endif
+
+    if(argc > 1 && !strcmp(argv[1], "--rs04-archive"))
+       return RS04ArchiveMain(argc, argv);
 
 #ifdef WITH_MEMDEBUG_YES
     atexit(check_memleaks);
@@ -1237,6 +1241,7 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --regtest                  - tweaks output for compatibility with regtests\n"));
       PrintCLI(_("  --resource-file p          - get resource file from given path\n"));
       PrintCLI(_("  --rs04-memory n            - RS04: memory budget in MiB for en-/decoding (default: 4096)\n"));
+      PrintCLI(_("  --rs04-archive ...         - archival development CLI (must be first; requires Python 3)\n"));
       PrintCLI(_("  --sector-size n            - RS04: sector size of the data, 2048, 2324 or 2352 (ecc files)\n"));
       PrintCLI(_("  --speed-warning n          - print warning if speed changes by more than n percent\n"));
       PrintCLI(_("  --spinup-delay n           - wait n seconds for drive to spin up\n"));

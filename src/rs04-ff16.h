@@ -101,6 +101,23 @@ int RS04Decode(guint64 buffer_bytes, unsigned original_count, unsigned recovery_
                unsigned work_count, const void* const* original,
                const void* const* recovery, void** work);
 
+/* Immutable-family API for the archival development profile. reserve is a
+   power of two, not a count inferred from the currently stored parity.
+   1 <= original_count, 1 <= reserve, original_count + reserve <= 65536.
+   Encode needs 2*reserve work buffers and returns all reserved rows.
+   Decode needs NextPow2(original_count+reserve) work buffers. recovery is
+   indexed by row ID in [0,reserve); NULL denotes absent or rejected rows.
+   Recovered originals are in work[i]. Input and work buffers must not alias.
+   The original API above, including its wire format, remains unchanged. */
+int RS04EncodeFamily(guint64 bytes, unsigned original_count, unsigned reserve,
+                     unsigned work_count, const void* const* original, void** work);
+int RS04DecodeFamily(guint64 bytes, unsigned original_count, unsigned reserve,
+                     unsigned work_count, const void* const* original,
+                     const void* const* recovery, void** work);
+/* target ^= coefficient * source; buffers use the 64-byte shard layout,
+   coefficient uses the on-disc Cantor representation. Aliasing is allowed. */
+int RS04MulAddFamily(guint64 bytes, guint16 coefficient, const void *source, void *target);
+
 G_END_DECLS
 
 #endif /* RS04FF16_H */
