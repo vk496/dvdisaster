@@ -19,6 +19,9 @@ This version is built on top of the latest upstream version, with the following 
 - Re-enabled adaptive reading for RS01 and RS02, and optionally for RS03 on user request (more on that below)
 - Ability to strip an augmented image from its additional ECC-data
 - New experimental RS04 codec with long codewords and self-describing layout (more on that below)
+- An archival development CLI (`--rs04-archive`) with extendable parity, independently protected SHA-256 metadata,
+  rescue-file extraction, donor-assisted recovery, collection parity, local protection and joint decoding
+  ([usage and development status](documentation/rs04-archive.md))
 - List which files of an ISO image are affected by unreadable sectors (`--list-damaged-files`)
 - Reading of multi-session discs (all sessions in one image) and of audio CDs (2352-byte `.bin` + `.cue`, with C2 error pointers);
   Video CD, PlayStation and CD-i discs (Mode 2 Form 2 sectors) are read the same way, with EDC checks of the data sectors
