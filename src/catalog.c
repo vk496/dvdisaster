@@ -47,7 +47,7 @@ void AppendCatalog(Image *image, char *action, char *label,
    char fingerprint[33], date[32];
    char *l = g_strdup(label && *label ? label : "-");
 
-   // codeql[cpp/world-writable-file-creation] Catalog file chosen by the user; intentionally honor umask.
+   // codeql[cpp/world-writable-file-creation] codeql[cpp/path-injection] Catalog file chosen by the user; intentionally honor umask.
    file = g_fopen(Closure->catalogFile, "ab");
 
    if(!file)

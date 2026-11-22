@@ -451,7 +451,7 @@ static void encode(ecc_closure *ec)
    guint64 per_codeword = (guint64)(set->k + set->m)*set->Bs;
    unsigned wc = RS04EncodeWorkCount(set->k, set->m);
    guint64 j;
-   int i;
+   int i, n_workers;
 
    RS04ChooseKernel();
    ec->W = MIN(set->L, MAX(1, RS04MemoryBudget()/per_codeword));
@@ -460,8 +460,9 @@ static void encode(ecc_closure *ec)
    ec->sectors = g_malloc(ec->W*set->B);
    ec->present = g_malloc(ec->W);
 
-   ec->nWorkers = MAX(1, MIN(MIN(Closure->codecThreads, MAX_CODEC_THREADS), (int)ec->W));
-   ec->workers = g_malloc0(ec->nWorkers*sizeof(worker));
+   n_workers = MAX(1, MIN(MIN(Closure->codecThreads, MAX_CODEC_THREADS), (int)ec->W));
+   ec->nWorkers = n_workers;
+   ec->workers = g_malloc0((gsize)n_workers*sizeof(worker));
    for(i=0; i<ec->nWorkers; i++)
    {  worker *wk = &ec->workers[i];
       unsigned u;

@@ -615,7 +615,7 @@ static void alloc_buffers(fix_closure *fc)
    guint64 per_codeword = (guint64)(set->k + set->m)*set->Bs;
    unsigned dwc = RS04DecodeWorkCount(set->k, set->m);
    unsigned ewc = RS04EncodeWorkCount(set->k, set->m);
-   int i;
+   int i, n_workers;
 
    fc->W = MIN(set->L, MAX(1, RS04MemoryBudget()/per_codeword));
    fc->data    = g_malloc(fc->W*set->k*set->Bs);
@@ -626,8 +626,9 @@ static void alloc_buffers(fix_closure *fc)
    fc->sectors = g_malloc(fc->W*set->B);
    fc->present = g_malloc(fc->W);
 
-   fc->nWorkers = MAX(1, MIN(MIN(Closure->codecThreads, MAX_CODEC_THREADS), (int)fc->W));
-   fc->workers = g_malloc0(fc->nWorkers*sizeof(worker));
+   n_workers = MAX(1, MIN(MIN(Closure->codecThreads, MAX_CODEC_THREADS), (int)fc->W));
+   fc->nWorkers = n_workers;
+   fc->workers = g_malloc0((gsize)n_workers*sizeof(worker));
    for(i=0; i<fc->nWorkers; i++)
    {  worker *wk = &fc->workers[i];
       unsigned u;

@@ -225,7 +225,7 @@ void GuiReadDotfile()
       if(!strcmp(symbol, "bd-size4"))        { Closure->bdSize4 = Closure->savedBDSize4 = atoll(value); continue; }
       if(!strcmp(symbol, "cache-size"))      { Closure->cacheMiB = atoi(value); continue; }
       if(!strcmp(symbol, "cd-size"))         { Closure->cdSize = Closure->savedCDSize = atoll(value); continue; }
-      if(!strcmp(symbol, "codec-threads"))   { Closure->codecThreads = atoi(value); continue; }
+      if(!strcmp(symbol, "codec-threads"))   { Closure->codecThreads = bounded_setting(value, 1, MAX_CODEC_THREADS, Closure->codecThreads); continue; }
       if(!strcmp(symbol, "confirm-deletion")){ Closure->confirmDeletion = atoi(value); continue; }
       if(!strcmp(symbol, "dao"))             { Closure->noTruncate  = atoi(value); continue; }
       if(!strcmp(symbol, "defective-dump"))  { Closure->defectiveDump = atoi(value); continue; }
