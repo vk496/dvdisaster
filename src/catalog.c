@@ -43,9 +43,12 @@ static void sanitize(char *s)
 
 void AppendCatalog(Image *image, char *action, char *label,
 		   gint64 sectors, gint64 unreadable, gint64 crc_errors)
-{  FILE *file = g_fopen(Closure->catalogFile, "ab");
+{  FILE *file;
    char fingerprint[33], date[32];
    char *l = g_strdup(label && *label ? label : "-");
+
+   // codeql[cpp/world-writable-file-creation] Catalog file chosen by the user; intentionally honor umask.
+   file = g_fopen(Closure->catalogFile, "ab");
 
    if(!file)
    {  PrintLog(_("Could not append to catalog file %s: %s\n"),
@@ -57,8 +60,12 @@ void AppendCatalog(Image *image, char *action, char *label,
    if(Closure->regtestMode)
       strcpy(date, "2000-01-01 00:00:00");
    else
-   {  time_t now = time(NULL);
-      strftime(date, sizeof(date), "%Y-%m-%d %H:%M:%S", localtime(&now));
+   {  GDateTime *now = g_date_time_new_now_local();   /* thread safe, unlike localtime() */
+      char *text = g_date_time_format(now, "%Y-%m-%d %H:%M:%S");
+
+      g_strlcpy(date, text, sizeof(date));
+      g_free(text);
+      g_date_time_unref(now);
    }
 
    if(image && image->fpState == 2)

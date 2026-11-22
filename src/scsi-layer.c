@@ -3082,6 +3082,7 @@ void WriteCueSheet(DeviceHandle *dh, char *image_name)
         cue = g_strdup_printf("%.*s.cue", (int)len-4, image_name);
    else cue = g_strdup_printf("%s.cue", image_name);
 
+   // codeql[cpp/world-writable-file-creation] Cue sheet next to the user's image; intentionally honor umask.
    file = fopen(cue, "wb");
    if(!file)
    {  LogWarning(_("Could not write cue sheet %s: %s\n"), cue, strerror(errno));

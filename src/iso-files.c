@@ -57,13 +57,12 @@ static char* record_name(iso_walk *w, unsigned char *name, int len)
 {  char *result;
 
    if(w->joliet)  /* UCS-2 big endian */
-   {  gunichar2 *utf16 = g_malloc0(len+2);
-      int i;
+   {  gunichar2 utf16[128];  /* the length field of a directory record is one byte */
+      int i, chars = MIN(len/2, 127);
 
-      for(i=0; i<len/2; i++)
+      for(i=0; i<chars; i++)
 	 utf16[i] = name[2*i]<<8 | name[2*i+1];
-      result = g_utf16_to_utf8(utf16, len/2, NULL, NULL, NULL);
-      g_free(utf16);
+      result = g_utf16_to_utf8(utf16, chars, NULL, NULL, NULL);
       if(!result) result = g_strdup("?");
    }
    else result = g_strndup((char*)name, len);

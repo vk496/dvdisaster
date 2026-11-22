@@ -1694,6 +1694,7 @@ step_counter:
    /*** CD-DA images get a cue sheet */
 
    if(rc->sectorBytes != 2048 && !rc->scanMode)
+      // codeql[cpp/path-injection] Image/ECC path intentionally restored from trusted user configuration; arbitrary paths are supported.
       WriteCueSheet(rc->image->dh, Closure->imageName);
 
    /*** Eject medium */

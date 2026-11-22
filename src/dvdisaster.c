@@ -1300,6 +1300,7 @@ int main(int argc, char *argv[])
 
       case MODE_DRIVE_TEST:
          if(!Closure->device) Closure->device = DefaultDevice();
+	 // codeql[cpp/path-injection] Device path intentionally restored from trusted user configuration; arbitrary paths are supported.
 	 DriveTest(Closure->device);
 	 break;
 
@@ -1336,6 +1337,7 @@ int main(int argc, char *argv[])
    /*** List the files containing missing sectors if requested */
 
    if(Closure->listDamagedFiles && mode == MODE_SEQUENCE)
+      // codeql[cpp/path-injection] Image/ECC path intentionally restored from trusted user configuration; arbitrary paths are supported.
       ListDamagedFiles(Closure->imageName);
 
    /*** Print the medium history from a catalog file if requested */

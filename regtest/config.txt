@@ -873,6 +873,8 @@ RS04f_audio_offset_fix_damaged yes
 RS04f_audio_offset_given yes
 RS04f_audio_offset_wrong yes
 RS04f_bincue_create yes
+RS04f_bincue_outside yes
+RS04f_gdi_absolute yes
 RS04f_gdi_create yes
 RS04f_bincue_verify yes
 RS04f_bincue_fix yes

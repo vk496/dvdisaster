@@ -522,6 +522,20 @@ if try "ecc file from a cue sheet" bincue_create; then (
   run_regtest bincue_create "--debug --set-version $SETVERSION -n 20% -mRS04 -o file -c" $TEST_TMPDIR/disc.cue $TMPECC
 ) & limit_jobs; fi
 
+# Files named in a sheet must lie below the directory of the sheet
+
+if try "cue sheet naming a file outside its directory" bincue_outside; then (
+  bincue $TEST_TMPDIR
+  printf 'FILE "../track02.bin" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n' >$TEST_TMPDIR/outside.cue
+  run_regtest bincue_outside "--debug --set-version $SETVERSION -n 20% -mRS04 -o file -c" $TEST_TMPDIR/outside.cue $TMPECC
+) & limit_jobs; fi
+
+if try "gdi file naming an absolute path" gdi_absolute; then (
+  bincue $TEST_TMPDIR
+  printf '1\n1 0 4 2352 /dev/null 0\n' >$TEST_TMPDIR/absolute.gdi
+  run_regtest gdi_absolute "--debug --set-version $SETVERSION -n 20% -mRS04 -o file -c" $TEST_TMPDIR/absolute.gdi $TMPECC
+) & limit_jobs; fi
+
 if try "ecc file from a gdi file" gdi_create; then (
   bincue $TEST_TMPDIR
   run_regtest gdi_create "--debug --set-version $SETVERSION -n 20% -mRS04 -o file -c" $TEST_TMPDIR/disc.gdi $TMPECC

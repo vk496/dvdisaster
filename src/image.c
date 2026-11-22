@@ -65,6 +65,26 @@ static char *next_token(char **p)
    return start;
 }
 
+/* The files named in a sheet must lie below the sheet's directory: sheets
+   are often downloaded together with the images, and repairing writes to
+   the files they name. */
+
+static int sheet_name_ok(const char *file)
+{  const char *p = file;
+
+   if(g_path_is_absolute(file) || *file == '\\')
+     return FALSE;
+
+   while(*p)
+   {  const char *end = p + strcspn(p, "/\\");
+
+      if(end-p == 2 && p[0] == '.' && p[1] == '.')
+	return FALSE;
+      p = *end ? end+1 : end;
+   }
+   return TRUE;
+}
+
 static LargeFile *open_multi_file(char *name, int flags, int gdi)
 {  FILE *sheet = fopen(name, "rb");
    GPtrArray *parts;
@@ -116,8 +136,16 @@ static LargeFile *open_multi_file(char *name, int flags, int gdi)
       }
 
       if(file)
-      {  char *path = g_path_is_absolute(file) ? g_strdup(file) : g_strdup_printf("%.*s%s", dir_len, name, file);
-	 LargeFile *part = LargeOpen(path, flags, IMG_PERMS);
+      {  char *path;
+	 LargeFile *part;
+
+	 if(!sheet_name_ok(file))
+	   Stop(_("%s: file name \"%s\" must not be absolute or contain \"..\".\n"
+		  "Keep the image files in the directory of the sheet."), name, file);
+
+	 path = g_strdup_printf("%.*s%s", dir_len, name, file);
+	 // codeql[cpp/path-injection] File named in the sheet; confined to the sheet's directory by sheet_name_ok().
+	 part = LargeOpen(path, flags, IMG_PERMS);
 
 	 if(!part)
 	   Stop(_("Can't open %s:\n%s"), path, strerror(errno));

@@ -626,7 +626,7 @@ static void alloc_buffers(fix_closure *fc)
    fc->sectors = g_malloc(fc->W*set->B);
    fc->present = g_malloc(fc->W);
 
-   fc->nWorkers = MAX(1, MIN(Closure->codecThreads, (int)fc->W));
+   fc->nWorkers = MAX(1, MIN(MIN(Closure->codecThreads, MAX_CODEC_THREADS), (int)fc->W));
    fc->workers = g_malloc0(fc->nWorkers*sizeof(worker));
    for(i=0; i<fc->nWorkers; i++)
    {  worker *wk = &fc->workers[i];
