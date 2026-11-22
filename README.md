@@ -25,7 +25,9 @@ This version is built on top of the latest upstream version, with the following 
 - List which files of an ISO image are affected by unreadable sectors (`--list-damaged-files`)
 - Reading of multi-session discs (all sessions in one image) and of audio CDs (2352-byte `.bin` + `.cue`, with C2 error pointers);
   Video CD, PlayStation and CD-i discs (Mode 2 Form 2 sectors) are read the same way, with EDC checks of the data sectors
-- Audio CD rips get AccurateRip v1/v2 and CTDB checksums and CD-TEXT in the `.cue`, and an optional test & copy pass (`--test-and-copy`)
+- Audio CD rips get AccurateRip v1/v2 and CTDB checksums and CD-TEXT in the `.cue`, and an optional test & copy pass (`--test-and-copy`, or "Test & Copy" in the preferences)
+- Catalog of scan and read results (`--catalog`, or "Medium catalog" in the preferences): one line per run with the medium fingerprint and the number of
+  damaged sectors; `--catalog-report` prints the history of each medium and warns when the damage is growing
 - Optional pause after a given number of read errors, to let drives that overheat on damaged media cool down (`--pause-after-errors`)
 - Drive capability report (`--drive-test`): profiles, raw/C2/CD-DA reading support and what the drive is suitable for, using read-only commands
 - A helper script that turns a folder into a protected disc in one step: it builds the ISO image with xorriso, augments it,

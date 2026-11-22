@@ -256,6 +256,10 @@ void GuiReadDotfile()
       if(!strcmp(symbol, "encoding-io-strategy")) { Closure->encodingIOStrategy = atoi(value); continue; }
       if(!strcmp(symbol, "examine-rs02"))    { Closure->examineRS02  = atoi(value); continue; }
       if(!strcmp(symbol, "examine-rs03"))    { Closure->examineRS03  = atoi(value); continue; }
+      if(!strcmp(symbol, "examine-rs04"))    { Closure->examineRS04  = atoi(value); continue; }
+      if(!strcmp(symbol, "catalog-file"))    { g_free(Closure->catalogFile);
+	                                       Closure->catalogFile = g_strdup(value); continue; }
+      if(!strcmp(symbol, "test-and-copy"))   { Closure->testAndCopy = atoi(value); continue; }
       if(!strcmp(symbol, "bruteforce-rs03-search")) { Closure->bruteforceRS03Search = atoi(value); continue; }
       if(!strcmp(symbol, "fill-unreadable")) { Closure->fillUnreadable = atoi(value); continue; }
       if(!strcmp(symbol, "ignore-fatal-sense")) { Closure->ignoreFatalSense  = atoi(value); continue; }
@@ -401,6 +405,10 @@ static void update_dotfile()
    g_fprintf(dotfile, "encoding-io-strategy:%d\n", Closure->encodingIOStrategy);
    g_fprintf(dotfile, "examine-rs02:      %d\n", Closure->examineRS02);
    g_fprintf(dotfile, "examine-rs03:      %d\n", Closure->examineRS03);
+   g_fprintf(dotfile, "examine-rs04:      %d\n", Closure->examineRS04);
+   if(Closure->catalogFile)   /* an empty value would be skipped when reading */
+      g_fprintf(dotfile, "catalog-file:      %s\n", Closure->catalogFile);
+   g_fprintf(dotfile, "test-and-copy:     %d\n", Closure->testAndCopy);
    g_fprintf(dotfile, "bruteforce-rs03-search:%d\n", Closure->bruteforceRS03Search);
    g_fprintf(dotfile, "fill-unreadable:   %d\n", Closure->fillUnreadable);
    g_fprintf(dotfile, "ignore-fatal-sense: %d\n", Closure->ignoreFatalSense);
