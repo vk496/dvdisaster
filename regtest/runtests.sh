@@ -15,7 +15,7 @@ export REGTEST_RUNNER=1
 
 # Run the given codec test scripts (default: all) in parallel
 suites=("$@")
-[ ${#suites[@]} -eq 0 ] && suites=(rs*.bash)
+[ ${#suites[@]} -eq 0 ] && suites=(rs*.bash reading.bash)
 pids=()
 scripts=()
 for i in "${suites[@]}"; do

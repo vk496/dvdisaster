@@ -525,6 +525,17 @@ static char* finish(XorrisoCheck *xc, int repairable, int want_markup)
    repairable: the codec has found defects in the image which its ecc
    data can attempt to repair; otherwise bad tags can not be repaired. */
 
+/* Like XorrisoCheckReport(), but returns the text for the GUI (with markup
+   if wanted; to be freed by the caller) instead of showing it in a label.
+   For callers which keep their own copy of the text, like the RS04 window. */
+
+char* XorrisoCheckReportText(XorrisoCheck *xc, int repairable, int want_markup)
+{  if(!xc || Closure->stopActions)   /* image not read completely */
+      return NULL;
+
+   return finish(xc, repairable, want_markup);
+}
+
 void XorrisoCheckReport(XorrisoCheck *xc, int repairable, GtkWidget *label)
 {  char *text;
 

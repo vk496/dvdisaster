@@ -1,0 +1,20 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+rs04i-tmp.iso present.
+
+Error correction properties:
+- type             : Augmented image
+- method           : RS04, 191+47 layers of 42 sectors, 24.6% redundancy.
+- sector size      : 2048 bytes
+- created by       : dvdisaster-0.80
+- data md5sum      : 85a24eb529119e79c540b623f47fc2a3
+
+Data integrity:
+- medium sectors   : 10022 total / 8000 data
+- good image/file  : all sectors present
+- data md5sum      : 85a24eb529119e79c540b623f47fc2a3

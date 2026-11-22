@@ -27,6 +27,14 @@
 #include "read-linear.h"
 #include "scsi-layer.h"
 #include "udf.h"
+#include "rs04-includes.h"
+
+/* CD-DA rips are only comparable with the CRCs of an RS04 ecc file
+   if both were read with the same read offset. This is assumed once a
+   sector which is not digital silence matches; CRC errors before that
+   are held back, and checking ends if the first 8 such sectors fail. */
+
+enum { AUDIO_ALIGNED, AUDIO_UNSURE, AUDIO_SHIFTED };
 
 /*
  * IO buffer states
@@ -51,6 +59,24 @@ static void send_eof(read_closure *rc)
 
    g_cond_signal(rc->canWrite);
    g_mutex_unlock(rc->mutex);
+}
+
+/*
+ * Create a missing sector marker. Sectors which are not part of the image
+ * (between sessions) are zero-filled instead. CD-DA sectors (2352 bytes)
+ * get the 2048 byte marker followed by zero bytes (or the fill byte).
+ */
+
+static void create_missing_sector(read_closure *rc, unsigned char *buf, gint64 s)
+{
+   if(IsZeroFilledSector(rc->image->dh, s))
+   {  memset(buf, 0, rc->sectorBytes);
+      return;
+   }
+
+   CreateMissingSector(buf, s, rc->image->imageFP, FINGERPRINT_SECTOR, rc->volumeLabel);
+   if(rc->sectorBytes > 2048)
+      memset(buf+2048, Closure->fillUnreadable >= 0 ? Closure->fillUnreadable : 0, rc->sectorBytes-2048);
 }
 
 /*
@@ -312,24 +338,24 @@ reopen_image:
       Stop(_("Can't open %s:\n%s"),Closure->imageName,strerror(errno));
 
    rc->rereading  = 1;
-   rc->readMarker = image_size / 2048;
+   rc->readMarker = image_size / rc->sectorBytes;
 
    /* Try reading the media and image fingerprints. */
 
-   if(!LargeSeek(rc->readerImage, (gint64)(2048*FINGERPRINT_SECTOR)))
+   if(!LargeSeek(rc->readerImage, (gint64)rc->sectorBytes*FINGERPRINT_SECTOR))
       unknown_fingerprint = TRUE;
    else
    {  struct MD5Context md5ctxt;
-      int n = LargeRead(rc->readerImage, buf, 2048);
+      int n = LargeRead(rc->readerImage, buf, rc->sectorBytes);
       int fp_read;
 
       MD5Init(&md5ctxt);
-      MD5Update(&md5ctxt, buf, 2048);
+      MD5Update(&md5ctxt, buf, rc->sectorBytes);
       MD5Final(image_fp, &md5ctxt);
 
       fp_read = GetImageFingerprint(rc->image, medium_fp, FINGERPRINT_SECTOR);
 	 
-      if(n != 2048 || !fp_read || (CheckForMissingSector(buf, FINGERPRINT_SECTOR, NULL, 0) != SECTOR_PRESENT))
+      if(n != rc->sectorBytes || !fp_read || (CheckForMissingSector(buf, FINGERPRINT_SECTOR, NULL, 0) != SECTOR_PRESENT))
 	 unknown_fingerprint = TRUE;
    }
 
@@ -390,20 +416,20 @@ static void fill_gap(read_closure *rc)
 {  gint64 s;
 
    if(!rc->scanMode && rc->firstSector > rc->readMarker)
-   {  unsigned char buf[2048];
+   {  unsigned char buf[CD_RAW_SECTOR_SIZE];
 
       s = rc->readMarker;
 
-      if(!LargeSeek(rc->writerImage, (gint64)(2048*s)))
+      if(!LargeSeek(rc->writerImage, (gint64)rc->sectorBytes*s))
 	Stop(_("Failed seeking to sector %" PRId64 " in image [%s]: %s"),
 	     s, "fill", strerror(errno));
 
       while(s < rc->firstSector)
       {  int n;
 
-	 CreateMissingSector(buf, s, rc->image->imageFP, FINGERPRINT_SECTOR, rc->volumeLabel);
-	 n = LargeWrite(rc->writerImage, buf, 2048);
-	 if(n != 2048)
+	 create_missing_sector(rc, buf, s);
+	 n = LargeWrite(rc->writerImage, buf, rc->sectorBytes);
+	 if(n != rc->sectorBytes)
 	   Stop(_("Failed writing to sector %" PRId64 " in image [%s]: %s"),
 		s, "fill", strerror(errno));
 	 s++;
@@ -430,6 +456,11 @@ static void prepare_crc_cache(read_closure *rc)
      Closure->crcBuf = NULL;
   }
     
+   /*** CD-DA images are only handled by RS04 ecc files. */
+
+   if(rc->sectorBytes != 2048 && !rc->eccMethod)
+      return;
+
    /*** Memory for the CRC32 sums is needed in two cases: */
 
    /* a) We have suitable ecc data and want to compare CRC32sums
@@ -461,7 +492,9 @@ static void prepare_crc_cache(read_closure *rc)
 	    the data portion, but not for the full image.
 	    Request calculation of them from the image. */
 	 
-	 if(Closure->crcBuf->md5State & MD5_BUILDING)
+	 if(rc->sectorBytes != 2048)
+	   rc->audioOffset = AUDIO_UNSURE;
+	 else if(Closure->crcBuf->md5State & MD5_BUILDING)
 	   rc->doChecksumsFromImage = CRCBUF_UPDATE_MD5 | CRCBUF_UPDATE_CRC_AFTER_DATA;
       }
       else Closure->crcBuf = NULL;
@@ -484,6 +517,60 @@ static void prepare_crc_cache(read_closure *rc)
 
    Closure->crcBuf = CreateCrcBuf(rc->image);
    rc->doChecksumsFromImage = CRCBUF_UPDATE_ALL;
+}
+
+/*
+ * CD-DA images can be checked against an RS04 ecc file for 2352 byte sectors
+ */
+
+static void cdda_ecc_file(Image *image)
+{  RS04Info *info;
+
+   if(!OpenEccFileForImage(image, Closure->eccName, O_RDONLY, IMG_PERMS) || !image->eccFile)
+     return;
+
+   info = image->eccFileMethod && !strncmp(image->eccFileMethod->name, "RS04", 4) ? RS04GetSets(image) : NULL;
+   if(!info || info->set[0].B != CD_RAW_SECTOR_SIZE)
+   {  LargeClose(image->eccFile);
+      image->eccFile = NULL;
+      image->eccFileMethod = NULL;
+      g_free(image->eccFileHeader);
+      image->eccFileHeader = NULL;
+   }
+   g_free(info);
+}
+
+/*
+ * CRC errors found by the writer thread
+ */
+
+static void crc_error(read_closure *rc, gint64 sector)
+{  ClearProgress();
+   PrintCLIError(_("* CRC error, sector: %lld\n"), (long long int)sector);
+   Closure->crcErrors++;
+   g_mutex_lock(rc->mutex);  /* reader sets bits in the same words */
+   if(rc->readMap)  /* trigger re-read */
+      ClearBit(rc->readMap, sector);
+   MapfileReadBad(sector, 1);
+   g_mutex_unlock(rc->mutex);
+}
+
+static int all_zero(unsigned char *buf, int n)
+{  int i;
+
+   for(i=0; i<n; i++)
+     if(buf[i]) return FALSE;
+   return TRUE;
+}
+
+static void audio_shifted(read_closure *rc)
+{  rc->audioOffset = AUDIO_SHIFTED;
+   if(!rc->nAudioPending) return;
+
+   ClearProgress();
+   PrintLog(_("* The rip does not match the CRCs of the ecc file; it was probably made\n"
+	      "  with another read offset. CRCs are not compared while reading;\n"
+	      "  verifying and fixing the rip take the offset into account.\n"));
 }
 
 /*
@@ -667,14 +754,14 @@ static gpointer worker_thread(read_closure *rc)
       if(!rc->scanMode)
       {  int n;
 
-	 if(!LargeSeek(rc->writerImage, (gint64)(2048*s)))
+	 if(!LargeSeek(rc->writerImage, (gint64)rc->sectorBytes*s))
 	 {  rc->workerError = g_strdup_printf(_("Failed seeking to sector %" PRId64 " in image [%s]: %s"),
 					      s, "store", strerror(errno));
 	    goto update_mutex;
 	 }
 
-	 n = LargeWrite(rc->writerImage, rc->alignedBuf[rc->writePtr]->buf, 2048*nsectors);
-	 if(n != 2048*nsectors)
+	 n = LargeWrite(rc->writerImage, rc->alignedBuf[rc->writePtr]->buf, (size_t)rc->sectorBytes*nsectors);
+	 if(n != rc->sectorBytes*nsectors)
 	 {  rc->workerError = g_strdup_printf(_("Failed writing to sector %" PRId64 " in image [%s]: %s"),
 	                                      s, "store", strerror(errno));
 	    goto update_mutex;
@@ -687,7 +774,7 @@ static gpointer worker_thread(read_closure *rc)
       if(rc->bufState[rc->writePtr] != BUF_DEAD)
       {
 	for(i=0; i<nsectors; i++)
-	{  unsigned char *buf = rc->alignedBuf[rc->writePtr]->buf+2048*i;
+	{  unsigned char *buf = rc->alignedBuf[rc->writePtr]->buf+rc->sectorBytes*i;
 	   gint64 sector = s+i;
 
 	   /* Update the global checksum buffer */
@@ -707,15 +794,24 @@ static gpointer worker_thread(read_closure *rc)
 	   
 	   if(Closure->crcBuf && sector < Closure->crcBuf->coveredSectors)
 	   {  switch(CheckAgainstCrcBuffer(Closure->crcBuf, sector, buf))
-	      {  case CRC_BAD:
-		   ClearProgress();
-		   PrintCLIError(_("* CRC error, sector: %lld\n"), (long long int)s+i);
-		   Closure->crcErrors++;
-		   g_mutex_lock(rc->mutex);  /* reader sets bits in the same words */
-		   if(rc->readMap)  /* trigger re-read */
-		      ClearBit(rc->readMap, sector);
-		   MapfileReadBad(sector, 1);
-		   g_mutex_unlock(rc->mutex);
+	      {  case CRC_GOOD:
+		   if(rc->audioOffset == AUDIO_UNSURE && !all_zero(buf, rc->sectorBytes))
+		   {  int j;
+
+		      rc->audioOffset = AUDIO_ALIGNED;
+		      for(j=0; j<rc->nAudioPending; j++)
+			crc_error(rc, rc->audioPending[j]);
+		   }
+		   break;
+
+	         case CRC_BAD:
+		   if(rc->audioOffset == AUDIO_UNSURE)
+		   {  rc->audioPending[rc->nAudioPending++] = sector;
+		      if(rc->nAudioPending == 8)
+			audio_shifted(rc);
+		   }
+		   else if(rc->audioOffset == AUDIO_ALIGNED)
+		     crc_error(rc, sector);
 		   break;
 
 	         case CRC_UNKNOWN:  /* CRC data missing or detected as defective */
@@ -781,6 +877,8 @@ void ReadMediumLinear(gpointer data)
    char *t = NULL;
    int status,n;
    int tao_tail, run_out, summary_error = FALSE;
+   int session_tails = 0;
+   int tao_case;
    int i;
 
    /*** This value might be temporarily changed later. */
@@ -821,6 +919,15 @@ void ReadMediumLinear(gpointer data)
    rc->image = OpenImageFromDevice(Closure->device, 0);
    Closure->readErrors = Closure->crcErrors = rc->readOK = 0;
 
+   /*** Audio CDs (or any CD with --cdda) are read as 2352 byte sectors */
+
+   rc->sectorBytes = UseCDDAImage(rc->image) ? CD_RAW_SECTOR_SIZE : 2048;
+
+   if(rc->image->dh->zeroFill)
+   {  PrintTrackTable(rc->image->dh, PrintLog);
+      PrintLog("\n");
+   }
+
    /*** Save some useful information for the missing sector marker */
 
    if(rc->image->isoInfo && rc->image->isoInfo->volumeLabel[0])
@@ -830,13 +937,24 @@ void ReadMediumLinear(gpointer data)
         and attach it with the Image struct. */
 
    // codeql[cpp/path-injection] Image/ECC path intentionally restored from trusted user configuration; arbitrary paths are supported.
-   OpenEccFileForImage(rc->image, Closure->eccName, O_RDONLY, IMG_PERMS);
-   HintOverwritableMedium(rc->image);
+   if(rc->sectorBytes == 2048)
+   {  OpenEccFileForImage(rc->image, Closure->eccName, O_RDONLY, IMG_PERMS);
+      HintOverwritableMedium(rc->image);
+   }
+   else if(Closure->eccName && !g_file_test(Closure->eccName, G_FILE_TEST_IS_DIR))
+      cdda_ecc_file(rc->image);
 
    /*** If ecc information is available in both the image and the
 	ecc file, the ecc file gets precedence. */
 
-   if(rc->image->eccFileMethod)
+   if(rc->sectorBytes != 2048)
+   {  /* RS01..RS03 data does not apply to CD-DA images */
+      if(rc->image->eccFile)
+      {  rc->eccMethod = rc->image->eccFileMethod;
+	 rc->eccHeader = rc->image->eccFileHeader;
+      }
+   }
+   else if(rc->image->eccFileMethod)
    {  rc->eccMethod = rc->image->eccFileMethod;
       rc->eccHeader = rc->image->eccFileHeader;
    }
@@ -989,10 +1107,11 @@ next_reading_pass:
    rc->speed = 0;
    rc->lastSpeed = -1.0;
    rc->firstSpeedValue = TRUE;
-   tao_tail = 0;
+   tao_tail = session_tails = 0;
 
    while(rc->readPos<=rc->lastSector)
    {  int cluster_mask = rc->image->dh->clusterSize-1;
+      gint64 session_end = SessionEnd(rc->image->dh, rc->readPos);
 
       CheckStopRequest(rc->readPos);  /* --time-limit, --abort-file */
 
@@ -1026,10 +1145,14 @@ next_reading_pass:
 	   Switching to fast mode is done only on cluster boundaries
 	   -- this matches the internal structure of DVD and later media better. 
            In order to treat the 2 read errors at the end of TAO discs correctly,
-           we switch back to per sector reading at the end of the medium. */
+           we switch back to per sector reading at the end of the medium
+	   (CD only: on DVD and BD an unreadable ECC block would be retried
+	   sector by sector, which takes very long). */
 
-      if(   rc->readPos & cluster_mask 
-	 || rc->readPos >= ((rc->image->dh->sectors - 2) & ~cluster_mask) )
+      if(   rc->readPos & cluster_mask
+	 || (   rc->image->dh->mainType == CD
+	     && rc->readPos >= ((rc->image->dh->sectors - 2) & ~cluster_mask))
+	 || (session_end && rc->readPos >= ((session_end - 2) & ~cluster_mask)))
             nsectors = 1;
       else  nsectors = rc->image->dh->clusterSize;
 
@@ -1059,7 +1182,7 @@ reread:
 	 /* else query dead sectors from image */
 	 
 	 else
-	 {  if(!LargeSeek(rc->readerImage, (gint64)(2048*rc->readPos)))
+	 {  if(!LargeSeek(rc->readerImage, (gint64)rc->sectorBytes*rc->readPos))
 	       Stop(_("Failed seeking to sector %" PRId64 " in image [%s]: %s"),
 		    rc->readPos, "reread", strerror(errno));
 
@@ -1067,11 +1190,11 @@ reread:
 	       num_compare = rc->readMarker-rc->readPos;
 
 	    for(i=0; i<num_compare; i++)
-	    {  unsigned char sector_buf[2048];
+	    {  unsigned char sector_buf[CD_RAW_SECTOR_SIZE];
 	       int err;
 
-	       n = LargeRead(rc->readerImage, sector_buf, 2048);
-	       if(n != 2048)
+	       n = LargeRead(rc->readerImage, sector_buf, rc->sectorBytes);
+	       if(n != rc->sectorBytes)
 		  Stop(_("unexpected read error in image for sector %" PRId64),rc->readPos);
 	       err = CheckForMissingSector(sector_buf, rc->readPos+i,
 					   rc->image->fpState == 2 ? rc->image->imageFP : NULL,
@@ -1190,11 +1313,11 @@ reread:
 	    /* Note: providing the fingerprint is not necessary as any 
 	       incoming missing sector marker indicates a huge problem. */
 
-	    err = CheckForMissingSector(sector_buf+i*2048, rc->readPos+i,
+	    err = CheckForMissingSector(sector_buf+i*rc->sectorBytes, rc->readPos+i,
 					rc->image->fpState == 2 ? rc->image->imageFP : NULL,
 					rc->image->fpSector);
 	    if(err != SECTOR_PRESENT)
-	    {  ExplainMissingSector(sector_buf+i*2048, rc->readPos+i, err, SOURCE_MEDIUM, &unrecoverable_sectors);
+	    {  ExplainMissingSector(sector_buf+i*rc->sectorBytes, rc->readPos+i, err, SOURCE_MEDIUM, &unrecoverable_sectors);
 	       corrupted_sectors++;  /* readable, but written corrupted */
 	       g_mutex_lock(rc->mutex);
 	       MapfileReadBad(rc->readPos+i, 1);
@@ -1283,8 +1406,7 @@ reread:
 	       {  g_cond_wait(rc->canRead, rc->mutex);
 	       }
 
-	       CreateMissingSector(rc->alignedBuf[rc->readPtr]->buf, rc->readPos+i, 
-				   rc->image->imageFP, FINGERPRINT_SECTOR, rc->volumeLabel);
+	       create_missing_sector(rc, rc->alignedBuf[rc->readPtr]->buf, rc->readPos+i);
 
 	       rc->bufferedSector[rc->readPtr] = rc->readPos+i;
 	       rc->nSectors[rc->readPtr] = 1;
@@ -1317,7 +1439,8 @@ reread:
 			    _("Sector %" PRId64 ": %s Skipping %d sectors.\n"),
 			    rc->readPos, GetLastSenseString(FALSE), nfill-1);  
 	    for(i=0; i<nfill; i++)         /* workaround: large values for nfill */
-	    {  Closure->readErrors++;      /* would exceed sampling of green/red */
+	    {  if(!IsZeroFilledSector(rc->image->dh, rc->readPos))
+		 Closure->readErrors++;    /* would exceed sampling of green/red */
 	       rc->readPos++;              /* in the spiral. Internal NOTE01 */
 	       show_progress(rc);
 	    }
@@ -1345,6 +1468,7 @@ reread:
 			       _("Sector %" PRId64 ": %s\n"),
 			       rc->readPos, GetLastSenseString(FALSE));  
 	       if(rc->readPos >= rc->image->dh->sectors - 2) tao_tail++;
+	       else if(session_end && rc->readPos >= session_end - 2) session_tails++;
 	       Closure->readErrors++;
 	       g_mutex_lock(rc->mutex);
 	       MapfileReadBad(rc->readPos, 1);
@@ -1416,6 +1540,9 @@ step_counter:
    g_thread_join(rc->worker);
    rc->worker = NULL;
 
+   if(rc->audioOffset == AUDIO_UNSURE)
+     audio_shifted(rc);
+
    /*** Finalize on-the-fly checksum calculation */
 
    if(rc->doChecksumsFromCodec && rc->eccMethod)
@@ -1459,7 +1586,7 @@ step_counter:
 
 	 if(t) summary_error = TRUE;
 	 else
-	 {  if(rc->eccMethod) /* we had CRC sums to compare against */
+	 {  if(rc->eccMethod && rc->audioOffset == AUDIO_ALIGNED) /* we had CRC sums to compare against */
 	    {  if(rc->crcIncomplete)
 	       {  t = g_strdup(_("All sectors successfully read, but incomplete or damaged checksums."));
 		  summary_error = TRUE;
@@ -1488,10 +1615,12 @@ step_counter:
    if(Closure->crcErrors)
       summary_error = TRUE;
 
-   /* The two unreadable run-out sectors at the end of a TAO CD don't count as defects */
+   /* Unreadable run-out sectors at the end of TAO sessions and of a TAO CD
+      don't count as defects */
 
-   run_out = rc->image->dh->mainType == CD && tao_tail && tao_tail == Closure->readErrors
-             && !Closure->noTruncate ? tao_tail : 0;
+   tao_case = rc->image->dh->mainType == CD && tao_tail
+              && tao_tail + session_tails == Closure->readErrors && !Closure->noTruncate;
+   run_out = session_tails + (tao_case ? tao_tail : 0);
 
    if(summary_error)
       SetExitCode(EXIT_FAILURE, EXIT_CODE_DEFECTS);
@@ -1520,7 +1649,12 @@ step_counter:
    if(!Closure->fixedSpeedValues)
      PrintTimeToLog(rc->readTimer, "for reading/scanning.\n");
 
-   if(run_out)
+   if(session_tails)
+      PrintLog(_("%d of the unreadable sectors are at the end of a session.\n"
+		 "This is okay if the session was written in TAO (track at once) mode;\n"
+		 "these sectors do not contain data.\n"), session_tails);
+
+   if(tao_case)
    {  int answer;
    
       if(Closure->guiMode)
@@ -1550,27 +1684,40 @@ step_counter:
 			       );
       }
       if(!rc->scanMode && answer)
-      {  if(!LargeTruncate(rc->writerImage, (gint64)(2048*(rc->image->dh->sectors-tao_tail))))
+      {  if(!LargeTruncate(rc->writerImage, (gint64)rc->sectorBytes*(rc->image->dh->sectors-tao_tail)))
 	   Stop(_("Could not truncate %s: %s\n"),Closure->imageName,strerror(errno));
 	 MapfileTruncate(rc->image->dh->sectors-tao_tail);  /* run-out sectors are not part of the medium */
       }
    }
-   else if(Closure->readErrors) SetExitCode(EXIT_FAILURE, EXIT_CODE_DEFECTS);
+   else if(Closure->readErrors > session_tails) SetExitCode(EXIT_FAILURE, EXIT_CODE_DEFECTS);
+
+   /*** CD-DA images get a cue sheet */
+
+   if(rc->sectorBytes != 2048 && !rc->scanMode)
+      // codeql[cpp/path-injection] Image/ECC path intentionally restored from trusted user configuration; arbitrary paths are supported.
+      WriteCueSheet(rc->image->dh, Closure->imageName);
 
    /*** Eject medium */
 
    if(Closure->eject && !Closure->readErrors)
       LoadMedium(rc->image->dh, FALSE);
 
+   /*** Remember the result in the catalog file */
+
+   if(Closure->catalogFile)
+      AppendCatalog(rc->image, rc->scanMode ? "scan" : "read", rc->volumeLabel,
+		    rc->image->dh->sectors, Closure->readErrors - run_out, Closure->crcErrors);
+
    /*** Close and clean up */
 
-   if(Closure->readErrors || Closure->crcErrors) 
+   if(Closure->crcBuf && (Closure->readErrors || Closure->crcErrors))
      Closure->crcBuf->md5State = MD5_INVALID;
      
    rc->unreportedError = FALSE;
    rc->earlyTermination = FALSE;
 
 terminate:
-   PrintCrcBuf(Closure->crcBuf);
+   if(Closure->crcBuf)
+     PrintCrcBuf(Closure->crcBuf);
    cleanup((gpointer)rc);
 }

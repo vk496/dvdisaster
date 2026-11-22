@@ -242,6 +242,9 @@ typedef struct _GlobalClosure
    struct _Bitmap *mapFailedBlock; /* sectors of a failed multi-sector read */
    gint64 mapSectors;              /* medium size covered by the mapfile */
    GArray *mapPrevious;            /* blocks of an existing mapfile being updated */
+   GPtrArray *moreEccNames; /* further ecc files given with -e (RS04 supplementary sets) */
+   char *catalogFile;   /* append scan/read results to this file */
+   char *catalogReport; /* print the history from this catalog file */
    GPtrArray *methodList; /* List of available methods */
    char *methodName;    /* Name of currently selected codec */
    gint64 readStart;    /* Range to read */
@@ -264,12 +267,14 @@ typedef struct _GlobalClosure
    int cacheMiB;        /* Cache setting for the parity codec, in megabytes */
    int prefetchSectors; /* Prefetch setting per encoder thread */
    int codecThreads;    /* Number of threads to use for RS encoders */
-   int encodingAlgorithm; /* Force a certain codec type for RS03 */
+   int encodingAlgorithm; /* Force a certain codec type for RS03/RS04 */
    int encodingIOStrategy; /* Force a IO strategy for RS03 encoding */
    int sectorSkip;      /* Number of sectors to skip after read error occurs */
    char *redundancy;    /* Error correction code redundancy */
    int eccTarget;       /* 0=file; 1=augmented image */
    int readRaw;         /* Read CD sectors raw + verify them */
+   int cdda;            /* Read CDs as CD-DA images (2352 bytes per sector) */
+   int testAndCopy;     /* Read audio tracks twice and compare their CRC32 */
    int rawMode;         /* mode for mode page */
    int minReadAttempts; /* minimum reading attempts */
    int maxReadAttempts; /* maximal reading attempts */
@@ -285,6 +290,7 @@ typedef struct _GlobalClosure
    char *stopReason;    /* "time_limit" or "abort_file" once reading was stopped */
    int abortFileWarned; /* an error checking abortFile was reported */
    gint64 simStopSector;/* debug: act as if --time-limit expired at this sector (-1 = off) */
+   int listDamagedFiles;/* list files containing missing sectors */
    int truncate;        /* confirms truncation of large images */
    int noTruncate;      /* do not truncate image at the end */
    int noProgress;      /* do not print the percentage progress indicator */
@@ -305,6 +311,12 @@ typedef struct _GlobalClosure
    int ignoreIsoSize;   /* get size per READ CAPACITY; ignore all ISO/UDF meta data */
    int examineRS02;     /* perform deep search for RS02 structures */
    int examineRS03;     /* perform deep search for RS03 structures */
+   int examineRS04;     /* scan whole images for RS04 tags */
+   int sectorBytes;     /* RS04: sector size of the protected data */
+   int audioOffset;     /* RS04: read offset of a CD-DA rip in samples */
+   int audioOffsetGiven;/* RS04: TRUE if audioOffset was specified */
+   int rs04MemoryMiB;   /* RS04: memory budget for de-/encoding */
+   int rs04Kernel;      /* RS04: codec kernels (RS04_KERNEL_*), 0 = auto */
    int readAndCreate;   /* automatically create .ecc file after reading an image */
    int enableCurveSwitch; /* TRUE in readAndCreateMode after reading is complete */
    int welcomeMessage;  /* just print dvdisaster logo if FALSE */
@@ -312,6 +324,7 @@ typedef struct _GlobalClosure
    int simulateDefects; /* if >0, this is the percentage of simulated media defects */
    char *simulateCD;    /* Simulate CD from given image */
    int simulateProfile; /* MMC profile for the simulated medium (default CD-R) */
+   char *simulateTOC;   /* Session/track layout of the simulated CD */
    int defectiveDump;   /* dump non-recoverable sectors into given path */
    char *dDumpDir;      /* directory for above */
    char *dDumpPrefix;   /* file name prefix for above */
@@ -479,6 +492,7 @@ typedef struct _LargeFile
    char *path;
    guint64 size;
    int flags;
+   GPtrArray *parts;  /* multi-file image (.cue/.gdi): its files in order */
 } LargeFile;
 
 /***
@@ -614,6 +628,7 @@ void GuiUpdateMarkup(char**, GdkRGBA*);
  ***/
 
 guint32 Crc32(unsigned char*, int);
+guint32 Crc32Update(guint32, unsigned char*, int);
 guint32 EDCCrc32(unsigned char*, int);
 
 /***
@@ -633,6 +648,9 @@ typedef struct _CrcBuf
    guint32 *crcbuf;
    guint64 crcSize;
    Bitmap *valid;
+   Bitmap *covered;             /* if not NULL: sectors which have a CRC at all */
+   void *rs04;                  /* RS04Info: augmented sets whose tags hold more CRCs */
+   int sectorBytes;             /* 2048, or 2352 for CD-DA */
    gint32 crcCached;            /* CRC has been retrieved from ECC or previous run */
   
    /* MD5 sum of image sectors */
@@ -976,6 +994,19 @@ void MapfileReadOK(gint64, gint64);
 void MapfileReadBad(gint64, gint64);
 void MapfileBlockFailed(gint64, gint64);
 void MapfileFree(void);
+
+/***
+ *** iso-files.c
+ ***/
+
+void ListDamagedFiles(char*);
+
+/***
+ *** catalog.c
+ ***/
+
+void AppendCatalog(Image*, char*, char*, gint64, gint64, gint64);
+void CatalogReport(char*);
 Image* OpenImageFromDevice(char*, int);   /* really in scsi-layer.h */
 Image* OpenEccFileForImage(Image*, char*, int, mode_t);
 int ReportImageEccInconsistencies(Image*);
@@ -985,6 +1016,7 @@ void WarnAboutImagePadding(Image*);
 int ImageReadSectors(Image*, void*, guint64, int);
 int TruncateImage(Image*, guint64);
 void CloseImage(Image*);
+void RefuseMultiFileImage(Image*);
 
 /***
  *** large-io.c
@@ -1513,6 +1545,7 @@ AlignedBuffer *CreateAlignedBuffer(int);
 void FreeAlignedBuffer(AlignedBuffer*);
 
 char* DefaultDevice(void);
+void DriveTest(char*);
 gint64 CurrentImageSize(void);
 gint64 CurrentImageCapacity(void);
 
@@ -1625,6 +1658,7 @@ typedef struct _XorrisoCheck XorrisoCheck;
 XorrisoCheck* XorrisoCheckNew(void);
 void XorrisoCheckSector(XorrisoCheck*, gint64, unsigned char*, int);
 void XorrisoCheckReport(XorrisoCheck*, int, GtkWidget*);
+char* XorrisoCheckReportText(XorrisoCheck*, int, int);
 int XorrisoCheckBad(XorrisoCheck*);
 void XorrisoCheckFree(XorrisoCheck*);
 

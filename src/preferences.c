@@ -103,8 +103,12 @@ typedef struct _prefs_context
    GtkWidget *daoButtonA, *daoButtonB;
    GtkWidget *ignoreISOSizeA, *ignoreISOSizeB;
    GtkWidget *dsmButtonA, *dsmButtonB;
+   GtkWidget *cddaButtonA, *cddaButtonB;
    GtkWidget *recogRS02A, *recogRS02B;
    GtkWidget *recogRS03A, *recogRS03B;
+   GtkWidget *recogRS04A, *recogRS04B;
+   GtkWidget *testAndCopyA, *testAndCopyB;
+   GtkWidget *catalogPathA, *catalogPathB;
    GtkWidget *bruteforceRS03A, *bruteforceRS03B;
    GtkWidget *byteEntryA, *byteEntryB;
    GtkWidget *byteCheckA, *byteCheckB;
@@ -307,6 +311,8 @@ void GuiUpdatePrefsExhaustiveSearch(void)
       activate_toggle_button(GTK_TOGGLE_BUTTON(pc->recogRS02B), Closure->examineRS02); 
       activate_toggle_button(GTK_TOGGLE_BUTTON(pc->recogRS03A), Closure->examineRS03);
       activate_toggle_button(GTK_TOGGLE_BUTTON(pc->recogRS03B), Closure->examineRS03);
+      activate_toggle_button(GTK_TOGGLE_BUTTON(pc->recogRS04A), Closure->examineRS04);
+      activate_toggle_button(GTK_TOGGLE_BUTTON(pc->recogRS04B), Closure->examineRS04);
       activate_toggle_button(GTK_TOGGLE_BUTTON(pc->bruteforceRS03A), Closure->bruteforceRS03Search);
       activate_toggle_button(GTK_TOGGLE_BUTTON(pc->bruteforceRS03B), Closure->bruteforceRS03Search);
    }
@@ -341,10 +347,13 @@ enum
    TOGGLE_SUFFIX,
    TOGGLE_RECOG_RS02,
    TOGGLE_RECOG_RS03,
+   TOGGLE_RECOG_RS04,
+   TOGGLE_TEST_AND_COPY,
    TOGGLE_BRUTEFORCE_RS03,
    TOGGLE_SIZEDRIVE,
    TOGGLE_DAO,
    TOGGLE_DSM,
+   TOGGLE_CDDA,
    TOGGLE_RANGE,
    TOGGLE_RAW,
    TOGGLE_RAW_20H,
@@ -466,6 +475,18 @@ static void toggle_cb(GtkWidget *widget, gpointer data)
 	activate_toggle_button(GTK_TOGGLE_BUTTON(pc->recogRS03B), state);
 	break;
 
+      case TOGGLE_RECOG_RS04:
+	Closure->examineRS04 = state;
+	activate_toggle_button(GTK_TOGGLE_BUTTON(pc->recogRS04A), state);
+	activate_toggle_button(GTK_TOGGLE_BUTTON(pc->recogRS04B), state);
+	break;
+
+      case TOGGLE_TEST_AND_COPY:
+	Closure->testAndCopy = state;
+	activate_toggle_button(GTK_TOGGLE_BUTTON(pc->testAndCopyA), state);
+	activate_toggle_button(GTK_TOGGLE_BUTTON(pc->testAndCopyB), state);
+	break;
+
       case TOGGLE_BRUTEFORCE_RS03:
 	Closure->bruteforceRS03Search = state;
 	activate_toggle_button(GTK_TOGGLE_BUTTON(pc->bruteforceRS03A), state);
@@ -482,6 +503,12 @@ static void toggle_cb(GtkWidget *widget, gpointer data)
 	   if(pc->byteCheckB)
 	      activate_toggle_button(GTK_TOGGLE_BUTTON(pc->byteCheckB), FALSE);
 	}
+	break;
+
+      case TOGGLE_CDDA:
+	Closure->cdda = state;
+	activate_toggle_button(GTK_TOGGLE_BUTTON(pc->cddaButtonA), state);
+	activate_toggle_button(GTK_TOGGLE_BUTTON(pc->cddaButtonB), state);
 	break;
 
       case TOGGLE_RAW:
@@ -1045,6 +1072,47 @@ static void cache_defective_dir_cb(GtkWidget *widget, gpointer data)
 
 
 /*
+ * The catalog file: choose it, or switch cataloguing off again
+ */
+
+static void catalog_show_path(void)
+{  prefs_context *pc = (prefs_context*)Closure->prefsContext;
+   const char *text = Closure->catalogFile ? Closure->catalogFile : _utf("(none)");
+
+   if(pc->catalogPathA) gtk_label_set_text(GTK_LABEL(pc->catalogPathA), text);
+   if(pc->catalogPathB) gtk_label_set_text(GTK_LABEL(pc->catalogPathB), text);
+}
+
+static void catalog_select_cb(GtkWidget *widget, gpointer data)
+{  GtkWidget *dialog = gtk_file_chooser_dialog_new(_utf("Catalog file"),
+						   Closure->prefsWindow,
+						   GTK_FILE_CHOOSER_ACTION_SAVE,
+						   _("_Cancel"), GTK_RESPONSE_CANCEL,
+						   _("_Open"), GTK_RESPONSE_ACCEPT,
+						   NULL);
+
+   /* Results are appended, so an existing file is fine */
+
+   gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(dialog), FALSE);
+   if(Closure->catalogFile)
+        gtk_file_chooser_set_filename(GTK_FILE_CHOOSER(dialog), Closure->catalogFile);
+   else gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(dialog), "dvdisaster-catalog.tsv");
+
+   if(gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT)
+   {  g_free(Closure->catalogFile);
+      Closure->catalogFile = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
+      catalog_show_path();
+   }
+   gtk_widget_destroy(dialog);
+}
+
+static void catalog_clear_cb(GtkWidget *widget, gpointer data)
+{  g_free(Closure->catalogFile);
+   Closure->catalogFile = NULL;
+   catalog_show_path();
+}
+
+/*
  * Run the file chooser for the log file
  */
 
@@ -1453,6 +1521,42 @@ void GuiCreatePreferencesWindow(void)
 	   "with a custom medium size."
 	   ));
 
+      /* RS04 */
+
+      lwoh = GuiCreateLabelWithOnlineHelp(_("Exhaustive RS04 tag search"),
+					  _("Scan whole media for RS04 tags"));
+      GuiRegisterPreferencesHelpWindow(lwoh);
+
+      for(i=0; i<2; i++)
+      {  GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+	 GtkWidget *button = gtk_check_button_new();
+
+	 gtk_box_pack_start(GTK_BOX(hbox), button, FALSE, FALSE, 0);
+	 gtk_box_pack_start(GTK_BOX(hbox), i ? lwoh->normalLabel : lwoh->linkBox, FALSE, FALSE, 0);
+         if(!i) gtk_box_pack_start(GTK_BOX(hbox), lwoh->tooltip, FALSE, FALSE, 0);
+
+	 if(!i) pc->recogRS04A = button;
+	 else   pc->recogRS04B = button;
+
+	 activate_toggle_button(GTK_TOGGLE_BUTTON(button), Closure->examineRS04);
+	 g_signal_connect(G_OBJECT(button), "toggled", G_CALLBACK(toggle_cb), GINT_TO_POINTER(TOGGLE_RECOG_RS04));
+	 if(!i) gtk_box_pack_start(GTK_BOX(vbox2), hbox, FALSE, FALSE, 0);
+	 else   GuiAddHelpWidget(lwoh, hbox);
+      }
+
+      GuiAddHelpParagraph(lwoh,
+	 _("<b>Exhaustive RS04 tag search</b>\n\n"
+	   "RS04 error correction data is announced by tags. On a medium, "
+	   "only the places where the tags are expected are checked quickly: "
+	   "behind the file system, and at the end of the medium and of each "
+	   "session. If these places are damaged, the quick check may not "
+	   "recognize the medium as being protected with RS04.\n\n"
+	   "Turn this option <b>on</b> to search the whole medium for tags. "
+	   "This reads every sector, which causes a significant delay at the start "
+	   "of reading and scanning processes and wears the drive.\n\n"
+	   "Leave it <b>off</b> for media without RS04 data. Image files are "
+	   "always searched completely; this option only affects media."));
+
       /** Image properties */
 
       frame = gtk_frame_new(_utf("Image properties"));
@@ -1588,6 +1692,71 @@ void GuiCreatePreferencesWindow(void)
 	   "N.b.: dvdisaster >= 0.72 will automatically recognize "
 	   "both tag formats when reading images; setting this value "
 	   "only affects the creation of new images."));
+
+      /* CD-DA images */
+
+      lwoh = GuiCreateLabelWithOnlineHelp(_("CD-DA images"),
+					  _("Read all CDs as CD-DA images (2352 bytes per sector, .bin + .cue)"));
+      GuiRegisterPreferencesHelpWindow(lwoh);
+
+      for(i=0; i<2; i++)
+      {  GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+	 GtkWidget *button = gtk_check_button_new();
+
+	 gtk_box_pack_start(GTK_BOX(hbox), button, FALSE, FALSE, 0);
+	 gtk_box_pack_start(GTK_BOX(hbox), i ? lwoh->normalLabel : lwoh->linkBox, FALSE, FALSE, 0);
+         if(!i) gtk_box_pack_start(GTK_BOX(hbox), lwoh->tooltip, FALSE, FALSE, 0);
+
+	 if(!i) pc->cddaButtonA = button;
+	 else   pc->cddaButtonB = button;
+
+	 activate_toggle_button(GTK_TOGGLE_BUTTON(button), Closure->cdda);
+	 g_signal_connect(G_OBJECT(button), "toggled", G_CALLBACK(toggle_cb), GINT_TO_POINTER(TOGGLE_CDDA));
+	 if(!i) gtk_box_pack_start(GTK_BOX(vbox2), hbox, FALSE, FALSE, 0);
+	 else   GuiAddHelpWidget(lwoh, hbox);
+      }
+
+      GuiAddHelpParagraph(lwoh,
+	 _("<b>CD-DA images</b>\n\n"
+	   "Audio CDs are always read as CD-DA images: every sector is stored "
+	   "with 2352 bytes into a .bin image, and a cue sheet with the same name "
+	   "and the suffix .cue is written.\n"
+	   "Activate this option to read mixed mode and CD Extra discs the same way, "
+	   "including their audio tracks. Such images can be protected with RS04 "
+	   "error correction data; adaptive reading is not available for them."));
+
+      /* Test & Copy */
+
+      lwoh = GuiCreateLabelWithOnlineHelp(_("Test & Copy"),
+					  _("Audio CDs: read the tracks twice and compare them"));
+      GuiRegisterPreferencesHelpWindow(lwoh);
+
+      for(i=0; i<2; i++)
+      {  GtkWidget *hbox = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+	 GtkWidget *button = gtk_check_button_new();
+
+	 gtk_box_pack_start(GTK_BOX(hbox), button, FALSE, FALSE, 0);
+	 gtk_box_pack_start(GTK_BOX(hbox), i ? lwoh->normalLabel : lwoh->linkBox, FALSE, FALSE, 0);
+         if(!i) gtk_box_pack_start(GTK_BOX(hbox), lwoh->tooltip, FALSE, FALSE, 0);
+
+	 if(!i) pc->testAndCopyA = button;
+	 else   pc->testAndCopyB = button;
+
+	 activate_toggle_button(GTK_TOGGLE_BUTTON(button), Closure->testAndCopy);
+	 g_signal_connect(G_OBJECT(button), "toggled", G_CALLBACK(toggle_cb), GINT_TO_POINTER(TOGGLE_TEST_AND_COPY));
+	 if(!i) gtk_box_pack_start(GTK_BOX(vbox2), hbox, FALSE, FALSE, 0);
+	 else   GuiAddHelpWidget(lwoh, hbox);
+      }
+
+      GuiAddHelpParagraph(lwoh,
+	 _("<b>Test &amp; Copy</b>\n\n"
+	   "After an audio CD has been read, the audio tracks are read once more and "
+	   "the CRC32 of each track is compared with the one of the image, like "
+	   "\"test &amp; copy\" in other CD rippers. A track with a different CRC32 was not "
+	   "read reliably, e.g. because the drive interpolated damaged samples without "
+	   "reporting errors.\n\n"
+	   "Reading takes about twice as long with this option. It has no effect on "
+	   "data discs."));
 
       /** byte filling */
 
@@ -2353,6 +2522,16 @@ void GuiCreatePreferencesWindow(void)
 	 "over RS01 and RS02. However it should not be used for productive work "
 	 "unless a stable version is released with dvdisaster V0.80."));
 
+      GuiAddHelpParagraph(lwoh, "");  /* the RS03 text lacks the trailing newline */
+      GuiAddHelpListItem(lwoh, _("The RS04 codec (Warning: experimental)\n"
+	 "RS04 is a further development of RS03 which can also store error correction "
+	 "data in a separate file or augment the image with it. Its longer codewords "
+	 "survive about twice as many sectors lost at random places all over the medium, "
+	 "and it can protect audio CD (CD-DA) and Mode 2 Form 2 images. "
+	 "RS04 has not seen real-world use yet; keep using RS01, RS02 or RS03 for "
+	 "important data, or use RS04 in addition to them. Its error correction data "
+	 "can not be used by upstream dvdisaster versions."));
+
       /* sub pages for individual method configuration */
       
       pc->methodNotebook = gtk_notebook_new();
@@ -2536,6 +2715,63 @@ void GuiCreatePreferencesWindow(void)
 	   "dvdisaster will ask you for confirmation "
 	   "when it is going to overwrite an existing image "
 	   "or error correction file if this option is checked."));
+
+      /*** Catalog of scan and read results */
+
+      frame = gtk_frame_new(_utf("Medium catalog"));
+      gtk_box_pack_start(GTK_BOX(vbox), frame, FALSE, FALSE, 0);
+
+      vbox2 = gtk_box_new(GTK_ORIENTATION_VERTICAL, 15);
+      gtk_container_set_border_width(GTK_CONTAINER(vbox2), 10);
+      gtk_container_add(GTK_CONTAINER(frame), vbox2);
+
+      lwoh = GuiCreateLabelWithOnlineHelp(_("Catalog file"),
+					  _("Append the result of each scan and read to this file:"));
+      GuiRegisterPreferencesHelpWindow(lwoh);
+
+      for(i=0; i<2; i++)
+      {  GtkWidget *grid = gtk_grid_new();
+	 GtkWidget *label = gtk_label_new(Closure->catalogFile ? Closure->catalogFile : _utf("(none)"));
+	 GtkWidget *select = gtk_button_new_with_label(_utf("Select"));
+	 GtkWidget *clear = gtk_button_new_with_label(_utf("Clear"));
+
+	 gtk_grid_set_column_spacing(GTK_GRID(grid), 10);
+
+	 gtk_label_set_xalign(GTK_LABEL(lwoh->linkLabel), 0.0);
+	 gtk_label_set_xalign(GTK_LABEL(lwoh->normalLabel), 0.0);
+	 gtk_grid_attach(GTK_GRID(grid), i ? lwoh->normalLabel : lwoh->linkBox, 1, 1, 3, 1);
+	 if(!i) gtk_grid_attach(GTK_GRID(grid), lwoh->tooltip, 4, 1, 1, 1);
+
+	 gtk_label_set_xalign(GTK_LABEL(label), 0.0);
+	 gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_MIDDLE);
+	 gtk_widget_set_hexpand(label, TRUE);
+	 gtk_grid_attach(GTK_GRID(grid), label, 1, 2, 1, 1);
+
+	 gtk_grid_attach(GTK_GRID(grid), select, 2, 2, 1, 1);
+	 g_signal_connect(G_OBJECT(select), "clicked", G_CALLBACK(catalog_select_cb), 0);
+	 gtk_grid_attach(GTK_GRID(grid), clear, 3, 2, 1, 1);
+	 g_signal_connect(G_OBJECT(clear), "clicked", G_CALLBACK(catalog_clear_cb), 0);
+
+	 if(!i)
+	 {  pc->catalogPathA = label;
+	    gtk_box_pack_start(GTK_BOX(vbox2), grid, FALSE, FALSE, 0);
+	 }
+	 else
+	 {  pc->catalogPathB = label;
+	    GuiAddHelpWidget(lwoh, grid);
+	 }
+      }
+
+      GuiAddHelpParagraph(lwoh,
+	 _("<b>Catalog file</b>\n\n"
+	   "When a catalog file is selected, each scan and each read adds one line "
+	   "to it: the date, the medium fingerprint, volume label and size, the action, and "
+	   "the numbers of unreadable sectors and CRC errors. This lets you follow the "
+	   "state of a medium over the years.\n\n"
+	   "The file is a plain text file with tab separated columns. Use "
+	   "<b>--catalog-report</b> on the command line to print the history of "
+	   "each medium; it warns about media whose number of damaged sectors is growing.\n\n"
+	   "Press <b>Clear</b> to stop cataloguing. The file itself is not deleted."));
 
       /*** GUI page */
 

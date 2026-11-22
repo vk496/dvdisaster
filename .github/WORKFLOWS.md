@@ -81,15 +81,20 @@ suppression metadata without changing repository-wide dismissals. Removing a
 comment lets the action reopen alerts it previously dismissed; manual
 dismissals are preserved. The action is recorded in `actions.lock`.
 
-The three output-file permission suppressions intentionally retain the user's
-umask for logs, debug text, and sector dumps. Newly created configuration files
-exclude group and other write permissions.
+The five output-file permission suppressions intentionally retain the user's
+umask for logs, debug text, sector dumps, cue sheets and the catalog file.
+Newly created configuration files exclude group and other write permissions.
 
 Path-injection suppressions cover image, ECC, device, and log paths restored
 from trusted user configuration. These settings intentionally accept arbitrary
 paths, just like file selections made by the user; they are not confined to a
 base directory. Configuration files must therefore be trusted by the user
 running the application.
+
+The files named in a `.cue` or `.gdi` sheet are different: sheets often come
+from elsewhere, and repairing writes to the files they name. They must lie below
+the directory of the sheet (no absolute paths, no `..`), which is checked before
+the single suppressed `LargeOpen()` call in `image.c`.
 
 ## Compatibility notes
 

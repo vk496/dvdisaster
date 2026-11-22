@@ -155,6 +155,9 @@ Scanning layers for signatures.
 - layer slice 0
 ** All layers tested -> no RS03 data found
 RS03RecognizeImage: no RS03 data found
+...trying RS04
+RS04: sectors 30000 - 30000 unreadable
+RS04: looking for tags in sectors 34638 - 34931
 ...no augmented image detected.
 # Calling query_size()
 # *** query_size(Simulated CD drive 1.00) ***

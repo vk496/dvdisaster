@@ -1303,6 +1303,7 @@ void RS03Create(void)
    }
 
    ec->image = image;
+   RefuseMultiFileImage(image);
 
    if(image->inLast == 2048)
         PrintLog(_("%s: %" PRId64 " medium sectors.\n"), Closure->imageName, image->sectorSize);

@@ -1189,6 +1189,16 @@ ecc data format:
   the \tlnk{howto-augment}{error correction data directly onto the medium}.
   To do so you must create an ISO image first and then augment it with
   error correction data before you write it to the medium. 
+
+\item {\em Do you want to add more sessions to the medium later?}
+
+  Each session can be augmented with RS04 error correction data before it is written;
+  see \tlnk{howto-multisession}{protecting multi-session media}.
+
+\item {\em Do you want to protect an audio CD?}
+
+  Audio CDs can be protected with an RS04 error correction file for the audio image;
+  see \tlnk{howto-audio}{protecting audio CDs}.
 \end{itemize}
 
 \paragraph{More information on keeping error correction data.}\quad
@@ -1380,6 +1390,8 @@ Error correction files can be created using either the RS03 or the RS01 method
 (see this \tlnk{background-methods}{comparison} for details).
 It is recommended to use RS03 as it contains all features present in RS01,
 but encodes much faster due to certain optimizations.
+The experimental RS04 method can also create error correction files
+(see \tlnk{howto-eccfile-rs04}{below}).
 
 \paragraph{Settings for encoding with the RS03 method.} First select the entry
 ``Multithreaded RS codec (RS03)'' in the drop down menu (marked green).
@@ -1445,6 +1457,22 @@ Then select a redundancy setting which suits your needs; see the
 explanations on redundancy for the RS03 method above for more information.
 For RS01, the ``normal'' and ``high'' settings are somehow optimized for
 speed, but still much slower than their RS03 counterparts. 
+
+\begin{figure}[h]
+\centerline{\includegraphics[width=0.7\textwidth]{screenshots/rs04-prefs.png}}
+\caption{The ``Error correction'' tab for the RS04 codec.}  
+\label{howto-eccfile-prefs-rs04}
+\end{figure}
+
+\paragraph{Settings for encoding with the RS04 method.} \label{howto-eccfile-rs04}
+Select the entry ``Long codeword RS codec (RS04, experimental)'' in the drop down menu
+and choose ``File'' as storage (see fig. \ref{howto-eccfile-prefs-rs04}).
+The redundancy is selected as for RS03; ``Use at most \ldots MiB'' limits the size of the error correction file.
+The {\em memory utilization} decides how long the error correction blocks of new error correction data will be:
+longer blocks recover more scattered damage, but need more memory, or more time when repairing.
+Error correction data created with any setting can be repaired with less memory, only more slowly.
+Leave the {\em sector size} at 2048 bytes for normal data images; 2352 bytes are used for
+\tlnk{howto-audio}{audio CD images} and 2324 bytes for Mode 2 Form 2 tracks (VCD/SVCD).
 
 \newpage
 
@@ -1993,6 +2021,16 @@ selected which is faster to compute. However due to RS03s multithreading
 capabilities it might keep its performance advantage over RS02 even
 when encoding with full redundancy. 
 
+\smallskip
+
+The experimental RS04 method can augment images, too. Like RS03 it fills the medium by default,
+but the redundancy can be chosen freely and no medium size needs to be remembered for repairing.
+It recovers considerably more scattered damage than RS03 (see the \tlnk{background-methods}{comparison}),
+and it can protect \tlnk{howto-multisession}{multi-session media}. Select
+``Long codeword RS codec (RS04, experimental)'' and ``Image'' as storage on the
+``Error correction'' tab (see fig. \ref{howto-eccfile-prefs-rs04}); the other settings are
+explained in the \tlnk{howto-eccfile-rs04}{RS04 settings for error correction files}.
+
 \newpage
 
 \begin{figure}[h]
@@ -2530,6 +2568,60 @@ size which will not be exceeded after augmenting it with RS02
 error correction data. To do so activate the button beneath
 ``Use at most ... sectors'' and enter the maximum image size
 in units of sectors (1 sector = 2KiB).
+
+\newpage
+\subsection{Protecting multi-session media}
+\label{howto-multisession}
+
+Media which are written in several sessions (e.g. a disc to which new backups are added
+from time to time) can be protected with the RS04 method. Each session is protected on its own:
+
+\begin{enumerate}
+\item Create the image of the new session with your writing software, e.g.
+  with {\tt xorriso} or {\tt mkisofs -C} for appending to the existing sessions.
+\item Augment this image with RS04 error correction data before writing it,
+  e.g. {\tt dvdisaster -i session2.iso -mRS04 -n 20\% -c}. Use a redundancy instead of filling
+  the medium so that space is left for further sessions.
+\item Write the augmented image as the new session.
+\end{enumerate}
+
+When the medium is read, dvdisaster reads all sessions into one image in which every sector is at
+its real position on the medium. The areas between the sessions are not read; they are stored as
+zero-filled sectors and are not counted as read errors. Verifying or repairing this image
+finds the error correction data of every session and checks or repairs all of them,
+e.g. {\tt dvdisaster -d /dev/sr0 -i medium.iso -r -f}.
+
+\smallskip
+
+Media with RS02 or RS03 error correction data can not be read in multi-session mode since
+these methods describe only a single session.
+
+\newpage
+\subsection{Protecting audio CDs}
+\label{howto-audio}
+
+Audio CDs contain no error correction data of their own besides the one used by the drive, and
+drives may silently replace unreadable audio data by interpolated sound. dvdisaster can protect
+an audio CD with an RS04 error correction file for its audio image:
+
+\begin{enumerate}
+\item Read the CD with dvdisaster. Audio CDs are read automatically as audio images with
+  2352 bytes per sector ({\tt .bin}) together with a cue sheet ({\tt .cue});
+  use the {\tt --cdda} option (or ``Image format'' in the preferences)
+  for mixed mode and CD Extra discs. Sectors are read with the drive's C2 error pointers if supported, so
+  that damaged audio sectors are recognized.
+\item Create the error correction file with the RS04 method and a sector size of 2352 bytes,
+  e.g. {\tt dvdisaster -i audio.bin -e audio.ecc -mRS04 --sector-size 2352 -c}.
+\end{enumerate}
+
+To repair the CD later, read it again into an audio image and repair the image with the error correction file.
+Different drives may read audio data shifted by a few samples (read offset); dvdisaster detects this offset
+automatically and corrects it. If the detection fails, the offset can be entered manually
+(option {\tt --audio-offset} or the ``Error correction'' tab).
+
+\smallskip
+
+A CD Extra disc may even hold the error correction file of its own audio session in its data session.
 
 \newpage
 

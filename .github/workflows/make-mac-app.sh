@@ -29,6 +29,13 @@ mkdir -p dvdisaster.app/Contents/{MacOS,Resources}
 cp dvdisaster dvdisaster.app/Contents/MacOS/dvdisaster.bin
 chmod +x dvdisaster.app/Contents/MacOS/dvdisaster.bin
 
+# Standard-library recovery frontend; the host supplies Python 3. Keep the
+# scalar implementation independent of Homebrew's shared-library locations.
+mkdir -p dvdisaster.app/Contents/MacOS/contrib
+cp contrib/rs04_archive.py contrib/rs04_archive_codec.py contrib/rs04-archive-vectors.py contrib/rs04_archive_vectors.json COPYING dvdisaster.app/Contents/MacOS/contrib/
+cp documentation/codec-specs/rs04-archival.md dvdisaster.app/Contents/MacOS/contrib/FORMAT.md
+cp documentation/rs04-archive.md dvdisaster.app/Contents/MacOS/contrib/USAGE.md
+
 # Use dylibbundler to bundle dynamic libraries into the application bundle
 dylibbundler -od -cd -b -x dvdisaster.app/Contents/MacOS/dvdisaster.bin -d 'dvdisaster.app/Contents/libs/' -s "$BREW_PREFIX/lib"
 

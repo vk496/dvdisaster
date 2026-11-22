@@ -34,10 +34,18 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .RB [\| \-\-auto-suffix \|]
 .RB [\| \-\-cache-size
 .IR n \|]
+.RB [\| \-\-audio-offset
+.IR n \|]
+.RB [\| \-\-cdda \|]
+.RB [\| \-\-catalog
+.IR f \|]
+.RB [\| \-\-catalog-report
+.IR f \|]
 .RB [\| \-\-dao \|]
 .RB [\| \-\-detailed-exit-status \|]
 .RB [\| \-\-defective-dump
 .IR d \|]
+.RB [\| \-\-drive-test \|]
 .RB [\| \-\-driver
 .IR d \|]
 .RB [\| \-\-eject \|]
@@ -53,6 +61,7 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .IR n \|]
 .RB [\| \-\-json
 .IR file \|]
+.RB [\| \-\-list-damaged-files \|]
 .RB [\| \-\-mapfile
 .IR f \|]
 .RB [\| \-\-medium-info \|]
@@ -73,10 +82,17 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .RB [\| \-\-regtest \|]
 .RB [\| \-\-resource-file
 .IR n \|]
+.RB [\| \-\-rs04-kernel
+.IR x \|]
+.RB [\| \-\-rs04-memory
+.IR n \|]
+.RB [\| \-\-sector-size
+.IR n \|]
 .RB [\| \-\-speed-warning
 .IR n \|]
 .RB [\| \-\-spinup\-delay
 .IR n \|]
+.RB [\| \-\-test-and-copy \|]
 .RB [\| \-\-time-limit
 .IR d \|]
 .RB [\| \-\-version \|]
@@ -111,6 +127,10 @@ the \fB--read-raw\fP option is silently ignored.
 Creates an image as described above. Defective sectors are retried at least \fIn\fP
 times and at most \fIm\fP times. Recovery of defective CD media may improve when
 combined with \fB--read-raw\fP. 
+.TP
+\fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-i\fP \fIaudio.bin\fP \fB-r\fP
+Reads an audio CD into the file \fIaudio.bin\fP (2352 bytes per sector)
+and writes the cue sheet \fIaudio.cue\fP; see \fB--cdda\fP.
 .TP
 \fBdvdisaster\fP \fB-d\fP \fI/dev/hdc\fP \fB-i\fP \fImedium.iso\fP \fB-e\fP \fIcorr.ecc\fP \fB-r\fP \fB--adaptive-read\fP
 Uses the adaptive reading strategy to read an image from 
@@ -190,6 +210,15 @@ prefix of .iso/.ecc file (default: medium.* ).
 .TP
 .B \-i, \-\-image imagefile
 name of image file (default: medium.iso).
+For creating, verifying and repairing RS04 error correction files (\-o file),
+a cue sheet (.cue) or a Dreamcast .gdi file may be given instead, e.g. a disc
+dumped by redumper with one .bin file per track. Its files are used as one
+image with 2352 byte sectors, in the order of the sheet; pregaps which are not
+stored in the files are not part of the image. A repair writes back into the
+\&.bin files. Only BINARY files with 2352 byte sectors (AUDIO, MODE1/2352,
+MODE2/2352, CDI/2352) are supported. Only the size of the last file can be
+corrected by a repair; a missing or shortened file in between can not be
+recovered.
 .TP
 .B \-e, \-\-ecc eccfile
 name of parity file (default: medium.ecc).
@@ -200,9 +229,12 @@ If no file matches, or the fingerprint sector is unreadable, a warning is
 printed and dvdisaster continues as without an error correction file.
 dvdisaster then exits with a failure status unless the image contains
 error correction data itself.
+With RS04, \fB-e\fP may be given several times (or a directory may hold several
+matching .ecc files): fix and verify then combine all RS04 sets of the image,
+including those of an augmented image.
 .TP
 .B \-o, \-\-ecc-target file|image
-Specifies whether RS03 should create error correction files
+Specifies whether RS03 and RS04 should create error correction files
 or augmented images (default: image).
 .TP
 
@@ -334,7 +366,7 @@ does not need to be specified again for verifying or repairing the image.
 .B \-m, \-\-method n
 lists/selects error correction methods (default: RS01).
 .RS
-Possible values are RS01 and RS02.
+Possible values are RS01, RS02, RS03 and RS04.
 .RE
 .TP
 .B \-q, \-\-quiet
@@ -347,7 +379,7 @@ Useful together with \-\-json and the exit status (see EXIT STATUS).
 more diagnostic messages
 .TP
 .B \-x, \-\-threads n
-Use n threads for encoding with the RS03 method. Use 2 or 4 threads for 2 or 4 core 
+Use n threads for encoding with the RS03 and RS04 methods. Use 2 or 4 threads for 2 or 4 core 
 processors respectively.
 On larger machines save one core for housekeeping; e.g. use 7 threads
 on an eight core machine.
@@ -366,11 +398,69 @@ Useful for unattended runs.
 .B \-\-adaptive-read
 use optimized strategy for reading damaged media.
 .TP
+.B \-\-audio-offset n
+RS04 only: read offset of a CD-DA rip relative to the rip the error correction file
+was created from, in samples (4 bytes). By default the offset is detected
+automatically when repairing; use this option if detection fails.
+When reading an audio CD, the AccurateRip and CTDB checksums (see \-\-cdda) are
+computed with this read offset correction; give the drive's AccurateRip read
+offset for comparing them with the databases. The image itself is stored as read.
+.TP
 .B \-\-auto-suffix
 automatically add .iso and .ecc file suffixes (not to existing directories).
 .TP
 .B \-\-cache-size n
 image cache size in MiB during \-c mode (default: 32MiB).
+.TP
+.B \-\-cdda
+read a CD as a CD-DA image: every sector is stored with 2352 bytes
+(audio samples, or the raw data sector including sync pattern, header and EDC/ECC)
+into a .bin image, and a cue sheet with the same name and the suffix .cue is written.
+This is done automatically for audio CDs; use \-\-cdda for mixed mode and CD Extra
+discs to read their audio tracks as well. Audio sectors are read with C2 error pointers
+if the drive supports them; a sector with C2 errors counts as unreadable (it is retried
+according to \-\-read-attempts) and is stored as a dead sector marker (2048 bytes)
+followed by 304 zero bytes. Drives without C2 support may interpolate damaged audio
+sectors silently; dvdisaster prints a warning in that case. Adaptive reading is not
+available for CD-DA images, and RS01, RS02 and RS03 error correction data is not used
+while reading them. An RS04 error correction file for 2352 byte sectors given with \-e
+is used to check the sectors against their CRC32, provided the rip it was made from
+was read with the same read offset (otherwise the check is skipped).
+Data sectors are checked against their EDC (Mode 1, Mode 2 Form 1, and Form 2 if
+the sector carries one); a sector failing the check counts as unreadable like a sector
+with C2 errors, so that RS04 can repair it.
+CDs with Mode 2 Form 2 sectors (Video CD, Super Video CD, PlayStation, CD-i) are
+always read as CD-DA images since these sectors do not fit into 2048 bytes. For Mode 2
+(XA) discs, dvdisaster looks for them in 64 sectors spread over the data tracks; use
+\-\-cdda if Form 2 sectors are rare on the disc.
+After reading, the AccurateRip v1 and v2 checksums and the CRC32 of each audio track,
+the AccurateRip disc id (which ends with the FreeDB disc id) and the CUETools database
+(CTDB) TOC id and CRC32 are printed and written into the cue sheet as REM lines,
+for comparing the rip with these databases using other tools; dvdisaster does not
+look them up online. They match the AccurateRip database only if the drive's read offset
+is given with \-\-audio-offset (the log and the cue sheet tell which offset was used).
+CD-TEXT is written into the cue sheet (TITLE, PERFORMER, SONGWRITER, ...) if the drive
+reports it; only CD-TEXT in ISO 8859-1 or ASCII is used, and packs with CRC errors
+are skipped. See also \-\-test-and-copy.
+.RS
+Multi-session media (CD, DVD and BD) are always read as one image with the sectors
+at their real positions. The sectors between the sessions are not read; they are
+stored as zero-filled sectors and are not counted as read errors. Unreadable sectors
+among the last two sectors of a session (the run-out of sessions written in TAO mode)
+are reported separately.
+Without \-\-cdda, audio tracks of a CD with data tracks are stored the same way.
+Media with RS02 or RS03 error correction data can not be read in multi-session mode.
+.RE
+.TP
+.B \-\-catalog f
+append the result of each scan (\-s) or read (\-r) to the catalog file f, so that the
+state of a medium can be followed over the years. Each run adds one line with the
+date, the medium fingerprint, volume label and size, the action and the numbers of
+unreadable sectors and CRC errors, separated by tabs.
+.TP
+.B \-\-catalog-report f
+print the history of each medium recorded in the catalog file f, and warn about media
+whose number of damaged sectors is growing.
 .TP
 .B \-\-dao
 assume DAO disc; do not trim image end.
@@ -380,6 +470,18 @@ Specifies the sub directory for storing incomplete raw sectors.
 .TP
 .B \-\-detailed-exit-status
 use detailed exit codes for defects and recovery results; see EXIT STATUS.
+.TP
+.B \-\-drive-test
+Prints a report about what the drive selected with \-d can do for dvdisaster:
+vendor, model and firmware, the supported profiles and read features
+(CD, DVD, BD, HD DVD, C2 error pointers, CD-TEXT, streaming),
+the read error recovery mode page (whether the drive can deliver defective
+sectors in raw mode), and a summary of the reading modes it is suitable for.
+If a CD is inserted, user data, raw and CD-DA reading with and without
+C2 error pointers are tried on the first data and audio sector.
+Only read-only commands are sent; the drive settings are not changed.
+The drive's read offset is not measured.
+Please include this report when reporting drive related problems.
 .TP
 .B \-\-driver d (Linux only)
 Selects between the sg (SG_IO) driver (default setting) and the
@@ -405,6 +507,11 @@ use 128bit wide operations;
 AVX2 uses 256bit wide operations. Explicit choices require processor support.
 With auto, dvdisaster prefers AVX2, then SSE2, then AltiVec, then NEON, and otherwise
 uses the 64bit algorithm. Automatic selection is the default.
+.RE
+.RS
+RS04 picks GFNI, AVX2, SSSE3 or NEON automatically; 32bit and 64bit select
+its portable code and SSE2 its SSSE3 code. All variants create
+identical error correction data.
 .RE
 .TP
 .B \-\-encoding-io-strategy [readwrite|mmap]
@@ -480,6 +587,12 @@ otherwise the verdict is "ok" or "error". Keys which do not apply to a run
 are left out. A run stopped by \-\-time-limit or \-\-abort-file contains
 "stopped_by" ("time_limit" or "abort_file").
 .RE
+.TP
+.B \-\-list-damaged-files
+list the files of an ISO 9660 image (Joliet names are used if present) which contain
+missing sectors, and how many missing sectors are outside of files.
+Can be combined with reading (\-r) or used alone on an image file.
+UDF-only images are not supported yet.
 .TP
 .B \-\-mapfile f
 together with \-r: writes a GNU ddrescue compatible mapfile describing the
@@ -568,11 +681,39 @@ modifies some outputs for better processing with the regression test scripts.
 .B \-\-resource-file n
 Specifies the path to the configuration file (default: $HOME/.dvdisaster)
 .TP
+.B \-\-rs04-kernel [auto|scalar|SSSE3|AVX2|GFNI|NEON]
+RS04 only: select the codec kernels used for encoding and decoding (default: auto,
+the fastest one supported by the processor). All kernels give identical results;
+the setting only affects the speed.
+SSSE3, AVX2 and GFNI need an x86 processor (GFNI also the GF2P8AFFINEQB instruction),
+NEON an ARM64 processor.
+Without this option, \fB\-\-encoding\-algorithm\fR also applies to RS04: 32bit, 64bit and AltiVec
+select the scalar kernels, SSE2 the SSSE3 ones, AVX2 and NEON their namesakes.
+.TP
+.B \-\-rs04-memory n
+RS04 only: memory budget in MiB for encoding and decoding (default: 4096).
+It decides the codeword length of newly created error correction data:
+longer codewords tolerate more scattered damage but need more memory or
+more passes over the image. Any codeword length can be repaired with any budget,
+a smaller budget only makes repairing slower.
+.TP
+.B \-\-sector-size n
+RS04 only: sector size of the data when creating an error correction file:
+2048 (default), 2324 (Mode 2 Form 2, e.g. VCD/SVCD video tracks) or 2352 (CD-DA audio
+rips, see \-\-cdda).
+.TP
 .B \-\-speed-warning n
 print warning if speed changes by more than n percent.
 .TP
 .B \-\-spinup-delay n
 wait n seconds for drive to spin up.
+.TP
+.B \-\-test-and-copy
+for audio CDs (see \-\-cdda): after reading, read the audio tracks once more and
+compare the CRC32 of each track with the one of the image, like "test & copy" in
+other CD rippers. A track with a different CRC32 was not read reliably, e.g. because the
+drive interpolated damaged samples without reporting C2 errors; dvdisaster exits
+with an error code in that case.
 .TP
 .B \-\-time-limit d
 with \-r or \-s: stop reading or scanning (like the Stop button in the

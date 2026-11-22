@@ -237,15 +237,21 @@ void GuiRedrawAxes(cairo_t *cr, Curve *curve)
 
    /* Draw and label the grid lines for the normal curve */
 
-   if(curve->maxY > 20) step = 10;
+   if(curve->maxY > 20)  /* at most about 20 labels */
+   {  static int steps[] = { 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000 };
+
+      for(i=0; i<9 && curve->maxY > 20*steps[i]; i++)
+	;
+      step = steps[i];
+   }
    else if(curve->maxY > 10) step = 4;
    else if(curve->maxY > 4) step = 2;
    else step = 1;
 
    for(i=0; i<=curve->maxY; i+=step)
-   {  char buf[4];
+   {  char buf[16];
    
-      g_snprintf(buf, 4, curve->leftFormat, i);
+      g_snprintf(buf, sizeof(buf), curve->leftFormat, i);
       GuiSetText(curve->layout, buf, &w, &h);
 
       y = yg = GuiCurveY(curve, i);

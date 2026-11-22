@@ -263,6 +263,7 @@ void RS01Create(void)
    {  PrintLog("%s: %s.\n", Closure->imageName, strerror(errno));
       Stop(_("Image file %s: %s."),Closure->imageName, strerror(errno));
    }
+   RefuseMultiFileImage(image);
    if(image->inLast == 2048)
         PrintLog(_("%s: %" PRId64 " medium sectors.\n"), Closure->imageName, image->sectorSize);
    else PrintLog(_("%s: %" PRId64 " medium sectors and %d bytes.\n"), Closure->imageName,

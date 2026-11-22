@@ -1,0 +1,15 @@
+ignore
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening absolute.gdi
+*
+* dvdisaster - can not continue:
+*
+absolute.gdi: file name "/dev/null" must not be absolute or contain "..".
+Keep the image files in the directory of the sheet.
+
+Aborted by unrecoverable error.

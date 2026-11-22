@@ -1,0 +1,16 @@
+a82e05901e03bfa2c64ff21a0d08a96c
+ignore
+This software comes with  ABSOLUTELY NO WARRANTY.  This
+is free software and you are welcome to redistribute it
+under the conditions of the GNU GENERAL PUBLIC LICENSE.
+See the file "COPYING" for further information.
+
+Opening rs04i-tmp.iso: 8000 medium sectors and 56 bytes.
+
+*
+* dvdisaster - can not continue:
+*
+The image size is not a multiple of 2048 bytes.
+Augmented images need complete sectors; please create an error correction file instead.
+
+Aborted by unrecoverable error.

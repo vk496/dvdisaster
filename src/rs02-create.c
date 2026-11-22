@@ -655,6 +655,7 @@ void RS02Create(void)
       Stop(_("Image file %s: %s."),Closure->imageName, strerror(errno));
       return;
    }
+   RefuseMultiFileImage(image);
 
    if(image->inLast == 2048)
         PrintLog(_("%s: %" PRId64 " medium sectors.\n"), Closure->imageName, image->sectorSize);

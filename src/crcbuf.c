@@ -26,6 +26,7 @@
 
 #include "scsi-layer.h"
 #include "rs02-includes.h"
+#include "rs04-includes.h"
 
 /***
  *** Create a CRC buffer ready for accumulating CRC and MD5 sums
@@ -40,6 +41,7 @@ CrcBuf *CreateCrcBuf(Image *image)
    MD5Init(cb->md5Ctxt);
    cb->md5State = MD5_BUILDING;
    cb->lastSector = 0;
+   cb->sectorBytes = 2048;
    memset(cb->dataMD5sum, 0, 16);
    memset(cb->imageMD5sum, 0, 16);
 
@@ -110,7 +112,8 @@ int AddSectorToCrcBuffer(CrcBuf *cb, int mode, guint64 idx, unsigned char *buf, 
    /* Update the CRC sums */
 
    if(   (mode & CRCBUF_UPDATE_CRC)
-      || ((mode & CRCBUF_UPDATE_CRC_AFTER_DATA) && idx >= cb->coveredSectors))
+      || ((mode & CRCBUF_UPDATE_CRC_AFTER_DATA)
+	  && (idx >= cb->coveredSectors || (cb->covered && !GetBit(cb->covered, idx)))))
    {  crc = Crc32(buf, 2048);  /* should be buf_size, but remains at 2048 for backwards compatibility. */
       cb->crcbuf[idx] = crc;   /* does not harm except that the last sector is padded with the contents */
       SetBit(cb->valid, idx);  /* of the previous sector when reading an image file whole size is not */
@@ -156,8 +159,14 @@ int CheckAgainstCrcBuffer(CrcBuf *cb, gint64 idx, unsigned char *buf)
 
    if(idx < 0 || idx >= cb->crcSize)
      return CRC_OUTSIDE_BOUND;
+
+   if(cb->rs04)
+     RS04TagToCrcBuf(cb, idx, buf);
+
+   if(cb->covered && !GetBit(cb->covered, idx))
+     return CRC_OUTSIDE_BOUND;
    
-   crc = Crc32(buf, 2048);
+   crc = Crc32(buf, cb->sectorBytes);
 
    if(!GetBit(cb->valid, idx))
       return CRC_UNKNOWN;
@@ -260,6 +269,9 @@ void FreeCrcBuf(CrcBuf *cb)
    
    g_free(cb->crcbuf);
    FreeBitmap(cb->valid);
+   if(cb->covered)
+     FreeBitmap(cb->covered);
+   g_free(cb->rs04);
    if(cb->imageName)
      g_free(cb->imageName);
    if(cb->md5Ctxt)
@@ -305,7 +317,7 @@ void PrintCrcBuf(CrcBuf *cb)
    else PrintLog("  fp sector: %d; invalid\n", cb->fpSector);
 
    for(i=0; i<cb->crcSize; i++)
-     if(!GetBit(cb->valid, i))
+     if(!GetBit(cb->valid, i) && (!cb->covered || GetBit(cb->covered, i)))
      {   missing++;
      }
    PrintLog("  missing crcs: %" PRId64 "\n", missing);

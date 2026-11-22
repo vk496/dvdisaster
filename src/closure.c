@@ -23,6 +23,7 @@
 /*** src type: some GUI code ***/
 
 #include "dvdisaster.h"
+#include "rs04-ff16.h"
 
 #ifdef SYS_MINGW
 #include <windows.h>
@@ -224,7 +225,7 @@ void GuiReadDotfile()
       if(!strcmp(symbol, "bd-size4"))        { Closure->bdSize4 = Closure->savedBDSize4 = atoll(value); continue; }
       if(!strcmp(symbol, "cache-size"))      { Closure->cacheMiB = atoi(value); continue; }
       if(!strcmp(symbol, "cd-size"))         { Closure->cdSize = Closure->savedCDSize = atoll(value); continue; }
-      if(!strcmp(symbol, "codec-threads"))   { Closure->codecThreads = atoi(value); continue; }
+      if(!strcmp(symbol, "codec-threads"))   { Closure->codecThreads = bounded_setting(value, 1, MAX_CODEC_THREADS, Closure->codecThreads); continue; }
       if(!strcmp(symbol, "confirm-deletion")){ Closure->confirmDeletion = atoi(value); continue; }
       if(!strcmp(symbol, "dao"))             { Closure->noTruncate  = atoi(value); continue; }
       if(!strcmp(symbol, "defective-dump"))  { Closure->defectiveDump = atoi(value); continue; }
@@ -255,6 +256,10 @@ void GuiReadDotfile()
       if(!strcmp(symbol, "encoding-io-strategy")) { Closure->encodingIOStrategy = atoi(value); continue; }
       if(!strcmp(symbol, "examine-rs02"))    { Closure->examineRS02  = atoi(value); continue; }
       if(!strcmp(symbol, "examine-rs03"))    { Closure->examineRS03  = atoi(value); continue; }
+      if(!strcmp(symbol, "examine-rs04"))    { Closure->examineRS04  = atoi(value); continue; }
+      if(!strcmp(symbol, "catalog-file"))    { g_free(Closure->catalogFile);
+	                                       Closure->catalogFile = g_strdup(value); continue; }
+      if(!strcmp(symbol, "test-and-copy"))   { Closure->testAndCopy = atoi(value); continue; }
       if(!strcmp(symbol, "bruteforce-rs03-search")) { Closure->bruteforceRS03Search = atoi(value); continue; }
       if(!strcmp(symbol, "fill-unreadable")) { Closure->fillUnreadable = atoi(value); continue; }
       if(!strcmp(symbol, "ignore-fatal-sense")) { Closure->ignoreFatalSense  = atoi(value); continue; }
@@ -275,6 +280,7 @@ void GuiReadDotfile()
       if(!strcmp(symbol, "prefetch-sectors")){ Closure->prefetchSectors  = bounded_setting(value, 32, MAX_PREFETCH_CACHE_SIZE, Closure->prefetchSectors); continue; }
       if(!strcmp(symbol, "raw-mode"))        { Closure->rawMode = atoi(value); continue; }
       if(!strcmp(symbol, "read-and-create")) { Closure->readAndCreate = atoi(value); continue; }
+      if(!strcmp(symbol, "read-cdda"))       { Closure->cdda = atoi(value); continue; }
       if(!strcmp(symbol, "read-medium"))     { Closure->readingPasses = atoi(value); continue; }
       if(!strcmp(symbol, "read-raw"))        { Closure->readRaw = atoi(value); continue; }
       if(!strcmp(symbol, "redundancy"))
@@ -290,6 +296,18 @@ void GuiReadDotfile()
             Closure->redundancy = g_strdup(value);
          continue;
       }
+      if(!strcmp(symbol, "rs04-audio-offset")) { Closure->audioOffsetGiven = strcmp(value, "auto");
+	                                         Closure->audioOffset = atoi(value); continue; }
+      if(!strcmp(symbol, "rs04-memory"))     { Closure->rs04MemoryMiB = CLAMP(atoi(value), 1, 1024*1024); continue; }
+      if(!strcmp(symbol, "rs04-kernel"))     /* preferences may come from another processor */
+      {  int kernel = CLAMP(atoi(value), RS04_KERNEL_AUTO, RS04_KERNEL_GFNI);
+
+	 Closure->rs04Kernel = RS04KernelSupported(kernel) ? kernel : RS04_KERNEL_AUTO;
+	 continue;
+      }
+      if(!strcmp(symbol, "rs04-sector-size")){ int b = atoi(value);
+	                                       if(b == 2048 || b == 2324 || b == 2352) Closure->sectorBytes = b;
+					       continue; }
       if(!strcmp(symbol, "spinup-delay"))    { Closure->spinupDelay = atoi(value); continue; }
       if(!strcmp(symbol, "unlink"))          { Closure->unlinkImage = atoi(value); continue; }
       if(!strcmp(symbol, "verbose"))         { Closure->verbose = atoi(value); continue; }
@@ -387,6 +405,10 @@ static void update_dotfile()
    g_fprintf(dotfile, "encoding-io-strategy:%d\n", Closure->encodingIOStrategy);
    g_fprintf(dotfile, "examine-rs02:      %d\n", Closure->examineRS02);
    g_fprintf(dotfile, "examine-rs03:      %d\n", Closure->examineRS03);
+   g_fprintf(dotfile, "examine-rs04:      %d\n", Closure->examineRS04);
+   if(Closure->catalogFile)   /* an empty value would be skipped when reading */
+      g_fprintf(dotfile, "catalog-file:      %s\n", Closure->catalogFile);
+   g_fprintf(dotfile, "test-and-copy:     %d\n", Closure->testAndCopy);
    g_fprintf(dotfile, "bruteforce-rs03-search:%d\n", Closure->bruteforceRS03Search);
    g_fprintf(dotfile, "fill-unreadable:   %d\n", Closure->fillUnreadable);
    g_fprintf(dotfile, "ignore-fatal-sense: %d\n", Closure->ignoreFatalSense);
@@ -405,10 +427,17 @@ static void update_dotfile()
    g_fprintf(dotfile, "prefetch-sectors:  %d\n", Closure->prefetchSectors);
    g_fprintf(dotfile, "raw-mode:          %d\n", Closure->rawMode);
    g_fprintf(dotfile, "read-and-create:   %d\n", Closure->readAndCreate);
+   g_fprintf(dotfile, "read-cdda:         %d\n", Closure->cdda);
    g_fprintf(dotfile, "read-medium:       %d\n", Closure->readingPasses);
    g_fprintf(dotfile, "read-raw:          %d\n", Closure->readRaw);
    if(Closure->redundancy)
      g_fprintf(dotfile, "redundancy:        %s\n", Closure->redundancy);
+   if(Closure->audioOffsetGiven)
+        g_fprintf(dotfile, "rs04-audio-offset: %d\n", Closure->audioOffset);
+   else g_fprintf(dotfile, "rs04-audio-offset: auto\n");
+   g_fprintf(dotfile, "rs04-memory:       %d\n", Closure->rs04MemoryMiB);
+   g_fprintf(dotfile, "rs04-kernel:       %d\n", Closure->rs04Kernel);
+   g_fprintf(dotfile, "rs04-sector-size:  %d\n", Closure->sectorBytes);
    g_fprintf(dotfile, "spinup-delay:      %d\n", Closure->spinupDelay);
    g_fprintf(dotfile, "unlink:            %d\n", Closure->unlinkImage);
    g_fprintf(dotfile, "verbose:           %d\n", Closure->verbose);
@@ -637,6 +666,9 @@ void InitClosure()
    Closure->noBdrDefectManagement = FALSE;
    Closure->bruteforceRS03Search = FALSE;
    Closure->ignoreRS03header = FALSE;
+   Closure->sectorBytes = 2048;
+   Closure->rs04MemoryMiB = 4096;
+   Closure->rs04Kernel = RS04_KERNEL_AUTO;
 
    /* default sizes for typical CD and DVD media */
 
@@ -771,6 +803,10 @@ void FreeClosure()
    MapfileFree();
    cond_free(Closure->abortFile);
    if(Closure->stopTimer) g_timer_destroy(Closure->stopTimer);
+   if(Closure->moreEccNames)
+     g_ptr_array_free(Closure->moreEccNames, TRUE);
+   cond_free(Closure->catalogFile);
+   cond_free(Closure->catalogReport);
    cond_free(Closure->redundancy);
 
    CallMethodDestructors();
@@ -785,6 +821,7 @@ void FreeClosure()
    cond_free(Closure->docDir);
    cond_free(Closure->errorTitle);
    cond_free(Closure->simulateCD);
+   cond_free(Closure->simulateTOC);
    cond_free(Closure->dDumpDir);
    cond_free(Closure->dDumpPrefix);
 

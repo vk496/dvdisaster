@@ -26,6 +26,8 @@
 #include "scsi-layer.h"
 #include "udf.h"
 
+#include "rs04-includes.h"
+
 /***
  *** Open image from a given device or file.
  ***
@@ -33,10 +35,156 @@
  * for convenience reasons.
  */
 
+/*
+ * Multi-file images: a .cue or .gdi sheet stands for the concatenation
+ * of its .bin files (2352 byte sectors), e.g. one file per track as
+ * written by redumper. Gaps which are not stored in the files are not
+ * part of the image. Only RS04 ecc files can be used with them.
+ */
+
+/* Next blank separated or quoted token; terminates it in place */
+
+static char *next_token(char **p)
+{  char *start, *end;
+
+   while(g_ascii_isspace(**p)) (*p)++;
+   if(!**p) return NULL;
+
+   if(**p == '"')
+   {  start = ++(*p);
+      end = strchr(start, '"');
+      if(!end) end = start + strlen(start);
+   }
+   else
+   {  for(start = end = *p; *end && !g_ascii_isspace(*end); end++)
+	 ;
+   }
+
+   *p = *end ? end+1 : end;
+   *end = 0;
+   return start;
+}
+
+/* The files named in a sheet must lie below the sheet's directory: sheets
+   are often downloaded together with the images, and repairing writes to
+   the files they name. */
+
+static int sheet_name_ok(const char *file)
+{  const char *p = file;
+
+   if(g_path_is_absolute(file) || *file == '\\')
+     return FALSE;
+
+   while(*p)
+   {  const char *end = p + strcspn(p, "/\\");
+
+      if(end-p == 2 && p[0] == '.' && p[1] == '.')
+	return FALSE;
+      p = *end ? end+1 : end;
+   }
+   return TRUE;
+}
+
+static LargeFile *open_multi_file(char *name, int flags, int gdi)
+{  FILE *sheet = fopen(name, "rb");
+   GPtrArray *parts;
+   LargeFile *lf;
+   char line[4096];
+   int dir_len = 0;
+   int i;
+
+   if(!sheet)
+      return NULL;
+
+   for(i=0; name[i]; i++)   /* file names are relative to the sheet */
+     if(name[i] == '/' || name[i] == G_DIR_SEPARATOR)
+       dir_len = i+1;
+
+   parts = g_ptr_array_new();
+   lf = g_malloc0(sizeof(LargeFile));
+
+   while(fgets(line, sizeof(line), sheet))
+   {  char *p = line, *token[6], *file = NULL;
+
+      if(!strncmp(p, "\xef\xbb\xbf", 3))  /* UTF-8 byte order mark */
+	 p += 3;
+      for(i=0; i<6; i++)
+	 token[i] = next_token(&p);
+
+      if(!token[0]) ;
+      else if(gdi)  /* track lba type sector_size file offset */
+      {  if(token[4])
+	 {  if(atoi(token[3]) != 2352)
+	      Stop(_("%s: track %s (%s) is not supported; all tracks need 2352 byte sectors."),
+		   name, token[0], token[3]);
+	    file = token[4];
+	 }
+      }
+      else if(!g_ascii_strcasecmp(token[0], "FILE"))
+      {  if(!token[2] || g_ascii_strcasecmp(token[2], "BINARY"))
+	   Stop(_("%s: only BINARY files are supported."), name);
+	 file = token[1];
+      }
+      else if(!g_ascii_strcasecmp(token[0], "TRACK"))
+      {  if(   !token[2]
+	    || (   g_ascii_strcasecmp(token[2], "AUDIO")
+		&& g_ascii_strcasecmp(token[2], "MODE1/2352")
+		&& g_ascii_strcasecmp(token[2], "MODE2/2352")
+		&& g_ascii_strcasecmp(token[2], "CDI/2352")))
+	   Stop(_("%s: track %s (%s) is not supported; all tracks need 2352 byte sectors."),
+		name, token[1] ? token[1] : "?", token[2] ? token[2] : "?");
+      }
+
+      if(file)
+      {  char *path;
+	 LargeFile *part;
+
+	 if(!sheet_name_ok(file))
+	   Stop(_("%s: file name \"%s\" must not be absolute or contain \"..\".\n"
+		  "Keep the image files in the directory of the sheet."), name, file);
+
+	 path = g_strdup_printf("%.*s%s", dir_len, name, file);
+	 // codeql[cpp/path-injection] File named in the sheet; confined to the sheet's directory by sheet_name_ok().
+	 part = LargeOpen(path, flags, IMG_PERMS);
+
+	 if(!part)
+	   Stop(_("Can't open %s:\n%s"), path, strerror(errno));
+	 Verbose("%s: %s, %" PRId64 " bytes\n", name, path, part->size);
+	 g_ptr_array_add(parts, part);
+	 lf->size += part->size;
+	 g_free(path);
+      }
+   }
+   fclose(sheet);
+
+   if(!parts->len)
+     Stop(_("%s: no image files found."), name);
+
+   lf->fileHandle = -1;
+   lf->path = g_strdup(name);
+   lf->flags = flags;
+   lf->parts = parts;
+   return lf;
+}
+
+/*
+ * Only RS04 ecc files can be used with multi-file images
+ */
+
+void RefuseMultiFileImage(Image *image)
+{  if(image && image->file && image->file->parts)
+     Stop(_("%s: .cue and .gdi images can only be protected by RS04 error correction files."),
+	  Closure->imageName);
+}
+
 Image *OpenImageFromFile(char *filename, int flags, mode_t mode)
 {  LargeFile *file;
+   size_t len = strlen(filename);
+   char *suffix = len > 4 ? filename+len-4 : "";
 
-   file = LargeOpen(filename, flags, mode);
+   if(!g_ascii_strcasecmp(suffix, ".cue") || !g_ascii_strcasecmp(suffix, ".gdi"))
+        file = open_multi_file(filename, flags, !g_ascii_strcasecmp(suffix, ".gdi"));
+   else file = LargeOpen(filename, flags, mode);
 
    if(file)
    {  Image *image = g_malloc0(sizeof(Image));
@@ -48,7 +196,8 @@ Image *OpenImageFromFile(char *filename, int flags, mode_t mode)
       CalcSectors(file->size, &image->sectorSize, &image->inLast);
 
       ExamineUDF(image);
-      ExamineECC(image);
+      if(!file->parts)   /* no augmented images */
+	 ExamineECC(image);
 
       GetImageFingerprint(image, NULL, FINGERPRINT_SECTOR);
 
@@ -169,12 +318,14 @@ void WarnAboutImagePadding(Image *image)
  *** Search a directory for the .ecc file matching the image
  ***
  * Only *.ecc files directly inside the directory are examined.
- * A file matches if its header fingerprint equals the image fingerprint;
+ * A file matches if its header fingerprint equals the image fingerprint
+ * (RS04: if its CRC sectors match the image);
  * copies with identical headers count as one match.
  * Returns the newly allocated path of the single match, or NULL with
  * *state telling why: ECCFILE_MISSING (no match, or the fingerprint
  * could not be read; the caller then proceeds as without an ecc file)
  * or ECCFILE_CANCELLED.
+ * Further matching RS04 files are added as supplementary sets.
  * Stops in CLI mode if the directory can not be read or more than
  * one file matches; the GUI calls this from its main thread where
  * Stop() is not usable, so it shows the error and proceeds as
@@ -220,6 +371,7 @@ static char *find_ecc_file(Image *image, char *dir, int *state)
    EccHeader *found_eh = NULL;
    int fp_unreadable = FALSE;
    int ambiguous = FALSE;
+   int found_rs04 = FALSE;
    int n;
 
    *state = ECCFILE_MISSING;
@@ -244,7 +396,7 @@ static char *find_ecc_file(Image *image, char *dir, int *state)
    {  char *path = g_ptr_array_index(names, n);
       LargeFile *file = LargeOpen(path, O_RDONLY, IMG_PERMS);
       EccHeader *eh = NULL;
-      int i, match = FALSE;
+      int i, match = FALSE, rs04 = FALSE;
 
       if(!file)
 	continue;
@@ -264,7 +416,9 @@ static char *find_ecc_file(Image *image, char *dir, int *state)
 	 if(result == ECCFILE_PRESENT)
 	 {  guint8 fp[16];
 
-	    if(GetImageFingerprint(image, fp, eh->fpSector))
+	    if(!strncmp((char*)eh->method, "RS04", 4))
+	         match = rs04 = RS04ConfirmEccFile(image, file, eh);
+	    else if(GetImageFingerprint(image, fp, eh->fpSector))
 	         match = !memcmp(fp, eh->mediumFP, 16);
 	    else fp_unreadable = TRUE;
 	    break;
@@ -286,6 +440,16 @@ static char *find_ecc_file(Image *image, char *dir, int *state)
 	 continue;
       }
 
+      /* Further RS04 files are supplementary sets */
+
+      if(found && found_rs04 && rs04)
+      {  if(!Closure->moreEccNames)
+	   Closure->moreEccNames = g_ptr_array_new_with_free_func(g_free);
+	 g_ptr_array_add(Closure->moreEccNames, g_strdup(path));
+	 g_free(eh);
+	 continue;
+      }
+
       if(found)
       {  find_ecc_error(_("Both %s and %s match the image; please select one with -e.\n"), found, path);
 	 g_free(eh);
@@ -297,6 +461,7 @@ static char *find_ecc_file(Image *image, char *dir, int *state)
 
       found = g_strdup(path);
       found_eh = eh;
+      found_rs04 = rs04;
    }
    g_ptr_array_free(names, TRUE);
    g_free(found_eh);
@@ -380,7 +545,9 @@ Image* OpenEccFileForImage(Image *image, char *filename, int flags, mode_t mode)
       if(method->recognizeEccFile)
       {  image->eccFileState = method->recognizeEccFile(image->eccFile, &image->eccFileHeader);
 	 if(image->eccFileState == ECCFILE_PRESENT)
-	 {  image->eccFileMethod = method; 
+	 {  if(strncmp(method->name, "RS04", 4))
+	       RefuseMultiFileImage(image);
+	    image->eccFileMethod = method; 
 	    image->expectedSectors = method->expectedImageSize(image);
 	    GetImageFingerprint(image, NULL, image->eccFileHeader->fpSector);
 	    return image;
@@ -512,11 +679,14 @@ int ImageReadSectors(Image* image, void *buf, guint64 first, int n)
 	}
 	else return 0;
 	break;
-      case IMAGE_MEDIUM:
-	if(!ReadSectorsFast(image->dh, buf, first, n))
-	     return n;
-	else return 0;
-	break;
+      case IMAGE_MEDIUM:  /* drives take at most a cluster per command */
+      {  int i, chunk = MAX(image->dh->clusterSize, 1);
+
+	 for(i=0; i<n; i+=chunk)
+	   if(ReadSectorsFast(image->dh, (unsigned char*)buf+2048*(gint64)i, first+i, MIN(chunk, n-i)))
+	     return 0;
+	 return n;
+      }
    }
 
    return 0;
@@ -550,7 +720,7 @@ int GetImageFingerprint(Image *image, guint8 *fp_out, guint64 sector)
 	    return TRUE;
       }
 
-     ab = CreateAlignedBuffer(2048);
+     ab = CreateAlignedBuffer(CD_RAW_SECTOR_SIZE);  /* CD-DA media deliver 2352 bytes */
      status = ImageReadSectors(image, ab->buf, sector, 1);
    
      image->fpSector = sector;
@@ -564,7 +734,7 @@ int GetImageFingerprint(Image *image, guint8 *fp_out, guint64 sector)
 	image->fpState = 2;
 
 	MD5Init(&md5ctxt);
-	MD5Update(&md5ctxt, ab->buf, 2048);
+	MD5Update(&md5ctxt, ab->buf, image->type == IMAGE_MEDIUM ? image->dh->sectorBytes : 2048);
 	MD5Final(image->imageFP, &md5ctxt);
 	if(fp_out)
 	  memcpy(fp_out, image->imageFP, 16);
