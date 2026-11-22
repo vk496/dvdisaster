@@ -26,6 +26,7 @@
 #include "dvdisaster.h"
 
 #include "rs04-includes.h"
+#include "rs04-ff16.h"
 
 /*
  * The settings are shared with the other codecs and the command line:
@@ -46,6 +47,14 @@ static char *medium_names[] =
 
 static int sector_sizes[] = { 2048, 2324, 2352 };
 
+/* Codec kernels, in the order of the radio buttons; all give identical results */
+
+static struct { int kernel; char *name; } kernel_choices[] =
+{  { RS04_KERNEL_SCALAR, "scalar" }, { RS04_KERNEL_SSSE3, "SSSE3" }, { RS04_KERNEL_AVX2, "AVX2" },
+   { RS04_KERNEL_GFNI, "GFNI" }, { RS04_KERNEL_NEON, "NEON" }, { RS04_KERNEL_AUTO, NULL }
+};
+#define N_KERNELS (sizeof(kernel_choices)/sizeof(kernel_choices[0]))
+
 static int updating;  /* setting the widgets must not change the closure */
 
 static int active(GtkWidget *widget)
@@ -59,8 +68,17 @@ static void set_redundancy(char *value)
 
 static void update_sensitivity(RS04Prefs *p)
 {  int fill = active(p->fillRadio);
+   int image = Closure->eccTarget == ECC_IMAGE;
 
-   gtk_widget_set_sensitive(p->fillRadio, Closure->eccTarget == ECC_IMAGE);
+   /* Like RS03: only show what applies to the selected target */
+
+   gtk_widget_set_visible(p->fillBox, image);
+   if(p->redundancyFrame)
+     gtk_frame_set_label(GTK_FRAME(p->redundancyFrame),
+			 image ? _utf("Redundancy for augmented image")
+			       : _utf("Redundancy for new error correction files"));
+
+   gtk_widget_set_sensitive(p->fillRadio, image);
    gtk_widget_set_sensitive(p->mediumAuto, fill);
    gtk_widget_set_sensitive(p->mediumForce, fill);
    gtk_widget_set_sensitive(p->mediumManual, fill);
@@ -100,6 +118,7 @@ static void read_redundancy(RS04Prefs *p)
 
 static void changed_cb(GtkWidget *widget, gpointer data)
 {  RS04Prefs *p = (RS04Prefs*)data;
+   unsigned int i;
 
    if(updating)
      return;
@@ -114,6 +133,13 @@ static void changed_cb(GtkWidget *widget, gpointer data)
       GuiUpdateMethodPreferences();  /* shows what the target means for the redundancy */
       return;
    }
+
+   for(i=0; i<N_KERNELS; i++)
+     if(widget == p->kernelRadio[i])
+     {  Closure->rs04Kernel = kernel_choices[i].kernel;
+	GuiUpdateMethodPreferences();
+	return;
+     }
 
    if(widget == p->memorySpin)
      Closure->rs04MemoryMiB = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget));
@@ -200,6 +226,9 @@ static void reset_prefs(RS04Prefs *p)
    for(i=0; i<3; i++)
      if(sector_sizes[i] == Closure->sectorBytes)
        gtk_combo_box_set_active(GTK_COMBO_BOX(p->sectorCombo), i);
+   for(i=0; i<N_KERNELS; i++)
+     if(kernel_choices[i].kernel == Closure->rs04Kernel)
+       gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->kernelRadio[i]), TRUE);
    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(p->offsetAuto), !Closure->audioOffsetGiven);
    gtk_spin_button_set_value(GTK_SPIN_BUTTON(p->offsetSpin), Closure->audioOffset);
 
@@ -222,9 +251,12 @@ void ResetRS04PrefsPage(Method *method)
  * Create the preferences page
  */
 
-static GtkWidget* add_frame(GtkWidget *parent, char *title)
+static GtkWidget* add_frame(GtkWidget *parent, char *title, GtkWidget **frame_out)
 {  GtkWidget *frame = gtk_frame_new(title);
    GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+
+   if(frame_out)
+     *frame_out = frame;
 
    gtk_container_set_border_width(GTK_CONTAINER(vbox), 10);
    gtk_container_add(GTK_CONTAINER(frame), vbox);
@@ -320,7 +352,7 @@ void CreateRS04PrefsPage(Method *method, GtkWidget *parent)
 
    /*** Target */
 
-   page = add_frame(parent, _utf("Error correction data storage"));
+   page = add_frame(parent, _utf("Error correction data storage"), NULL);
    lwoh = add_help(_("Error correction data storage"), _("Store ECC data in: "));
 
    for(i=0; i<2; i++)
@@ -354,12 +386,13 @@ void CreateRS04PrefsPage(Method *method, GtkWidget *parent)
 
    /*** Redundancy: filling the medium */
 
-   page = add_frame(parent, _utf("Redundancy"));
+   page = add_frame(parent, _utf("Redundancy"), &wl->prefs[0].redundancyFrame);
    lwoh = add_help(_("Target medium for augmented image"), _("Fill the medium:"));
 
    for(i=0; i<2; i++)
    {  p = &wl->prefs[i];
-      vbox = help_vbox(lwoh, page, i);
+      vbox = p->fillBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+      gtk_box_pack_start(GTK_BOX(help_vbox(lwoh, page, i)), vbox, FALSE, FALSE, 0);
 
       hbox = add_hbox(vbox, 0);
       p->fillRadio = add_radio(p, hbox, NULL, NULL);
@@ -378,6 +411,14 @@ void CreateRS04PrefsPage(Method *method, GtkWidget *parent)
       p->mediumSpin = add_spin(p, hbox, 1, 70000000, 1000, 10);
       gtk_spin_button_set_value(GTK_SPIN_BUTTON(p->mediumSpin), BD_SL_SIZE);
       add_label(hbox, _utf("sectors"));
+
+      hbox = add_hbox(vbox, 0);
+      add_label(hbox, _utf("or use a fixed redundancy, without filling the medium:"));
+
+      /* Shown by update_sensitivity() for augmented images only */
+
+      gtk_widget_show_all(vbox);
+      gtk_widget_set_no_show_all(vbox, TRUE);
    }
 
    GuiAddHelpParagraph(lwoh, _("<b>Target medium for augmented image</b>\n\n"
@@ -402,9 +443,13 @@ void CreateRS04PrefsPage(Method *method, GtkWidget *parent)
 
    for(i=0; i<2; i++)
    {  p = &wl->prefs[i];
-      hbox = add_hbox(help_vbox(lwoh, page, i), 0);
+      vbox = help_vbox(lwoh, page, i);
+
+      hbox = add_hbox(vbox, 0);
       p->normalRadio = add_radio(p, hbox, p->fillRadio, NULL);
       gtk_box_pack_start(GTK_BOX(hbox), i ? lwoh->normalLabel : lwoh->linkBox, FALSE, FALSE, 0);
+
+      hbox = add_hbox(vbox, 0);
       p->highRadio = add_radio(p, hbox, p->fillRadio, NULL);
       add_link(hbox, lwoh2, i);  /* shares the tooltip image with lwoh */
    }
@@ -459,7 +504,7 @@ void CreateRS04PrefsPage(Method *method, GtkWidget *parent)
 
    /*** Memory */
 
-   page = add_frame(parent, _utf("Memory utilization"));
+   page = add_frame(parent, _utf("Memory utilization"), NULL);
    lwoh = add_help(_("Memory utilization"), _("MiB for encoding and decoding"));
 
    for(i=0; i<2; i++)
@@ -481,7 +526,7 @@ void CreateRS04PrefsPage(Method *method, GtkWidget *parent)
 
    /*** Threads */
 
-   page = add_frame(parent, _utf("Multithreading"));
+   page = add_frame(parent, _utf("Multithreading"), NULL);
    lwoh = add_help(_("Multithreading"), _("Use"));
 
    for(i=0; i<2; i++)
@@ -498,9 +543,48 @@ void CreateRS04PrefsPage(Method *method, GtkWidget *parent)
       "Hard disk speed and memory bandwidth may limit the performance "
       "more than the number of cores."));
 
+   /*** Encoding algorithm */
+
+   page = add_frame(parent, _utf("Encoding algorithm"), NULL);
+   lwoh = add_help(_("Encoding algorithm"), _("Use: "));
+
+   for(i=0; i<2; i++)
+   {  p = &wl->prefs[i];
+      hbox = add_hbox(help_vbox(lwoh, page, i), 0);
+      add_link(hbox, lwoh, i);
+
+      for(j=0; j<N_KERNELS; j++)
+      {  char *text;
+
+	 if(kernel_choices[j].name)
+	      text = g_strdup(kernel_choices[j].name);
+	 else text = g_strdup_printf("%s (%s)", _utf("auto"), RS04KernelNameOf(RS04_KERNEL_AUTO));
+
+	 p->kernelRadio[j] = add_radio(p, hbox, j ? p->kernelRadio[0] : NULL, text);
+	 g_free(text);
+
+	 if(!RS04KernelSupported(kernel_choices[j].kernel))
+	 {  gtk_widget_set_sensitive(p->kernelRadio[j], FALSE);
+	    gtk_widget_set_tooltip_text(p->kernelRadio[j], _utf("This encoder is not supported on this system."));
+	 }
+      }
+   }
+
+   GuiAddHelpParagraph(lwoh, _("<b>Encoding algorithm</b>\n\n"
+      "This option affects the speed of creating and repairing RS04 data. "
+      "All variants give identical results; it only matters for speed.\n\n"
+      "The scalar kernels work on every processor. SSSE3 and AVX2 are "
+      "available on x86 processors, GFNI on x86 processors with the "
+      "GF2P8AFFINEQB instruction (e.g. Intel Ice Lake and newer, AMD Zen 4 and newer), "
+      "and NEON on ARM64 processors. Unsupported variants are greyed out.\n\n"
+      "If \"auto\" is selected, dvdisaster uses the fastest variant supported by "
+      "this processor; it is shown in parentheses. Selecting an explicit variant "
+      "forces it, which is mainly useful for comparing their performance.\n\n"
+      "The same setting is available as <i>--rs04-kernel</i> on the command line."));
+
    /*** Sector size */
 
-   page = add_frame(parent, _utf("Image format"));
+   page = add_frame(parent, _utf("Image format"), NULL);
    lwoh = add_help(_("Sector size"), _("Sector size:"));
 
    for(i=0; i<2; i++)

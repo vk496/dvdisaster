@@ -23,6 +23,7 @@
 /*** src type: some GUI code ***/
 
 #include "dvdisaster.h"
+#include "rs04-ff16.h"
 
 #ifdef SYS_MINGW
 #include <windows.h>
@@ -294,6 +295,12 @@ void GuiReadDotfile()
       if(!strcmp(symbol, "rs04-audio-offset")) { Closure->audioOffsetGiven = strcmp(value, "auto");
 	                                         Closure->audioOffset = atoi(value); continue; }
       if(!strcmp(symbol, "rs04-memory"))     { Closure->rs04MemoryMiB = CLAMP(atoi(value), 1, 1024*1024); continue; }
+      if(!strcmp(symbol, "rs04-kernel"))     /* preferences may come from another processor */
+      {  int kernel = CLAMP(atoi(value), RS04_KERNEL_AUTO, RS04_KERNEL_GFNI);
+
+	 Closure->rs04Kernel = RS04KernelSupported(kernel) ? kernel : RS04_KERNEL_AUTO;
+	 continue;
+      }
       if(!strcmp(symbol, "rs04-sector-size")){ int b = atoi(value);
 	                                       if(b == 2048 || b == 2324 || b == 2352) Closure->sectorBytes = b;
 					       continue; }
@@ -421,6 +428,7 @@ static void update_dotfile()
         g_fprintf(dotfile, "rs04-audio-offset: %d\n", Closure->audioOffset);
    else g_fprintf(dotfile, "rs04-audio-offset: auto\n");
    g_fprintf(dotfile, "rs04-memory:       %d\n", Closure->rs04MemoryMiB);
+   g_fprintf(dotfile, "rs04-kernel:       %d\n", Closure->rs04Kernel);
    g_fprintf(dotfile, "rs04-sector-size:  %d\n", Closure->sectorBytes);
    g_fprintf(dotfile, "spinup-delay:      %d\n", Closure->spinupDelay);
    g_fprintf(dotfile, "unlink:            %d\n", Closure->unlinkImage);
@@ -652,6 +660,7 @@ void InitClosure()
    Closure->ignoreRS03header = FALSE;
    Closure->sectorBytes = 2048;
    Closure->rs04MemoryMiB = 4096;
+   Closure->rs04Kernel = RS04_KERNEL_AUTO;
 
    /* default sizes for typical CD and DVD media */
 

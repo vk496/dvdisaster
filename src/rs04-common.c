@@ -191,25 +191,33 @@ guint64 RS04MemoryBudget(void)
 {  return (guint64)Closure->rs04MemoryMiB << 20;
 }
 
-/* --encoding-algorithm 32bit/64bit forces the scalar codec kernels,
-   SSE2 the SSSE3 ones (if available); results are identical anyway. */
+/* --rs04-kernel (or the preferences) selects the codec kernels. Without it,
+   the general --encoding-algorithm applies: 32bit/64bit force the scalar kernels,
+   SSE2 the SSSE3 ones, AVX2 and NEON their own. The results are identical anyway. */
 
 void RS04ChooseKernel(void)
-{  int kernel = RS04_KERNEL_AUTO;
+{  int kernel = Closure->rs04Kernel;
 
-   switch(Closure->encodingAlgorithm)
-   {  case ENCODING_ALG_32BIT:
-      case ENCODING_ALG_64BIT:
-      case ENCODING_ALG_ALTIVEC:
-	kernel = RS04_KERNEL_SCALAR;
-	break;
-      case ENCODING_ALG_SSE2:
-	kernel = RS04_KERNEL_SSSE3;
-	break;
-   }
+   if(kernel == RS04_KERNEL_AUTO)
+     switch(Closure->encodingAlgorithm)
+     {  case ENCODING_ALG_32BIT:
+	case ENCODING_ALG_64BIT:
+	case ENCODING_ALG_ALTIVEC:
+	  kernel = RS04_KERNEL_SCALAR;
+	  break;
+	case ENCODING_ALG_SSE2:
+	  kernel = RS04_KERNEL_SSSE3;
+	  break;
+	case ENCODING_ALG_AVX2:
+	  kernel = RS04_KERNEL_AVX2;
+	  break;
+	case ENCODING_ALG_NEON:
+	  kernel = RS04_KERNEL_NEON;
+	  break;
+     }
 
-   if(!RS04SelectKernel(kernel))
-     RS04SelectKernel(RS04_KERNEL_SCALAR);
+   if(!RS04SelectKernel(kernel))   /* not available here: use the best one */
+     RS04SelectKernel(RS04_KERNEL_AUTO);
    Verbose("RS04 codec kernels: %s\n", RS04KernelName());
 }
 

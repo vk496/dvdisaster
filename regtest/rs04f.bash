@@ -111,6 +111,16 @@ if try "ecc file creation with small memory budget" ecc_create_low_memory; then 
   run_regtest ecc_create_low_memory "-t" $MASTERISO $TMPECC
 ) & limit_jobs; fi
 
+# The scalar kernels must give the same ecc file as the default ones
+# (the master ecc file); on a mismatch the file is removed so that the
+# following verify fails.
+
+if try "ecc file creation with the scalar kernels" ecc_create_kernel_scalar; then (
+  $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TMPECC -mRS04 -o file --rs04-kernel scalar -c >>$LOGFILE 2>&1
+  cmp -s $MASTERECC $TMPECC || { echo "ecc file differs from the default kernels" >>$LOGFILE; rm -f $TMPECC; }
+  run_regtest ecc_create_kernel_scalar "-t" $MASTERISO $TMPECC
+) & limit_jobs; fi
+
 # Invalid parameters
 
 if try "redundancy out of range" ecc_bad_redundancy; then (
@@ -119,6 +129,10 @@ if try "redundancy out of range" ecc_bad_redundancy; then (
 
 if try "invalid redundancy" ecc_invalid_redundancy; then (
   run_regtest ecc_invalid_redundancy "--debug --set-version $SETVERSION -mRS04 -n 200x -o file -c" $MASTERISO $TMPECC
+) & limit_jobs; fi
+
+if try "invalid encoding kernel" ecc_invalid_kernel; then (
+  run_regtest ecc_invalid_kernel "--debug --set-version $SETVERSION -mRS04 --rs04-kernel bogus -o file -c" $MASTERISO $TMPECC
 ) & limit_jobs; fi
 
 if try "invalid sector size" ecc_invalid_sector_size; then (

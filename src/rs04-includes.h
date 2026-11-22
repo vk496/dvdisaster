@@ -135,6 +135,9 @@ typedef struct
    GtkWidget *mediumAuto, *mediumForce, *mediumManual, *mediumCombo, *mediumSpin;
    GtkWidget *rootsScale, *sizeSpin;
    GtkWidget *memorySpin, *threadsSpin, *sectorCombo, *offsetAuto, *offsetSpin;
+   GtkWidget *redundancyFrame;  /* page only: retitled for file and image */
+   GtkWidget *fillBox;          /* medium filling; only shown for augmented images */
+   GtkWidget *kernelRadio[6];   /* see kernel_choices[] in rs04-preferences.c */
 } RS04Prefs;
 
 typedef struct

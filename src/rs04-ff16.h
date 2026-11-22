@@ -83,6 +83,8 @@ void RS04InitGF16(void);
 #define RS04_KERNEL_GFNI     5
 
 int RS04SelectKernel(int kernel);
+int RS04KernelSupported(int kernel);
+const char *RS04KernelNameOf(int kernel);
 const char *RS04KernelName(void);
 
 /* Number of work[] buffers needed by RS04Encode() / RS04Decode(). */

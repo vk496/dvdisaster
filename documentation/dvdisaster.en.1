@@ -82,6 +82,8 @@ DVDISASTER \- data loss/scratch/aging protection for optical media
 .RB [\| \-\-regtest \|]
 .RB [\| \-\-resource-file
 .IR n \|]
+.RB [\| \-\-rs04-kernel
+.IR x \|]
 .RB [\| \-\-rs04-memory
 .IR n \|]
 .RB [\| \-\-sector-size
@@ -678,6 +680,15 @@ modifies some outputs for better processing with the regression test scripts.
 .TP
 .B \-\-resource-file n
 Specifies the path to the configuration file (default: $HOME/.dvdisaster)
+.TP
+.B \-\-rs04-kernel [auto|scalar|SSSE3|AVX2|GFNI|NEON]
+RS04 only: select the codec kernels used for encoding and decoding (default: auto,
+the fastest one supported by the processor). All kernels give identical results;
+the setting only affects the speed.
+SSSE3, AVX2 and GFNI need an x86 processor (GFNI also the GF2P8AFFINEQB instruction),
+NEON an ARM64 processor.
+Without this option, \fB\-\-encoding\-algorithm\fR also applies to RS04: 32bit, 64bit and AltiVec
+select the scalar kernels, SSE2 the SSSE3 ones, AVX2 and NEON their namesakes.
 .TP
 .B \-\-rs04-memory n
 RS04 only: memory budget in MiB for encoding and decoding (default: 4096).

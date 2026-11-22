@@ -24,6 +24,7 @@
 
 #include "dvdisaster.h"
 #include "rs04-archive.h"
+#include "rs04-ff16.h"
 
 #if defined(SYS_MINGW) && defined(WITH_GUI_YES)
 #include "win-console.h"
@@ -123,6 +124,7 @@ typedef enum
    MODIFIER_READ_RAW,
    MODIFIER_REGTEST,
    MODIFIER_RESOURCE_FILE,
+   MODIFIER_RS04_KERNEL,
    MODIFIER_RS04_MEMORY,
    MODIFIER_SCREEN_SHOT,
    MODIFIER_SECTOR_SIZE,
@@ -382,6 +384,7 @@ int main(int argc, char *argv[])
 	{"regtest", 0, 0, MODIFIER_REGTEST},
 	{"redundancy", 1, 0, 'n'},
 	{"resource-file", 1, 0, MODIFIER_RESOURCE_FILE},
+	{"rs04-kernel", 1, 0, MODIFIER_RS04_KERNEL},
 	{"rs04-memory", 1, 0, MODIFIER_RS04_MEMORY},
 	{"scan", 2, 0,'s'},
 	{"screen-shot", 0, 0, MODIFIER_SCREEN_SHOT },
@@ -785,6 +788,25 @@ int main(int argc, char *argv[])
          case MODIFIER_REGTEST:
 	   Closure->regtestMode = TRUE;
 	   break;
+         case MODIFIER_RS04_KERNEL:
+	 {  static const struct { char *name; int kernel; } kernels[] =
+	    {  { "auto", RS04_KERNEL_AUTO }, { "scalar", RS04_KERNEL_SCALAR },
+	       { "SSSE3", RS04_KERNEL_SSSE3 }, { "AVX2", RS04_KERNEL_AVX2 },
+	       { "GFNI", RS04_KERNEL_GFNI }, { "NEON", RS04_KERNEL_NEON }
+	    };
+	    unsigned int i;
+
+	    for(i=0; i<sizeof(kernels)/sizeof(kernels[0]); i++)
+	      if(!g_ascii_strcasecmp(optarg, kernels[i].name))
+	      {  if(!RS04KernelSupported(kernels[i].kernel))
+		   Stop(_("--rs04-kernel: %s not supported by this build or processor!"), kernels[i].name);
+		 Closure->rs04Kernel = kernels[i].kernel;
+		 break;
+	      }
+	    if(i == sizeof(kernels)/sizeof(kernels[0]))
+	      Stop(_("--rs04-kernel: valid types are auto, scalar, SSSE3, AVX2, GFNI, NEON"));
+	 }
+	 break;
          case MODIFIER_RS04_MEMORY:
 	   Closure->rs04MemoryMiB = atoi(optarg);
 	   if(Closure->rs04MemoryMiB < 1 || Closure->rs04MemoryMiB > 1024*1024)
@@ -1408,6 +1430,7 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --read-raw                 - performs read in raw mode if possible\n"));
       PrintCLI(_("  --regtest                  - tweaks output for compatibility with regtests\n"));
       PrintCLI(_("  --resource-file p          - get resource file from given path\n"));
+      PrintCLI(_("  --rs04-kernel x            - RS04: auto, scalar, SSSE3, AVX2, GFNI, NEON (default: auto)\n"));
       PrintCLI(_("  --rs04-memory n            - RS04: memory budget in MiB for en-/decoding (default: 4096)\n"));
       PrintCLI(_("  --rs04-archive ...         - archival development CLI (must be first; requires Python 3)\n"));
       PrintCLI(_("  --sector-size n            - RS04: sector size of the data, 2048, 2324 or 2352 (ecc files)\n"));

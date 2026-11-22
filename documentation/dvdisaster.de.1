@@ -82,6 +82,8 @@ oder Kratzer
 .RB [\| \-\-regtest \|]
 .RB [\| \-\-resource-file
 .IR n \|]
+.RB [\| \-\-rs04-kernel
+.IR x \|]
 .RB [\| \-\-rs04-memory
 .IR n \|]
 .RB [\| \-\-sector-size
@@ -679,6 +681,15 @@ ver\[:a]ndert einige Ausgaben so da\[ss] sie von den Regressionstest-Skripten be
 .TP
 .B \-\-resource-file n
 Gibt den Pfad zur Konfigurationsdatei an (Voreinstellung: $HOME/.dvdisaster)
+.TP
+.B \-\-rs04-kernel [auto|scalar|SSSE3|AVX2|GFNI|NEON]
+Nur RS04: w\[:a]hlt die Codec-Kernel f\[:u]r das Kodieren und Dekodieren (Standard: auto,
+der schnellste vom Prozessor unterst\[:u]tzte). Alle Kernel liefern identische Ergebnisse;
+die Einstellung beeinflusst nur die Geschwindigkeit.
+SSSE3, AVX2 und GFNI ben\[:o]tigen einen x86-Prozessor (GFNI au\[ss]erdem den Befehl GF2P8AFFINEQB),
+NEON einen ARM64-Prozessor.
+Ohne diese Option gilt \fB\-\-encoding\-algorithm\fR auch f\[:u]r RS04: 32bit, 64bit und AltiVec
+w\[:a]hlen die skalaren Kernel, SSE2 die SSSE3-Kernel, AVX2 und NEON die gleichnamigen.
 .TP
 .B \-\-rs04-memory n
 Nur RS04: Speicherbudget in MiB f\[:u]r das Kodieren und Dekodieren (Standard: 4096).

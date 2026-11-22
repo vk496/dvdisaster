@@ -316,6 +316,7 @@ typedef struct _GlobalClosure
    int audioOffset;     /* RS04: read offset of a CD-DA rip in samples */
    int audioOffsetGiven;/* RS04: TRUE if audioOffset was specified */
    int rs04MemoryMiB;   /* RS04: memory budget for de-/encoding */
+   int rs04Kernel;      /* RS04: codec kernels (RS04_KERNEL_*), 0 = auto */
    int readAndCreate;   /* automatically create .ecc file after reading an image */
    int enableCurveSwitch; /* TRUE in readAndCreateMode after reading is complete */
    int welcomeMessage;  /* just print dvdisaster logo if FALSE */

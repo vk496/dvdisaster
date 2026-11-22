@@ -821,8 +821,10 @@ RS04f_ecc_create_percent yes
 RS04f_ecc_create_roots yes
 RS04f_ecc_create_size yes
 RS04f_ecc_create_low_memory yes
+RS04f_ecc_create_kernel_scalar yes
 RS04f_ecc_bad_redundancy yes
 RS04f_ecc_invalid_redundancy yes
+RS04f_ecc_invalid_kernel yes
 RS04f_ecc_invalid_sector_size yes
 RS04f_ecc_missing_image yes
 RS04f_ecc_tiny_1 yes

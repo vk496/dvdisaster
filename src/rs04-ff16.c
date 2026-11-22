@@ -573,16 +573,23 @@ static gboolean cpu_has_gfni(void)
 
 static const Kernels *kern;
 
-int RS04SelectKernel(int kernel)
+/* The kernels for the given variant, or NULL if this build or CPU does not
+   have it. RS04_KERNEL_AUTO gives the fastest one. No side effects. */
+
+static const Kernels *find_kernel(int kernel)
 {  const Kernels *k = NULL;
 
    switch(kernel)
    {  case RS04_KERNEL_AUTO:
-	return    RS04SelectKernel(RS04_KERNEL_GFNI)
-	       || RS04SelectKernel(RS04_KERNEL_AVX2)
-	       || RS04SelectKernel(RS04_KERNEL_SSSE3)
-	       || RS04SelectKernel(RS04_KERNEL_NEON)
-	       || RS04SelectKernel(RS04_KERNEL_SCALAR);
+      {  static const int fastest_first[] =
+	 {  RS04_KERNEL_GFNI, RS04_KERNEL_AVX2, RS04_KERNEL_SSSE3, RS04_KERNEL_NEON, RS04_KERNEL_SCALAR };
+	 unsigned int i;
+
+	 for(i=0; i<sizeof(fastest_first)/sizeof(fastest_first[0]); i++)
+	   if((k = find_kernel(fastest_first[i])))
+	     return k;
+	 return NULL;
+      }
       case RS04_KERNEL_SCALAR:
 	k = &kernels_scalar;
 	break;
@@ -609,12 +616,30 @@ int RS04SelectKernel(int kernel)
 #endif
    }
 
+   return k;
+}
+
+int RS04SelectKernel(int kernel)
+{  const Kernels *k = find_kernel(kernel);
+
    if(!k)
      return FALSE;
 
    kern = k;
    build_affine = k->affine;
    return TRUE;
+}
+
+int RS04KernelSupported(int kernel)
+{  return find_kernel(kernel) != NULL;
+}
+
+/* Name of the kernels used for the given variant (the fastest one for AUTO) */
+
+const char *RS04KernelNameOf(int kernel)
+{  const Kernels *k = find_kernel(kernel);
+
+   return k ? k->name : NULL;
 }
 
 const char *RS04KernelName(void)
